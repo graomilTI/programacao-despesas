@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Programação – Despesas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="icon" href="data:,">
   <style>
     body{ margin:0; font-family:Arial,sans-serif; background:#f5f6f7; }
     .wrap{ max-width:1200px; margin:auto; padding:14px 14px 120px; }
@@ -50,36 +51,40 @@
 
     .loginTopRow{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
 
-    /* ✅ MODAL */
-    .modalBack{
-      position:fixed; inset:0; background:rgba(0,0,0,.38);
-      display:none; align-items:center; justify-content:center; padding:18px; z-index:9999;
+    /* Modal */
+    .modalOverlay{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.45);
+      display:none;
+      align-items:center; justify-content:center;
+      padding:16px;
+      z-index:9999;
     }
     .modal{
-      width:min(520px, 100%);
-      background:#fff; border-radius:16px; padding:14px;
-      box-shadow:0 20px 60px rgba(0,0,0,.25);
+      width:min(520px, 96vw);
+      background:#fff;
+      border-radius:16px;
+      box-shadow:0 12px 50px rgba(0,0,0,.25);
+      overflow:hidden;
     }
-    .modal h4{ margin:0 0 8px; }
-    .modal .muted{ margin:0 0 10px; }
-    .modal .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
-    .modal .actions button{ width:auto; padding:9px 14px; border-radius:999px; }
-    .modal .actions .secondary{ background:#374151; }
-    .modal input{ margin-top:8px; }
-    .modal .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-    .modal .err{ color:#b91c1c; font-size:12px; margin-top:8px; display:none; }
+    .modalHeader{
+      padding:14px 14px 10px;
+      border-bottom:1px solid #e5e7eb;
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+    }
+    .modalTitle{ font-weight:800; }
+    .modalBody{ padding:14px; }
+    .modalFooter{
+      padding:12px 14px;
+      border-top:1px solid #e5e7eb;
+      display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;
+    }
+    .xbtn{ width:auto; padding:6px 10px; background:#e5e7eb; color:#111827; border-radius:999px; border:1px solid #d1d5db; }
 
-    /* ✅ LOADER */
-    .overlay{
-      position:fixed; inset:0; background:rgba(255,255,255,.7);
-      display:none; align-items:center; justify-content:center; z-index:9998;
-      backdrop-filter: blur(2px);
+    .hintBox{
+      border:1px solid #e5e7eb; background:#f9fafb;
+      border-radius:12px; padding:10px; font-size:12px; color:#374151;
     }
-    .spinner{
-      width:44px; height:44px; border:4px solid #d1d5db; border-top-color:#166534;
-      border-radius:50%; animation: spin 1s linear infinite;
-    }
-    @keyframes spin{ to{ transform:rotate(360deg);} }
 
     @media (max-width: 720px){
       .wrap{ padding:12px 10px 110px; }
@@ -157,7 +162,7 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige Cidade/UF quando não encontrado.<br>
+        <b>Hotel</b>: consulta D-1 e exige Cidade + UF (ex: “Cascavel - PR”).<br>
         <b>Fazenda</b>: se Obs vazio, preenche “R$ 30,00 - pernoite”.
       </div>
       <div id="listaB"></div>
@@ -187,7 +192,6 @@
   </div>
 </div>
 
-<!-- ✅ BOTÕES SÓ APARECEM DEPOIS DO CARREGAR -->
 <div class="bottomBar" id="bottomBar" style="display:none;">
   <div class="inner">
     <button id="btnVoltar" class="secondary" onclick="voltar()">Voltar</button>
@@ -195,27 +199,20 @@
   </div>
 </div>
 
-<!-- ✅ LOADER -->
-<div class="overlay" id="overlay"><div class="spinner"></div></div>
-
-<!-- ✅ MODAL -->
-<div class="modalBack" id="modalBack">
+<!-- MODAL ÚNICO (reutilizável) -->
+<div id="modalOverlay" class="modalOverlay">
   <div class="modal">
-    <h4 id="modalTitle">Atenção</h4>
-    <p class="muted" id="modalMsg"></p>
-
-    <div id="modalBody"></div>
-    <div class="err" id="modalErr"></div>
-
-    <div class="actions">
-      <button class="secondary" id="modalCancel" onclick="modalClose(false)">Cancelar</button>
-      <button id="modalOk" onclick="modalClose(true)">OK</button>
+    <div class="modalHeader">
+      <div class="modalTitle" id="modalTitle">Atenção</div>
+      <button class="xbtn" onclick="closeModal()">Fechar</button>
     </div>
+    <div class="modalBody" id="modalBody"></div>
+    <div class="modalFooter" id="modalFooter"></div>
   </div>
 </div>
 
 <script>
-/** ✅ SUA API (Cloudflare Worker) */
+/** ✅ TROQUE SÓ AQUI (sua API do Worker) */
 const API_URL = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
@@ -223,9 +220,10 @@ let ctx = null;
 let step = "A";
 let form = {};
 let busy = false;
-let loadedOnce = false;
+let loaded = false;
 
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN"; // PIN | ADMIN
+
 const PROSSEGUIR = (st) => (String(st||"").trim() === "OK" || String(st||"").trim() === "Logística");
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
@@ -243,7 +241,6 @@ function setBusy(v){
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
-  document.getElementById("overlay").style.display = busy ? "flex" : "none";
 }
 
 function isAuthError_(text){
@@ -253,53 +250,27 @@ function isAuthError_(text){
 
 function logoutForcado(msg){
   try{ localStorage.removeItem("DESP_TOKEN"); }catch(e){}
-  token = ""; ctx = null; form = {}; loadedOnce = false;
+  token = "";
+  ctx = null;
+  form = {};
+  loaded = false;
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
+  updateBottomBarVisibility_();
 }
 
-async function apiCall(action, payload){
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify({ action, ...payload })
-  });
-  return res.json();
+function logout(){
+  // opcional: avisar servidor
+  apiCall_("logout", { token }).catch(()=>{});
+  logoutForcado("Logout realizado.");
 }
 
-/************** MODAL (bonitinho) **************/
-let modalResolve = null;
-function modalOpen({title, msg, bodyHTML, okText="OK", cancelText="Cancelar", showCancel=true, error=""}){
-  document.getElementById("modalTitle").innerText = title || "Atenção";
-  document.getElementById("modalMsg").innerText = msg || "";
-  document.getElementById("modalBody").innerHTML = bodyHTML || "";
-  const errEl = document.getElementById("modalErr");
-  errEl.style.display = error ? "block" : "none";
-  errEl.innerText = error || "";
-
-  const okBtn = document.getElementById("modalOk");
-  okBtn.innerText = okText;
-
-  const cancelBtn = document.getElementById("modalCancel");
-  cancelBtn.innerText = cancelText;
-  cancelBtn.style.display = showCancel ? "inline-block" : "none";
-
-  document.getElementById("modalBack").style.display = "flex";
-
-  return new Promise(resolve => { modalResolve = resolve; });
-}
-function modalSetError(msg){
-  const errEl = document.getElementById("modalErr");
-  errEl.style.display = msg ? "block" : "none";
-  errEl.innerText = msg || "";
-}
-function modalClose(ok){
-  document.getElementById("modalBack").style.display = "none";
-  if(modalResolve) modalResolve(!!ok);
-  modalResolve = null;
+function updateBottomBarVisibility_(){
+  // ✅ só mostra depois de carregar com sucesso
+  if (loaded) show("bottomBar");
+  else hide("bottomBar");
 }
 
-/************** Login **************/
 function setLoginMode(mode){
   loginMode = mode;
   localStorage.setItem("DESP_LOGIN_MODE", loginMode);
@@ -310,7 +281,7 @@ function setLoginMode(mode){
 
   if(mode === "ADMIN"){
     title.innerText = "Login ADMIN";
-    hint.innerHTML  = "Informe seu <b>CPF (11 dígitos)</b> autorizado em <code>ADMIN_CPFS</code>.";
+    hint.innerHTML  = "Informe seu <b>CPF (11 dígitos)</b> autorizado.";
     input.placeholder = "CPF (11 dígitos)";
     input.maxLength = 14;
     input.value = "";
@@ -325,15 +296,130 @@ function setLoginMode(mode){
   document.getElementById("loginStatus").innerText = "";
 }
 
+async function apiCall_(action, data){
+  const r = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, ...data })
+  });
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch(e){ return { ok:false, error: txt || "Resposta inválida" }; }
+}
+
+function openModal({ title="Atenção", bodyHtml="", footerButtons=[] }){
+  document.getElementById("modalTitle").innerText = title;
+  document.getElementById("modalBody").innerHTML = bodyHtml;
+
+  const footer = document.getElementById("modalFooter");
+  footer.innerHTML = "";
+  footerButtons.forEach(btn=>{
+    const b = document.createElement("button");
+    b.textContent = btn.text;
+    if(btn.className) b.className = btn.className;
+    b.onclick = btn.onClick;
+    footer.appendChild(b);
+  });
+
+  document.getElementById("modalOverlay").style.display = "flex";
+}
+function closeModal(){
+  document.getElementById("modalOverlay").style.display = "none";
+  document.getElementById("modalBody").innerHTML = "";
+  document.getElementById("modalFooter").innerHTML = "";
+}
+
+function modalAlert(title, message){
+  openModal({
+    title,
+    bodyHtml: `<div class="hintBox">${esc(message)}</div>`,
+    footerButtons: [{ text:"OK", className:"secondary", onClick: closeModal }]
+  });
+}
+
+function modalPrompt(title, label, placeholder="", defaultValue=""){
+  return new Promise(resolve=>{
+    const id = "mp_" + Math.random().toString(16).slice(2);
+    openModal({
+      title,
+      bodyHtml: `
+        <div class="muted" style="margin-bottom:8px;">${esc(label)}</div>
+        <input id="${id}" placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">
+      `,
+      footerButtons: [
+        { text:"Cancelar", className:"secondary", onClick: ()=>{ closeModal(); resolve(null); } },
+        { text:"Confirmar", onClick: ()=>{ const v = (document.getElementById(id).value||"").trim(); closeModal(); resolve(v || null); } }
+      ]
+    });
+    setTimeout(()=>{ const el = document.getElementById(id); if(el) el.focus(); }, 50);
+  });
+}
+
+/** Modal de Upload */
+function modalUploadAtestado({ nome, dataRef }){
+  return new Promise(resolve=>{
+    const fid = "f_" + Math.random().toString(16).slice(2);
+    openModal({
+      title: "Anexar Atestado",
+      bodyHtml: `
+        <div class="hintBox" style="margin-bottom:10px;">
+          Colaborador: <b>${esc(nome)}</b><br>
+          Data: <b>${esc(dataRef)}</b><br>
+          Envie PDF ou imagem (máx 8MB).
+        </div>
+        <input id="${fid}" type="file" accept="application/pdf,image/*">
+        <div class="muted" id="upStatus" style="margin-top:8px;"></div>
+      `,
+      footerButtons: [
+        { text:"Cancelar", className:"secondary", onClick: ()=>{ closeModal(); resolve({ ok:false, canceled:true }); } },
+        { text:"Enviar", onClick: async ()=>{
+            const input = document.getElementById(fid);
+            const f = input?.files?.[0];
+            if(!f){ modalAlert("Faltou arquivo","Selecione um arquivo para enviar."); return; }
+
+            const st = document.getElementById("upStatus");
+            st.innerText = "Enviando...";
+
+            try{
+              const fd = new FormData();
+              fd.append("file", f);
+              fd.append("nome", nome);
+              fd.append("dataRef", dataRef);
+              fd.append("token", token);
+
+              const r = await fetch(API_URL + "/uploadAtestado", { method:"POST", body: fd });
+              const txt = await r.text();
+              let out; try{ out = JSON.parse(txt); }catch{ out = { ok:false, error: txt }; }
+
+              if(!out || !out.ok){
+                if(isAuthError_(out?.error||"")) { closeModal(); logoutForcado(out.error); resolve(out); return; }
+                st.innerText = out?.error || "Erro ao enviar.";
+                return;
+              }
+
+              st.innerText = "✅ Enviado com sucesso!";
+              setTimeout(()=>{ closeModal(); resolve(out); }, 600);
+            }catch(e){
+              st.innerText = "Erro: " + (e?.message || e);
+            }
+          }
+        }
+      ]
+    });
+  });
+}
+
+/***************
+ * LOGIN
+ ***************/
 async function login(){
-  const raw = document.getElementById("loginInput").value;
+  const raw = document.getElementById("loginInput").value.trim();
   document.getElementById("loginStatus").innerText = "Entrando...";
   setBusy(true);
 
   try{
-    const res = (loginMode==="ADMIN")
-      ? await apiCall("loginAdminCPF", { cpf: raw })
-      : await apiCall("loginPIN", { pin: raw });
+    let res;
+    if(loginMode === "ADMIN") res = await apiCall_("loginAdminCPF", { cpf: raw });
+    else res = await apiCall_("loginPIN", { pin: raw });
 
     setBusy(false);
 
@@ -341,37 +427,36 @@ async function login(){
       document.getElementById("loginStatus").innerText = res?.error || "Erro";
       return;
     }
+
     token = res.token;
     localStorage.setItem("DESP_TOKEN", token);
 
     hide("loginCard"); show("app");
+    loaded = false;
+    updateBottomBarVisibility_();
     await carregarDataPadrao();
-  }catch(err){
+    document.getElementById("loginStatus").innerText = "";
+  }catch(e){
     setBusy(false);
-    document.getElementById("loginStatus").innerText = "Erro: " + (err?.message || err);
+    document.getElementById("loginStatus").innerText = "Erro: " + (e?.message || e);
   }
-}
-
-async function logout(){
-  setBusy(true);
-  try{ await apiCall("logout", { token }); }catch(e){}
-  setBusy(false);
-  logoutForcado("Logout realizado.");
 }
 
 async function carregarDataPadrao(){
   try{
-    const res = await apiCall("getDataPadrao", {});
-    if (!res || !res.ok) return;
+    const res = await apiCall_("getDataPadrao", {});
+    if(!res || !res.ok) return;
     document.getElementById("dataRef").value = res.data || "";
     const permit = res.janela?.permitidas || [];
     document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
   }catch(e){
-    setDebug("getDataPadrao falhou.");
+    setDebug("getDataPadrao falhou: " + (e?.message || e));
   }
 }
 
-/************** Agrupamento **************/
+/***************
+ * GROUP
+ ***************/
 function getSupOf_(nome){
   return (ctx?.mapSupPorNome && ctx.mapSupPorNome[nome]) ? ctx.mapSupPorNome[nome] : "SEM SUPERVISÃO";
 }
@@ -415,26 +500,25 @@ function renderGrouped_(names, rowHtmlFn){
   }).join("");
 }
 
-/************** Carregar **************/
+/***************
+ * CARREGAR
+ ***************/
 async function carregar(){
   const d = document.getElementById("dataRef").value.trim();
-
-  if(!d){
-    await modalOpen({ title:"Informe a data", msg:"Digite a data no formato dd/mm/aaaa para carregar.", bodyHTML:"" , okText:"Entendi", showCancel:false });
-    return;
-  }
-
   setBusy(true);
   setDebug("Carregando...");
+  loaded = false;
+  updateBottomBarVisibility_();
 
   try{
-    const res = await apiCall("carregarContexto", { token, dataRef: d });
+    const res = await apiCall_("carregarContexto", { token, dataRef: d });
+
     setBusy(false);
 
     if(!res || !res.ok){
       const err = res?.error || "Erro ao carregar";
       if(isAuthError_(err)) { logoutForcado(err); return; }
-      await modalOpen({ title:"Não foi possível carregar", msg: err, bodyHTML:"", okText:"OK", showCancel:false });
+      modalAlert("Erro ao carregar", err);
       setDebug(err);
       return;
     }
@@ -482,22 +566,22 @@ async function carregar(){
 
     renderA();
     setStep("A");
+
+    loaded = true;
+    updateBottomBarVisibility_();
     setDebug("OK");
-
-    // ✅ agora libera os botões só depois do carregar
-    loadedOnce = true;
-    show("bottomBar");
-
-  }catch(err){
+  }catch(e){
     setBusy(false);
-    const msg = "Falha no servidor: " + (err?.message || err);
+    const msg = "Falha no servidor: " + (e?.message || e);
     if(isAuthError_(msg)) { logoutForcado(msg); return; }
-    await modalOpen({ title:"Erro", msg, bodyHTML:"", okText:"OK", showCancel:false });
+    modalAlert("Falha no servidor", msg);
     setDebug(msg);
   }
 }
 
-/************** Step + Save **************/
+/***************
+ * STEP + SAVE
+ ***************/
 function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
@@ -514,8 +598,7 @@ function normalizeHotelObs_(tipo, obs){
 }
 
 async function salvarEtapaAtual_(){
-  if(!ctx){ await modalOpen({title:"Carregue primeiro", msg:"Clique em Carregar antes de prosseguir.", bodyHTML:"", showCancel:false}); return {ok:false}; }
-
+  if(!ctx){ modalAlert("Atenção","Carregue a data primeiro."); return { ok:false }; }
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
 
@@ -572,53 +655,37 @@ async function salvarEtapaAtual_(){
   if(step==="E" && saveEl) saveEl.innerText = "Salvando...";
   setBusy(true);
 
-  try{
-    const res = await apiCall("salvarEtapa", { token, payload: { dataReferencia: dataRef, etapa: step, registros: regs } });
-    setBusy(false);
+  const res = await apiCall_("salvarEtapa", { token, payload: { dataReferencia: dataRef, etapa: step, registros: regs } });
+  setBusy(false);
 
-    if(!res || !res.ok){
-      const err = res?.error || "Erro ao salvar etapa";
-      if(isAuthError_(err)) { logoutForcado(err); return {ok:false}; }
-      await modalOpen({ title:"Não foi possível salvar", msg: err, bodyHTML:"", okText:"OK", showCancel:false });
-      return {ok:false};
-    }
-
-    if(step==="E" && saveEl){
-      saveEl.innerText = `✅ Etapa ${res.etapa} salva (Atualizados: ${res.updated} | Novos: ${res.inserted})`;
-    }
-    return {ok:true};
-
-  }catch(err){
-    setBusy(false);
-    const msg = "Falha ao salvar etapa: " + (err?.message || err);
-    if(isAuthError_(msg)) { logoutForcado(msg); return {ok:false}; }
-    await modalOpen({ title:"Erro ao salvar", msg, bodyHTML:"", okText:"OK", showCancel:false });
-    return {ok:false};
+  if(!res || !res.ok){
+    const err = res?.error || "Erro ao salvar etapa";
+    if(isAuthError_(err)) { logoutForcado(err); return res; }
+    modalAlert("Erro ao salvar", err);
+    return res || { ok:false, error: err };
   }
+
+  if(step==="E" && saveEl){
+    saveEl.innerText = `✅ Etapa ${res.etapa} salva (Atualizados: ${res.updated} | Novos: ${res.inserted})`;
+  }
+  return res;
 }
 
 async function avancar(){
-  const sv = await salvarEtapaAtual_();
-  if(!sv.ok) return;
+  const saved = await salvarEtapaAtual_();
+  if(!saved?.ok) return;
 
   const namesAll = Object.keys(form);
   if(step==="A"){
     const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    if(!lista.length){
-      await modalOpen({ title:"Nada para prosseguir", msg:"Nenhum colaborador para seguir (somente OK/Logística).", showCancel:false });
-      return;
-    }
+    if(!lista.length){ modalAlert("Atenção","Nenhum colaborador para seguir (somente OK/Logística)."); return; }
     renderB(); setStep("B"); return;
   }
   if(step==="B"){ renderC(); setStep("C"); return; }
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
-  if(step==="E"){
-    await modalOpen({ title:"Tudo certo", msg:"✅ Tudo salvo!", showCancel:false });
-    return;
-  }
+  if(step==="E"){ modalAlert("Tudo certo","✅ Tudo salvo!"); return; }
 }
-
 function voltar(){
   if(busy) return;
   if(step==="B"){ renderA(); setStep("A"); return; }
@@ -627,39 +694,44 @@ function voltar(){
   if(step==="E"){ renderD(); setStep("D"); return; }
 }
 
-/************** Painel A **************/
+/***************
+ * PAINEL A
+ ***************/
 async function onDispChange(ne, val){
   const nome = decName(ne);
   form[nome].disponibilidade_status = val;
 
+  // ✅ Atestado: abre upload (sem link, só salva na pasta)
+  if(val === "Tem atestado"){
+    const dataRef = document.getElementById("dataRef").value.trim();
+    await modalUploadAtestado({ nome, dataRef });
+  }
+
   if(val === "Logística"){
     form[nome].deslocamento_tipo = "Frota (motorista)";
+
     const el = document.getElementById("dobs_"+idSafe(nome));
     if(el) el.value = "Buscando veículo...";
 
-    try{
-      const res = await apiCall("getPrimeiroVeiculoPorFuncionario", { token, nome });
-      if(!res || !res.ok){
-        if(el) el.value="";
-        await modalOpen({ title:"Erro", msg: (res?.error || "Erro ao buscar veículo"), showCancel:false });
-        renderA();
-        return;
-      }
-      const ident = res.found ? res.identificacao : "";
-      const sugestao = ident ? `Veículo: ${ident}` : "";
-      form[nome].logistica_default_obs = sugestao;
-
-      const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
-      if(!obsAtual || !form[nome].logistica_obs_editada){
-        form[nome].disponibilidade_obs = sugestao;
-        form[nome].logistica_obs_editada = false;
-      }
-      renderA();
-    }catch(err){
+    const res = await apiCall_("getPrimeiroVeiculoPorFuncionario", { token, nome });
+    if(!res || !res.ok){
       if(el) el.value="";
-      await modalOpen({ title:"Erro", msg:"Falha ao buscar veículo: " + (err?.message || err), showCancel:false });
+      if(isAuthError_(res?.error||"")) { logoutForcado(res.error); return; }
+      modalAlert("Erro", res?.error || "Erro ao buscar veículo");
       renderA();
+      return;
     }
+
+    const ident = res.found ? res.identificacao : "";
+    const sugestao = ident ? `Veículo: ${ident}` : "";
+    form[nome].logistica_default_obs = sugestao;
+
+    const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
+    if(!obsAtual || !form[nome].logistica_obs_editada){
+      form[nome].disponibilidade_obs = sugestao;
+      form[nome].logistica_obs_editada = false;
+    }
+    renderA();
     return;
   }
 
@@ -675,12 +747,7 @@ function onDispObsInput(ne, val){
     const def = String(form[nome].logistica_default_obs||"").trim();
     const cur = String(val||"").trim();
     if(def && cur && cur !== def){
-      // substitui alert por modal
-      modalOpen({
-        title:"Atenção",
-        msg:"⚠️ Obs alterada em Logística.\nSolicite a leitura do patrimônio do veículo associado.",
-        showCancel:false
-      });
+      modalAlert("Atenção","⚠️ Obs alterada em Logística.\nSolicite a leitura do patrimônio do veículo associado.");
     }
   }
 }
@@ -711,47 +778,9 @@ function renderA(){
   document.getElementById("listaA").innerHTML = html;
 }
 
-/************** Painel B – Estadia **************/
-function buildCidadeUfModal_(prefCidade="", prefUF=""){
-  return `
-    <div class="grid2">
-      <div>
-        <label class="muted">Cidade</label>
-        <input id="mCidade" placeholder="Ex.: Cascavel" value="${esc(prefCidade)}" />
-      </div>
-      <div>
-        <label class="muted">UF</label>
-        <input id="mUF" placeholder="Ex.: PR" maxlength="2" value="${esc(prefUF)}" />
-      </div>
-    </div>
-  `;
-}
-
-async function pedirCidadeUF_(){
-  const ok = await modalOpen({
-    title:"Informe a hospedagem",
-    msg:"Não encontrei no D-1. Informe Cidade e UF para salvar a hospedagem.",
-    bodyHTML: buildCidadeUfModal_(),
-    okText:"Salvar",
-    cancelText:"Cancelar",
-    showCancel:true
-  });
-
-  if(!ok) return null;
-
-  const cidade = (document.getElementById("mCidade")?.value || "").trim();
-  const uf = (document.getElementById("mUF")?.value || "").trim().toUpperCase();
-
-  if(!cidade || uf.length !== 2){
-    modalSetError("Preencha Cidade e UF (2 letras).");
-    // reabre (simples): mantém aberto e não fecha
-    document.getElementById("modalBack").style.display = "flex";
-    // força a pessoa clicar de novo após corrigir
-    return await pedirCidadeUF_();
-  }
-  return { cidade, uf };
-}
-
+/***************
+ * PAINEL B – Estadia
+ ***************/
 async function onEstadiaChange(ne, val){
   const nome = decName(ne);
   form[nome].estadia_tipo = val;
@@ -775,75 +804,63 @@ async function onEstadiaChange(ne, val){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
 
-  try{
-    const res = await apiCall("verificarHotelD1", { token, nome, dataRef });
+  const res = await apiCall_("verificarHotelD1", { token, nome, dataRef });
+  if(!res || !res.ok){
+    const msg = res?.error || "Erro";
+    if(isAuthError_(msg)) { logoutForcado(msg); return; }
+    if(el){ el.value = msg; form[nome].estadia_obs = msg; }
+    modalAlert("Erro", msg);
+    renderB();
+    return;
+  }
 
-    if(!res || !res.ok){
-      const msg = res?.error || "Erro";
-      if(el){ el.value = msg; form[nome].estadia_obs = msg; }
-      await modalOpen({ title:"Erro", msg, showCancel:false });
-      renderB();
-      return;
-    }
-
-    if(!res.found){
-      const info = await pedirCidadeUF_();
-      if(!info){
-        // cancelou: volta Casa por padrão
-        form[nome].estadia_tipo = "Casa";
-        form[nome].estadia_obs = "";
-        renderB();
-        return;
-      }
-      const txt = normalizeHotelObs_("Hotel", `${info.cidade}, ${info.uf}`);
-      form[nome].estadia_obs = txt;
-      if(el) el.value = txt;
-      renderB();
-      return;
-    }
-
-    const sugestao = [
-      res.cidade ? `Cidade: ${res.cidade}` : "",
-      res.embarque ? `Embarque: ${res.embarque}` : "",
-      res.hotel ? `Hotel: ${res.hotel}` : "",
-      res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
-      `D-1: ${res.d1}`
-    ].filter(Boolean).join(" | ");
-
-    const ok = await modalOpen({
-      title:"Hotel (D-1 encontrado)",
-      msg:"Encontrei o D-1. Você continuará na mesma cidade?",
-      bodyHTML:`<div class="muted" style="white-space:pre-wrap">${esc(sugestao)}</div>`,
-      okText:"Sim",
-      cancelText:"Não",
-      showCancel:true
-    });
-
-    let txt = sugestao;
-
-    if(!ok){
-      const info = await pedirCidadeUF_();
-      if(!info){
-        form[nome].estadia_tipo = "Casa";
-        form[nome].estadia_obs = "";
-        renderB();
-        return;
-      }
-      txt = normalizeHotelObs_("Hotel", `${info.cidade}, ${info.uf}`) + (res.embarque ? ` | Embarque: ${res.embarque}` : "");
-    } else {
-      txt = normalizeHotelObs_("Hotel", txt);
-    }
-
+  if(!res.found){
+    // ✅ pede CIDADE + UF
+    const cidadeUf = await modalPrompt(
+      "Hotel (não encontrado no D-1)",
+      `Não encontrei hospedagem no D-1 (${res.d1}).\nInforme a Cidade + UF (ex: Cascavel - PR):`,
+      "Cascavel - PR"
+    );
+    const txt = normalizeHotelObs_("Hotel", cidadeUf || "");
     form[nome].estadia_obs = txt;
     if(el) el.value = txt;
     renderB();
-
-  }catch(err){
-    const msg = "Falha no servidor: " + (err?.message || err);
-    if(el){ el.value = msg; form[nome].estadia_obs = msg; }
-    await modalOpen({ title:"Erro", msg, showCancel:false });
-    renderB();
+    return;
   }
+
+  const sugestao = [
+    res.cidade ? `Cidade: ${res.cidade}` : "",
+    res.embarque ? `Embarque: ${res.embarque}` : "",
+    res.hotel ? `Hotel: ${res.hotel}` : "",
+    res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
+    `D-1: ${res.d1}`
+  ].filter(Boolean).join(" | ");
+
+  // confirma via modal
+  openModal({
+    title: "Hotel encontrado no D-1",
+    bodyHtml: `<div class="hintBox">${esc(sugestao)}</div><div class="muted" style="margin-top:10px;">Continuará na mesma cidade?</div>`,
+    footerButtons: [
+      { text:"Não", className:"secondary", onClick: async ()=>{
+          closeModal();
+          const cidadeUf = await modalPrompt("Informe Cidade + UF", "Ex: Cascavel - PR", "Cascavel - PR", res.cidade || "");
+          let txt = normalizeHotelObs_("Hotel", cidadeUf || "");
+          if(res.embarque) txt += ` | Embarque: ${res.embarque}`;
+          form[nome].estadia_obs = txt;
+          if(el) el.value = txt;
+          renderB();
+        }
+      },
+      { text:"Sim", onClick: ()=>{
+          closeModal();
+          const txt = normalizeHotelObs_("Hotel", sugestao);
+          form[nome].estadia_obs = txt;
+          if(el) el.value = txt;
+          renderB();
+        }
+      }
+    ]
+  });
 }
 
 function renderB(){
@@ -868,7 +885,7 @@ function renderB(){
         </select>
 
         <input id="eobs_${idSafe(n)}"
-          placeholder="Ex.: Cidade, UF | Embarque: ..."
+          placeholder="Ex.: Cascavel - PR | Embarque: ..."
           value="${esc(form[n].estadia_obs)}"
           oninput="form[decName('${ne}')].estadia_obs=this.value"
           onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
@@ -879,7 +896,9 @@ function renderB(){
   document.getElementById("listaB").innerHTML = html;
 }
 
-/************** Painel C **************/
+/***************
+ * PAINEL C – Alimentação
+ ***************/
 function setSimNao_(ne, campo, checked){
   const nome = decName(ne);
   form[nome][campo] = checked ? "SIM" : "NÃO";
@@ -892,6 +911,7 @@ function toggleAllAlmoco(on){
   names.forEach(n => form[n].almoco_valor = on ? "SIM" : "NÃO");
   renderC();
 }
+
 function renderC(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
 
@@ -930,9 +950,12 @@ function renderC(){
   document.getElementById("listaC").innerHTML = html;
 }
 
-/************** Painel D **************/
+/***************
+ * PAINEL D
+ ***************/
 function renderD(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
     return `
@@ -958,21 +981,27 @@ function renderD(){
   document.getElementById("listaD").innerHTML = html;
 }
 
-/************** Painel E **************/
+/***************
+ * PAINEL E – Extras
+ ***************/
 function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
+
 function setExtraChecked_(ne, campo, checked){
   const n = decName(ne);
   if(!checked) form[n][campo] = 0;
   else if(Number(form[n][campo]||0) === 0) form[n][campo] = 0.01;
   renderE();
 }
+
 function setExtraValor_(ne, campo, val){
   const n = decName(ne);
   const num = Number(String(val||"").replace(",", "."));
   form[n][campo] = isNaN(num) ? 0 : num;
 }
+
 function renderE(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
 
@@ -1029,26 +1058,29 @@ function renderE(){
   document.getElementById("listaE").innerHTML = html;
 }
 
-/************** Auto start **************/
+/***************
+ * AUTO START
+ ***************/
 window.onload = async () => {
   setLoginMode(loginMode);
 
   show("loginCard");
   hide("app");
-  hide("bottomBar"); // ✅ só aparece depois do carregar
+  loaded = false;
+  updateBottomBarVisibility_();
 
+  // se tem token salvo, valida no servidor
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
-    try{
-      const res = await apiCall("ping", { token });
-      if(res && res.ok){
-        hide("loginCard");
-        show("app");
-        await carregarDataPadrao();
-      } else {
-        logoutForcado("Sessão expirada. Faça login novamente.");
-      }
-    }catch(e){
+    const res = await apiCall_("ping", { token });
+    if(res && res.ok){
+      hide("loginCard");
+      show("app");
+      loaded = false;
+      updateBottomBarVisibility_();
+      await carregarDataPadrao();
+      document.getElementById("loginStatus").innerText = "";
+    } else {
       logoutForcado("Sessão expirada. Faça login novamente.");
     }
   }
