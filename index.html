@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Programação – Despesas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    body{ margin:0; font-family:Arial,sans-serif; background:#f5f6f7; }
+    .wrap{ max-width:1200px; margin:auto; padding:14px 14px 120px; }
+    .card{ background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    h2,h3{ margin:0 0 8px; }
+    .muted{ color:#6b7280; font-size:12px; }
+    input,select,button{ width:100%; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px; }
+    button{ cursor:pointer; border:none; background:#166534; color:#fff; }
+    button.secondary{ background:#374151; }
+    button.light{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; width:auto; padding:8px 12px; border-radius:999px; }
+    button:disabled{ opacity:.6; cursor:not-allowed; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; }
+    .col{ flex:1; min-width:180px; }
+    .pill{ display:inline-block; padding:4px 10px; background:#e0f2fe; border-radius:999px; font-size:12px; margin-top:6px; }
+    .topbar{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .topbar .right{ display:flex; gap:10px; align-items:center; }
+    .logoutBtn{ width:auto; padding:9px 14px; border-radius:999px; background:#111827; }
+
+    .bottomBar{ position:fixed; left:0; right:0; bottom:0; background:#f5f6f7; border-top:1px solid #e5e7eb; padding:10px; }
+    .bottomBar .inner{ max-width:1200px; margin:auto; display:flex; gap:10px; }
+
+    .groupCoord{ border:1px solid #e5e7eb; border-radius:14px; padding:12px; margin:10px 0 14px; background:#fff; }
+    .groupCoordTitle{ font-weight:800; font-size:15px; margin:0 0 10px; }
+    .groupSup{ border-top:1px dashed #e5e7eb; padding-top:10px; margin-top:10px; }
+    .groupSup:first-child{ border-top:none; padding-top:0; margin-top:0; }
+    .groupSupTitle{ font-weight:700; font-size:13px; margin:0 0 8px; color:#374151; }
+
+    .nomeRow{ display:grid; grid-template-columns: 1fr 220px 1fr; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #f3f4f6; }
+    .nomeRow:last-child{ border-bottom:none; }
+
+    .nomeMain{ display:flex; flex-direction:column; gap:2px; }
+    .nomeMain .nome{ font-weight:700; font-size:13px; }
+    .nomeMain .sub{ font-size:11px; color:#6b7280; }
+
+    .toolsRow{ display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 10px; }
+    .chkRow{ display:flex; gap:8px; align-items:center; }
+    .chkRow input{ width:auto; transform:scale(1.1); }
+
+    .inlineVal{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .inlineVal input[type="number"]{ width:170px; }
+
+    .step{ display:none; }
+    .step.active{ display:block; }
+
+    .loginTopRow{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+
+    @media (max-width: 720px){
+      .wrap{ padding:12px 10px 110px; }
+      input,select,button{ padding:9px; font-size:13px; }
+      .col{ min-width:140px; }
+      .nomeRow{ grid-template-columns: 1fr; gap:8px; }
+      .inlineVal input[type="number"]{ width:100%; }
+    }
+
+    /* ===== MODAL (Dialog central) ===== */
+    .modalBack{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.45);
+      display:none;
+      align-items:center; justify-content:center;
+      z-index:9999;
+      padding:18px;
+    }
+    .modalBack.show{ display:flex; }
+    .modal{
+      width:min(520px, 96vw);
+      background:#fff;
+      border-radius:18px;
+      box-shadow:0 18px 60px rgba(0,0,0,.25);
+      overflow:hidden;
+      transform:scale(.98);
+      animation: pop .12s ease-out forwards;
+    }
+    @keyframes pop { to { transform:scale(1); } }
+    .modalHead{
+      padding:14px 16px;
+      border-bottom:1px solid #e5e7eb;
+      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+    }
+    .modalTitle{
+      font-weight:800; font-size:15px; margin:0;
+    }
+    .modalClose{
+      border:none; background:transparent; cursor:pointer;
+      font-size:18px; line-height:1; padding:6px 10px; border-radius:10px;
+    }
+    .modalBody{ padding:14px 16px; }
+    .modalMsg{ margin:0 0 12px; color:#374151; font-size:13px; white-space:pre-line; }
+    .modalFormRow{ display:flex; gap:10px; flex-wrap:wrap; }
+    .modalFormRow .field{ flex:1; min-width:160px; }
+    .modalFormRow label{ display:block; font-size:12px; color:#6b7280; margin:0 0 6px; }
+    .modalFormRow input, .modalFormRow select{
+      width:100%;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid #d1d5db;
+      font-size:14px;
+    }
+    .modalFoot{
+      padding:12px 16px;
+      border-top:1px solid #e5e7eb;
+      display:flex; gap:10px; justify-content:flex-end;
+    }
+    .modalBtn{
+      border:none; border-radius:12px;
+      padding:10px 14px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    .modalBtn.secondary{ background:#e5e7eb; color:#111827; }
+    .modalBtn.primary{ background:#166534; color:#fff; }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div id="loginCard" class="card">
+    <div class="loginTopRow">
+      <div>
+        <h2 id="loginTitle">Login do Gestor</h2>
+        <div id="loginHint" class="muted">Informe seu <b>PIN (4 dígitos)</b>.</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <button class="light" id="btnModePin" onclick="setLoginMode('PIN')">Gestor (PIN)</button>
+        <button class="light" id="btnModeAdmin" onclick="setLoginMode('ADMIN')">Admin (CPF)</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="col">
+        <input id="loginInput" placeholder="PIN" inputmode="numeric" maxlength="4" autocomplete="off">
+      </div>
+      <div class="col">
+        <button id="btnLogin" onclick="login()">Entrar</button>
+      </div>
+    </div>
+
+    <div id="loginStatus" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" style="display:none;">
+    <div class="card">
+      <div class="topbar">
+        <div>
+          <h3 style="margin:0;">Programação</h3>
+          <div id="topInfo" class="muted" style="margin-top:4px;"></div>
+          <div id="janelaInfo" class="muted"></div>
+        </div>
+        <div class="right">
+          <button class="logoutBtn" onclick="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="col">
+          <label class="muted">Data</label>
+          <input id="dataRef" placeholder="dd/mm/aaaa">
+        </div>
+        <div class="col">
+          <label class="muted">&nbsp;</label>
+          <button id="btnCarregar" onclick="carregar()">Carregar</button>
+        </div>
+      </div>
+
+      <div id="debugInfo" class="muted" style="margin-top:6px;"></div>
+    </div>
+
+    <div id="stepA" class="card step">
+      <h3>Painel A – Disponibilidade</h3>
+      <div class="muted">Somente <b>OK</b> e <b>Logística</b> seguem para os próximos painéis.</div>
+      <div id="listaA"></div>
+    </div>
+
+    <div id="stepB" class="card step">
+      <h3>Painel B – Estadia</h3>
+      <div class="muted">
+        Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
+        <b>Hotel</b>: consulta D-1 e exige Cidade + UF (ex.: Cascavel, PR).<br>
+        <b>Fazenda</b>: se Obs vazio, preenche “R$ 30,00 - pernoite”.
+      </div>
+      <div id="listaB"></div>
+    </div>
+
+    <div id="stepC" class="card step">
+      <h3>Painel C – Alimentação</h3>
+      <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = <b>NÃO</b>. (Botão somente para Almoço)</div>
+      <div class="toolsRow">
+        <button class="light" onclick="toggleAllAlmoco(true)">Todos Almoço</button>
+        <button class="light" onclick="toggleAllAlmoco(false)">Limpar Almoço</button>
+      </div>
+      <div id="listaC"></div>
+    </div>
+
+    <div id="stepD" class="card step">
+      <h3>Painel D – Deslocamento</h3>
+      <div id="listaD"></div>
+    </div>
+
+    <div id="stepE" class="card step">
+      <h3>Painel E – Extras</h3>
+      <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
+      <div id="listaE"></div>
+      <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="bottomBar" id="bottomBar" style="display:none;">
+  <div class="inner">
+    <button id="btnVoltar" class="secondary" onclick="voltar()">Voltar</button>
+    <button id="btnProximo" onclick="avancar()">Próximo</button>
+  </div>
+</div>
+
+<!-- ===== MODAL ===== -->
+<div class="modalBack" id="modalBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modalHead">
+      <div>
+        <h3 class="modalTitle" id="modalTitle">Atenção</h3>
+        <div class="muted" id="modalSub" style="margin-top:4px; display:none;"></div>
+      </div>
+      <button class="modalClose" onclick="modalCancel()" aria-label="Fechar">✕</button>
+    </div>
+
+    <div class="modalBody">
+      <p class="modalMsg" id="modalMsg"></p>
+      <div id="modalFields"></div>
+    </div>
+
+    <div class="modalFoot">
+      <button class="modalBtn secondary" id="modalBtnCancel" onclick="modalCancel()">Cancelar</button>
+      <button class="modalBtn primary" id="modalBtnOk" onclick="modalOk()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/***********************
+ * CONFIG (GITHUB -> API)
+ ***********************/
+const API_URL = "https://script.google.com/macros/s/AKfycbwgb-73w2UdpgYrQoLyXhcV5kcbZifQ33nB5zIEXg6ZZcS9RD0uw0MbP5bLJp0VFbar/exec"; // ex: https://script.google.com/macros/s/XXXX/exec
+
+/***************
+ * STATE
+ ***************/
+let token = localStorage.getItem("DESP_TOKEN") || "";
+let ctx = null;
+let step = "A";
+let form = {};
+let busy = false;
+
+let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN"; // PIN | ADMIN
+
+const PROSSEGUIR = (st) => (String(st||"").trim() === "OK" || String(st||"").trim() === "Logística");
+
+/***************
+ * HELPERS
+ ***************/
+function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function encName(n){ return encodeURIComponent(String(n||"")); }
+function decName(n){ return decodeURIComponent(String(n||"")); }
+function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
+
+function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
+function show(id){ document.getElementById(id).style.display="block"; }
+function hide(id){ document.getElementById(id).style.display="none"; }
+
+function setBusy(v){
+  busy = !!v;
+  ["btnProximo","btnVoltar","btnCarregar","btnLogin"].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.disabled = busy;
+  });
+}
+
+function isAuthError_(text){
+  const t = String(text||"").toLowerCase();
+  return t.includes("sessão expirada") || t.includes("sessao expirada") || t.includes("faça login") || t.includes("faca login");
+}
+
+function logoutForcado(msg){
+  try{ localStorage.removeItem("DESP_TOKEN"); }catch(e){}
+  token = "";
+  ctx = null;
+  form = {};
+  hide("app"); hide("bottomBar"); show("loginCard");
+  document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
+}
+
+function logout(){ logoutForcado("Logout realizado."); }
+
+/***************
+ * API (POST JSON)
+ ***************/
+async function api(action, payload={}){
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, ...payload })
+  });
+  const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
+  return data;
+}
+
+/***************
+ * MODAL (Promise)
+ ***************/
+let __modalResolve = null;
+let __modalReject = null;
+
+function openModal({ title="Atenção", sub="", message="", fields=[], okText="Confirmar", cancelText="Cancelar", hideCancel=false }) {
+  const back = document.getElementById("modalBack");
+  const elTitle = document.getElementById("modalTitle");
+  const elSub = document.getElementById("modalSub");
+  const elMsg = document.getElementById("modalMsg");
+  const elFields = document.getElementById("modalFields");
+  const btnOk = document.getElementById("modalBtnOk");
+  const btnCancel = document.getElementById("modalBtnCancel");
+
+  elTitle.innerText = title;
+  if(sub){
+    elSub.style.display = "block";
+    elSub.innerText = sub;
+  } else {
+    elSub.style.display = "none";
+    elSub.innerText = "";
+  }
+  elMsg.innerText = message;
+
+  btnOk.innerText = okText || "Confirmar";
+  btnCancel.innerText = cancelText || "Cancelar";
+  btnCancel.style.display = hideCancel ? "none" : "inline-block";
+
+  elFields.innerHTML = "";
+  if(fields && fields.length){
+    const wrap = document.createElement("div");
+    wrap.className = "modalFormRow";
+    fields.forEach(f=>{
+      const d = document.createElement("div");
+      d.className = "field";
+      d.innerHTML = `
+        <label>${esc(f.label || "")}</label>
+        ${f.type === "select"
+          ? `<select id="${esc(f.id)}">
+              ${(f.options||[]).map(op=>`<option value="${esc(op.value)}">${esc(op.label)}</option>`).join("")}
+            </select>`
+          : `<input id="${esc(f.id)}" type="${esc(f.type||"text")}" placeholder="${esc(f.placeholder||"")}" value="${esc(f.value||"")}" ${f.maxLength?`maxlength="${f.maxLength}"`:``} ${f.inputMode?`inputmode="${f.inputMode}"`:``} />`
+        }
+      `;
+      wrap.appendChild(d);
+
+      if(f.type==="select" && f.value != null){
+        setTimeout(()=>{
+          const sel = document.getElementById(f.id);
+          if(sel) sel.value = String(f.value);
+        },0);
+      }
+    });
+    elFields.appendChild(wrap);
+  }
+
+  back.classList.add("show");
+  back.setAttribute("aria-hidden", "false");
+
+  setTimeout(()=>{
+    const first = fields?.[0]?.id ? document.getElementById(fields[0].id) : null;
+    if(first) first.focus();
+  },50);
+
+  return new Promise((resolve, reject)=>{
+    __modalResolve = resolve;
+    __modalReject = reject;
+  });
+}
+
+function closeModal_(){
+  const back = document.getElementById("modalBack");
+  back.classList.remove("show");
+  back.setAttribute("aria-hidden", "true");
+}
+
+function modalOk(){
+  try{
+    const elFields = document.getElementById("modalFields");
+    const inputs = elFields.querySelectorAll("input, select, textarea");
+    const values = {};
+    inputs.forEach(i=> values[i.id] = i.value);
+
+    closeModal_();
+    if(__modalResolve) __modalResolve(values);
+  } finally {
+    __modalResolve = null;
+    __modalReject = null;
+  }
+}
+
+function modalCancel(){
+  try{
+    closeModal_();
+    if(__modalReject) __modalReject(new Error("cancelled"));
+  } finally {
+    __modalResolve = null;
+    __modalReject = null;
+  }
+}
+
+/***************
+ * LOGIN
+ ***************/
+function setLoginMode(mode){
+  loginMode = mode;
+  localStorage.setItem("DESP_LOGIN_MODE", loginMode);
+
+  const title = document.getElementById("loginTitle");
+  const hint  = document.getElementById("loginHint");
+  const input = document.getElementById("loginInput");
+
+  if(mode === "ADMIN"){
+    title.innerText = "Login ADMIN";
+    hint.innerHTML  = "Informe seu <b>CPF (11 dígitos)</b> autorizado em <code>ADMIN_CPFS</code>.";
+    input.placeholder = "CPF (11 dígitos)";
+    input.maxLength = 14;
+    input.value = "";
+    input.inputMode = "numeric";
+  } else {
+    title.innerText = "Login do Gestor";
+    hint.innerHTML  = "Informe seu <b>PIN (4 dígitos)</b>.";
+    input.placeholder = "PIN";
+    input.maxLength = 4;
+    input.value = "";
+    input.inputMode = "numeric";
+  }
+
+  document.getElementById("loginStatus").innerText = "";
+}
+
+async function login(){
+  const raw = document.getElementById("loginInput").value;
+  document.getElementById("loginStatus").innerText = "Entrando...";
+  setBusy(true);
+
+  try{
+    const res = (loginMode === "ADMIN")
+      ? await api("loginAdminCPF", { raw })
+      : await api("loginPIN", { raw });
+
+    setBusy(false);
+
+    if(!res || !res.ok){
+      document.getElementById("loginStatus").innerText = res?.error || "Erro";
+      return;
+    }
+
+    token = res.token;
+    localStorage.setItem("DESP_TOKEN", token);
+
+    hide("loginCard"); show("app"); show("bottomBar");
+    await carregarDataPadrao();
+
+  } catch(err){
+    setBusy(false);
+    document.getElementById("loginStatus").innerText = "Erro: " + (err?.message || err);
+  }
+}
+
+async function carregarDataPadrao(){
+  try{
+    const res = await api("getDataPadrao", {});
+    if(!res || !res.ok) return;
+
+    document.getElementById("dataRef").value = res.data || "";
+    const permit = res.janela?.permitidas || [];
+    document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+  } catch(err){
+    setDebug("getDataPadrao falhou: " + (err?.message || err));
+  }
+}
+
+/***************
+ * GROUP / RENDER BASE
+ ***************/
+function getSupOf_(nome){
+  return (ctx?.mapSupPorNome && ctx.mapSupPorNome[nome]) ? ctx.mapSupPorNome[nome] : "SEM SUPERVISÃO";
+}
+
+function groupByCoordSup_(names){
+  const tree = {};
+  names.forEach(n=>{
+    const coord = String(form[n]?.coordenacao || "SEM COORDENAÇÃO").trim();
+    const sup = String(getSupOf_(n) || "SEM SUPERVISÃO").trim();
+    if(!tree[coord]) tree[coord] = {};
+    if(!tree[coord][sup]) tree[coord][sup] = [];
+    tree[coord][sup].push(n);
+  });
+  const coords = Object.keys(tree).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  return { tree, coords };
+}
+
+function renderGrouped_(names, rowHtmlFn){
+  const { tree, coords } = groupByCoordSup_(names);
+  if(!coords.length) return `<div class="muted">Nenhum colaborador.</div>`;
+
+  return coords.map(coord=>{
+    const sups = tree[coord];
+    const supKeys = Object.keys(sups).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+    const totalCoord = supKeys.reduce((acc,k)=>acc + (sups[k]?.length||0), 0);
+
+    const supHtml = supKeys.map(sup=>{
+      const listaNomes = (sups[sup]||[]).slice().sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      return `
+        <div class="groupSup">
+          <div class="groupSupTitle">Supervisão: ${esc(sup)} <span class="muted">(${listaNomes.length})</span></div>
+          ${listaNomes.map(n => rowHtmlFn(n, coord, sup)).join("")}
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="groupCoord">
+        <div class="groupCoordTitle">Coordenação: ${esc(coord)} <span class="muted">(${totalCoord})</span></div>
+        ${supHtml}
+      </div>
+    `;
+  }).join("");
+}
+
+/***************
+ * CARREGAR CONTEXTO
+ ***************/
+async function carregar(){
+  const d = document.getElementById("dataRef").value.trim();
+  setBusy(true);
+  setDebug("Carregando...");
+
+  try{
+    const res = await api("carregarContexto", { token, data: d });
+    setBusy(false);
+
+    if(!res || !res.ok){
+      const err = res?.error || "Erro ao carregar";
+      if(isAuthError_(err)) { logoutForcado(err); return; }
+
+      await openModal({ title:"Erro", message: err, okText:"Ok", hideCancel:true }).catch(()=>{});
+      setDebug(err);
+      return;
+    }
+
+    ctx = res;
+
+    const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
+    const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
+    document.getElementById("topInfo").innerText =
+      `${perfil} | Coordenações: ${coordStr} | Liberados: ${(res.liberados||[]).length} | Bloqueados: ${(res.bloqueados||[]).length}`;
+
+    const permit = res.janela?.permitidas || [];
+    document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+
+    form = {};
+    const lanc = res.lancamentos || {};
+
+    (res.liberados || []).forEach(p=>{
+      const nome = p.colaborador;
+      const prev = lanc[nome] || {};
+
+      form[nome] = {
+        coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
+        disponibilidade_status: prev.disponibilidade_status ?? "OK",
+        disponibilidade_obs: prev.disponibilidade_obs ?? "",
+        logistica_default_obs: "",
+        logistica_obs_editada: false,
+
+        estadia_tipo: prev.estadia_tipo ?? "Casa",
+        estadia_obs: prev.estadia_obs ?? "",
+
+        cafe_valor: (prev.cafe_valor ?? "NÃO"),
+        almoco_valor: (prev.almoco_valor ?? "NÃO"),
+        janta_valor: (prev.janta_valor ?? "NÃO"),
+
+        deslocamento_tipo: prev.deslocamento_tipo ?? "",
+        deslocamento_obs: prev.deslocamento_obs ?? "",
+
+        extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
+        extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
+        extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
+        extras_obs: prev.extras_obs ?? ""
+      };
+    });
+
+    renderA();
+    setStep("A");
+    setDebug("OK");
+
+  } catch(err){
+    setBusy(false);
+    const msg = "Falha no servidor: " + (err?.message || err);
+    if(isAuthError_(msg)) { logoutForcado(msg); return; }
+    await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
+    setDebug(msg);
+  }
+}
+
+/***************
+ * STEP + SAVE
+ ***************/
+function setStep(s){
+  step = s;
+  ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
+  document.getElementById("step"+s).classList.add("active");
+}
+
+function normalizeHotelObs_(tipo, obs){
+  const t = String(tipo||"").trim();
+  let s = String(obs||"").trim();
+  if(t === "Hotel"){
+    if(s && !/cidade\s*:/i.test(s)) s = "Cidade: " + s;
+  }
+  return s;
+}
+
+async function salvarEtapaAtual_(){
+  if(!ctx){
+    await openModal({ title:"Atenção", message:"Carregue a data primeiro.", okText:"Ok", hideCancel:true }).catch(()=>{});
+    return { ok:false };
+  }
+
+  const dataRef = document.getElementById("dataRef").value.trim();
+  const namesAll = Object.keys(form);
+  let regs = [];
+
+  if(step === "A"){
+    regs = namesAll.map(n => ({
+      colaborador: n,
+      coordenacao: form[n].coordenacao,
+      disponibilidade_status: form[n].disponibilidade_status,
+      disponibilidade_obs: form[n].disponibilidade_obs
+    }));
+  }
+  if(step === "B"){
+    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    regs = names.map(n => ({
+      colaborador: n,
+      coordenacao: form[n].coordenacao,
+      estadia_tipo: form[n].estadia_tipo,
+      estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
+    }));
+  }
+  if(step === "C"){
+    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    regs = names.map(n => ({
+      colaborador: n,
+      coordenacao: form[n].coordenacao,
+      cafe_valor: form[n].cafe_valor,
+      almoco_valor: form[n].almoco_valor,
+      janta_valor: form[n].janta_valor
+    }));
+  }
+  if(step === "D"){
+    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    regs = names.map(n => ({
+      colaborador: n,
+      coordenacao: form[n].coordenacao,
+      deslocamento_tipo: form[n].deslocamento_tipo,
+      deslocamento_obs: form[n].deslocamento_obs
+    }));
+  }
+  if(step === "E"){
+    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    regs = names.map(n => ({
+      colaborador: n,
+      coordenacao: form[n].coordenacao,
+      extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
+      extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
+      extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
+      extras_obs: form[n].extras_obs || ""
+    }));
+  }
+
+  const saveEl = document.getElementById("saveStatus");
+  if(step==="E" && saveEl) saveEl.innerText = "Salvando...";
+  setBusy(true);
+
+  try{
+    const res = await api("salvarEtapa", { token, dataReferencia: dataRef, etapa: step, registros: regs });
+    setBusy(false);
+
+    if(!res || !res.ok){
+      const err = res?.error || "Erro ao salvar etapa";
+      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+      await openModal({ title:"Erro ao salvar", message: err, okText:"Ok", hideCancel:true }).catch(()=>{});
+      return { ok:false };
+    }
+
+    if(step==="E" && saveEl){
+      saveEl.innerText = `✅ Etapa ${res.etapa} salva (Atualizados: ${res.updated} | Novos: ${res.inserted})`;
+    }
+
+    return { ok:true, res };
+
+  } catch(err){
+    setBusy(false);
+    const msg = "Falha ao salvar etapa: " + (err?.message || err);
+    if(isAuthError_(msg)) { logoutForcado(msg); return { ok:false }; }
+    await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
+    return { ok:false };
+  }
+}
+
+async function avancar(){
+  const s = await salvarEtapaAtual_();
+  if(!s.ok) return;
+
+  const namesAll = Object.keys(form);
+  if(step==="A"){
+    const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    if(!lista.length){
+      await openModal({ title:"Atenção", message:"Nenhum colaborador para seguir (somente OK/Logística).", okText:"Ok", hideCancel:true }).catch(()=>{});
+      return;
+    }
+    renderB(); setStep("B"); return;
+  }
+  if(step==="B"){ renderC(); setStep("C"); return; }
+  if(step==="C"){ renderD(); setStep("D"); return; }
+  if(step==="D"){ renderE(); setStep("E"); return; }
+  if(step==="E"){
+    await openModal({ title:"Tudo certo ✅", message:"Tudo salvo!", okText:"Ok", hideCancel:true }).catch(()=>{});
+    return;
+  }
+}
+
+function voltar(){
+  if(busy) return;
+  if(step==="B"){ renderA(); setStep("A"); return; }
+  if(step==="C"){ renderB(); setStep("B"); return; }
+  if(step==="D"){ renderC(); setStep("C"); return; }
+  if(step==="E"){ renderD(); setStep("D"); return; }
+}
+
+/***************
+ * PAINEL A
+ ***************/
+async function onDispChange(ne, val){
+  const nome = decName(ne);
+  form[nome].disponibilidade_status = val;
+
+  if(val === "Logística"){
+    form[nome].deslocamento_tipo = "Frota (motorista)";
+    const el = document.getElementById("dobs_"+idSafe(nome));
+    if(el) el.value = "Buscando veículo...";
+
+    try{
+      const res = await api("getPrimeiroVeiculoPorFuncionario", { token, nome });
+      if(!res || !res.ok){
+        if(el) el.value="";
+        await openModal({ title:"Erro", message:(res?.error || "Erro ao buscar veículo"), okText:"Ok", hideCancel:true }).catch(()=>{});
+        renderA();
+        return;
+      }
+      const ident = res.found ? res.identificacao : "";
+      const sugestao = ident ? `Veículo: ${ident}` : "";
+      form[nome].logistica_default_obs = sugestao;
+
+      const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
+      if(!obsAtual || !form[nome].logistica_obs_editada){
+        form[nome].disponibilidade_obs = sugestao;
+        form[nome].logistica_obs_editada = false;
+      }
+      renderA();
+    } catch(err){
+      if(el) el.value="";
+      await openModal({ title:"Erro", message:"Falha ao buscar veículo: " + (err?.message || err), okText:"Ok", hideCancel:true }).catch(()=>{});
+      renderA();
+    }
+    return;
+  }
+
+  renderA();
+}
+
+function onDispObsInput(ne, val){
+  const nome = decName(ne);
+  form[nome].disponibilidade_obs = val;
+
+  if(form[nome].disponibilidade_status === "Logística"){
+    form[nome].logistica_obs_editada = true;
+    const def = String(form[nome].logistica_default_obs||"").trim();
+    const cur = String(val||"").trim();
+    if(def && cur && cur !== def){
+      openModal({
+        title:"Obs alterada em Logística",
+        message:"⚠️ Você alterou a observação.\nSolicite a leitura do patrimônio do veículo associado.",
+        okText:"Ok",
+        hideCancel:true
+      }).catch(()=>{});
+    }
+  }
+}
+
+function renderA(){
+  const names = Object.keys(form);
+  const html = renderGrouped_(names, (n, coord, sup)=>{
+    const ne = encName(n);
+    return `
+      <div class="nomeRow">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+        </div>
+
+        <select onchange="onDispChange('${ne}', this.value)">
+          ${["OK","Logística","Tem atestado","Férias","Folga","Falta"].map(op=>`
+            <option ${form[n].disponibilidade_status===op?"selected":""}>${op}</option>
+          `).join("")}
+        </select>
+
+        <input id="dobs_${idSafe(n)}" placeholder="Obs..."
+          value="${esc(form[n].disponibilidade_obs)}"
+          oninput="onDispObsInput('${ne}', this.value)">
+      </div>
+    `;
+  });
+  document.getElementById("listaA").innerHTML = html;
+}
+
+/***************
+ * PAINEL B – Estadia (Modal cidade+UF)
+ ***************/
+async function onEstadiaChange(ne, val){
+  const nome = decName(ne);
+  form[nome].estadia_tipo = val;
+
+  const el = document.getElementById("eobs_"+idSafe(nome));
+
+  if(val === "Fazenda"){
+    if(!String(form[nome].estadia_obs||"").trim()){
+      form[nome].estadia_obs = "R$ 30,00 - pernoite";
+      if(el) el.value = form[nome].estadia_obs;
+    }
+    renderB();
+    return;
+  }
+
+  if(val !== "Hotel"){
+    renderB();
+    return;
+  }
+
+  const dataRef = document.getElementById("dataRef").value.trim();
+  if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
+
+  try{
+    const res = await api("verificarHotelD1", { token, nome, dataRef });
+
+    if(!res || !res.ok){
+      const msg = res?.error || "Erro ao verificar D-1";
+      if(el){ el.value = msg; form[nome].estadia_obs = msg; }
+      await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
+      renderB();
+      return;
+    }
+
+    // não encontrou no D-1 -> pede cidade+UF
+    if(!res.found){
+      try{
+        const ans = await openModal({
+          title:"Hospedagem – Informe o destino",
+          sub:`Colaborador: ${nome}`,
+          message:`Hotel marcado, mas não encontrei no D-1 (${res.d1}).\nInforme a cidade e o estado (UF) para hospedagem.`,
+          fields:[
+            { id:"cidade", label:"Cidade", type:"text", placeholder:"Ex.: Cascavel" },
+            { id:"uf", label:"UF", type:"text", placeholder:"Ex.: PR", maxLength:2, inputMode:"text" }
+          ],
+          okText:"Salvar",
+          cancelText:"Cancelar"
+        });
+
+        const cidade = String(ans.cidade||"").trim();
+        const uf = String(ans.uf||"").trim().toUpperCase();
+
+        if(!cidade || uf.length !== 2){
+          await openModal({ title:"Dados incompletos", message:"Preencha Cidade e UF (2 letras).", okText:"Ok", hideCancel:true }).catch(()=>{});
+          if(el){ el.value = ""; form[nome].estadia_obs = ""; }
+          renderB();
+          return;
+        }
+
+        const txt = normalizeHotelObs_("Hotel", `${cidade}, ${uf}`);
+        form[nome].estadia_obs = txt;
+        if(el) el.value = txt;
+        renderB();
+        return;
+
+      } catch(_cancel){
+        if(el){ el.value = ""; form[nome].estadia_obs = ""; }
+        renderB();
+        return;
+      }
+    }
+
+    // encontrou no D-1
+    const sugestao = [
+      res.cidade ? `Cidade: ${res.cidade}` : "",
+      res.embarque ? `Embarque: ${res.embarque}` : "",
+      res.hotel ? `Hotel: ${res.hotel}` : "",
+      res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
+      `D-1: ${res.d1}`
+    ].filter(Boolean).join(" | ");
+
+    // modal Sim/Não
+    let same = true;
+    try{
+      await openModal({
+        title:"D-1 encontrado ✅",
+        sub:`Colaborador: ${nome}`,
+        message:`Encontrei no D-1 (${res.d1}):\n${sugestao}\n\nContinuará na mesma cidade?`,
+        okText:"Sim",
+        cancelText:"Não"
+      });
+      same = true;
+    } catch(_no){
+      same = false;
+    }
+
+    if(!same){
+      try{
+        const ans = await openModal({
+          title:"Alterar destino",
+          sub:`Colaborador: ${nome}`,
+          message:"Informe a nova cidade e UF do hotel.",
+          fields:[
+            { id:"cidade", label:"Cidade", type:"text", placeholder:"Ex.: Londrina", value: (res.cidade||"") },
+            { id:"uf", label:"UF", type:"text", placeholder:"Ex.: PR", maxLength:2, inputMode:"text" }
+          ],
+          okText:"Salvar",
+          cancelText:"Cancelar"
+        });
+
+        const cidade = String(ans.cidade||"").trim();
+        const uf = String(ans.uf||"").trim().toUpperCase();
+        if(!cidade || uf.length !== 2){
+          await openModal({ title:"Dados incompletos", message:"Preencha Cidade e UF (2 letras).", okText:"Ok", hideCancel:true }).catch(()=>{});
+          form[nome].estadia_obs = normalizeHotelObs_("Hotel", sugestao);
+          if(el) el.value = form[nome].estadia_obs;
+          renderB();
+          return;
+        }
+
+        let txt = normalizeHotelObs_("Hotel", `${cidade}, ${uf}`);
+        if(res.embarque) txt += ` | Embarque: ${res.embarque}`;
+        form[nome].estadia_obs = txt;
+        if(el) el.value = txt;
+        renderB();
+        return;
+
+      } catch(_cancel){
+        form[nome].estadia_obs = normalizeHotelObs_("Hotel", sugestao);
+        if(el) el.value = form[nome].estadia_obs;
+        renderB();
+        return;
+      }
+    }
+
+    const txt = normalizeHotelObs_("Hotel", sugestao);
+    form[nome].estadia_obs = txt;
+    if(el) el.value = txt;
+    renderB();
+
+  } catch(err){
+    const msg = "Falha no servidor: " + (err?.message || err);
+    if(el){ el.value = msg; form[nome].estadia_obs = msg; }
+    await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
+    renderB();
+  }
+}
+
+function renderB(){
+  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+  names.forEach(n=>{
+    if(!String(form[n].estadia_tipo||"").trim()) form[n].estadia_tipo = "Casa";
+  });
+
+  const html = renderGrouped_(names, (n, coord, sup)=>{
+    const ne = encName(n);
+    return `
+      <div class="nomeRow">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+        </div>
+
+        <select onchange="onEstadiaChange('${ne}', this.value)">
+          ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
+            <option ${form[n].estadia_tipo===op?"selected":""}>${op}</option>
+          `).join("")}
+        </select>
+
+        <input id="eobs_${idSafe(n)}"
+          placeholder="Ex.: Cascavel, PR | Embarque: ..."
+          value="${esc(form[n].estadia_obs)}"
+          oninput="form[decName('${ne}')].estadia_obs=this.value"
+          onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
+      </div>
+    `;
+  });
+
+  document.getElementById("listaB").innerHTML = html;
+}
+
+/***************
+ * PAINEL C – Alimentação
+ ***************/
+function setSimNao_(ne, campo, checked){
+  const nome = decName(ne);
+  form[nome][campo] = checked ? "SIM" : "NÃO";
+}
+function isSim_(nome, campo){
+  return String(form[nome][campo]||"").trim().toUpperCase() === "SIM";
+}
+function toggleAllAlmoco(on){
+  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+  names.forEach(n => form[n].almoco_valor = on ? "SIM" : "NÃO");
+  renderC();
+}
+
+function renderC(){
+  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+
+  const html = renderGrouped_(names, (n, coord, sup)=>{
+    const ne = encName(n);
+    return `
+      <div class="nomeRow">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+        </div>
+
+        <div class="chkRow">
+          <input type="checkbox" ${isSim_(n,"cafe_valor")?"checked":""}
+            onchange="setSimNao_('${ne}','cafe_valor',this.checked)">
+          <span>Café (SIM)</span>
+        </div>
+
+        <div class="chkRow" style="justify-content:space-between;">
+          <label class="chkRow" style="margin:0;">
+            <input type="checkbox" ${isSim_(n,"almoco_valor")?"checked":""}
+              onchange="setSimNao_('${ne}','almoco_valor',this.checked)">
+            <span>Almoço (SIM)</span>
+          </label>
+
+          <label class="chkRow" style="margin:0;">
+            <input type="checkbox" ${isSim_(n,"janta_valor")?"checked":""}
+              onchange="setSimNao_('${ne}','janta_valor',this.checked)">
+            <span>Janta (SIM)</span>
+          </label>
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById("listaC").innerHTML = html;
+}
+
+/***************
+ * PAINEL D – Deslocamento
+ ***************/
+function renderD(){
+  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+
+  const html = renderGrouped_(names, (n, coord, sup)=>{
+    const ne = encName(n);
+    return `
+      <div class="nomeRow">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+        </div>
+
+        <select onchange="form[decName('${ne}')].deslocamento_tipo=this.value">
+          ${["","Frota (motorista)","Carona","Uber","Km"].map(op=>`
+            <option ${form[n].deslocamento_tipo===op?"selected":""}>${op}</option>
+          `).join("")}
+        </select>
+
+        <input placeholder="Obs..."
+          value="${esc(form[n].deslocamento_obs)}"
+          oninput="form[decName('${ne}')].deslocamento_obs=this.value">
+      </div>
+    `;
+  });
+
+  document.getElementById("listaD").innerHTML = html;
+}
+
+/***************
+ * PAINEL E – Extras
+ ***************/
+function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
+
+function setExtraChecked_(ne, campo, checked){
+  const n = decName(ne);
+  if(!checked) form[n][campo] = 0;
+  else if(Number(form[n][campo]||0) === 0) form[n][campo] = 0.01;
+  renderE();
+}
+
+function setExtraValor_(ne, campo, val){
+  const n = decName(ne);
+  const num = Number(String(val||"").replace(",", "."));
+  form[n][campo] = isNaN(num) ? 0 : num;
+}
+
+function renderE(){
+  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+
+  const html = renderGrouped_(names, (n, coord, sup)=>{
+    const ne = encName(n);
+
+    const recOn = isExtraOn_(n,"extras_recarga_valor");
+    const pasOn = isExtraOn_(n,"extras_passagem_valor");
+    const lavOn = isExtraOn_(n,"extras_lavagem_valor");
+
+    return `
+      <div class="nomeRow">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+        </div>
+
+        <div class="inlineVal">
+          <div class="chkRow">
+            <input type="checkbox" ${recOn?"checked":""}
+              onchange="setExtraChecked_('${ne}','extras_recarga_valor',this.checked)">
+            <span>Recarga</span>
+          </div>
+          ${recOn ? `<input type="number" step="0.01" placeholder="Valor"
+            value="${esc(form[n].extras_recarga_valor)}"
+            oninput="setExtraValor_('${ne}','extras_recarga_valor',this.value)">` : ``}
+        </div>
+
+        <div class="inlineVal">
+          <div class="chkRow">
+            <input type="checkbox" ${pasOn?"checked":""}
+              onchange="setExtraChecked_('${ne}','extras_passagem_valor',this.checked)">
+            <span>Passagem</span>
+          </div>
+          ${pasOn ? `<input type="number" step="0.01" placeholder="Valor"
+            value="${esc(form[n].extras_passagem_valor)}"
+            oninput="setExtraValor_('${ne}','extras_passagem_valor',this.value)">` : ``}
+
+          <div class="chkRow" style="margin-left:10px;">
+            <input type="checkbox" ${lavOn?"checked":""}
+              onchange="setExtraChecked_('${ne}','extras_lavagem_valor',this.checked)">
+            <span>Lavagem</span>
+          </div>
+          ${lavOn ? `<input type="number" step="0.01" placeholder="Valor"
+            value="${esc(form[n].extras_lavagem_valor)}"
+            oninput="setExtraValor_('${ne}','extras_lavagem_valor',this.value)">` : ``}
+        </div>
+      </div>
+
+      <div style="margin:8px 0 14px;">
+        <input placeholder="Extras_Obs..." value="${esc(form[n].extras_obs||"")}"
+          oninput="form[decName('${ne}')].extras_obs=this.value">
+      </div>
+    `;
+  });
+
+  document.getElementById("listaE").innerHTML = html;
+}
+
+/***************
+ * AUTO START
+ ***************/
+window.onload = async () => {
+  setLoginMode(loginMode);
+
+  show("loginCard");
+  hide("app");
+  hide("bottomBar");
+
+  if(token){
+    document.getElementById("loginStatus").innerText = "Verificando sessão...";
+    try{
+      const res = await api("ping", { token });
+      if(res && res.ok){
+        hide("loginCard");
+        show("app");
+        show("bottomBar");
+        await carregarDataPadrao();
+      } else {
+        logoutForcado("Sessão expirada. Faça login novamente.");
+      }
+    } catch(_){
+      logoutForcado("Sessão expirada. Faça login novamente.");
+    }
+  }
+};
+</script>
+</body>
+</html>
