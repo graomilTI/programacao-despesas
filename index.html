@@ -4,14 +4,13 @@
   <meta charset="UTF-8" />
   <title>Programação – Despesas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <link rel="icon" href="data:,">
   <style>
     body{ margin:0; font-family:Arial,sans-serif; background:#f5f6f7; }
     .wrap{ max-width:1200px; margin:auto; padding:14px 14px 120px; }
     .card{ background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
     h2,h3{ margin:0 0 8px; }
-    .muted{ color:#6b7280; font-size:12px; }
-    input,select,button{ width:100%; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px; box-sizing:border-box; }
+    .muted{ color:#6b7280; font-size:12px; white-space:pre-line; }
+    input,select,button{ width:100%; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px; }
     button{ cursor:pointer; border:none; background:#166534; color:#fff; }
     button.secondary{ background:#374151; }
     button.light{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; width:auto; padding:8px 12px; border-radius:999px; }
@@ -50,41 +49,6 @@
     .step.active{ display:block; }
 
     .loginTopRow{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
-
-    /* Modal */
-    .modalOverlay{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.45);
-      display:none;
-      align-items:center; justify-content:center;
-      padding:16px;
-      z-index:9999;
-    }
-    .modal{
-      width:min(520px, 96vw);
-      background:#fff;
-      border-radius:16px;
-      box-shadow:0 12px 50px rgba(0,0,0,.25);
-      overflow:hidden;
-    }
-    .modalHeader{
-      padding:14px 14px 10px;
-      border-bottom:1px solid #e5e7eb;
-      display:flex; justify-content:space-between; align-items:center; gap:10px;
-    }
-    .modalTitle{ font-weight:800; }
-    .modalBody{ padding:14px; }
-    .modalFooter{
-      padding:12px 14px;
-      border-top:1px solid #e5e7eb;
-      display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;
-    }
-    .xbtn{ width:auto; padding:6px 10px; background:#e5e7eb; color:#111827; border-radius:999px; border:1px solid #d1d5db; }
-
-    .hintBox{
-      border:1px solid #e5e7eb; background:#f9fafb;
-      border-radius:12px; padding:10px; font-size:12px; color:#374151;
-    }
 
     @media (max-width: 720px){
       .wrap{ padding:12px 10px 110px; }
@@ -162,15 +126,14 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige Cidade + UF (ex: “Cascavel - PR”).<br>
-        <b>Fazenda</b>: se Obs vazio, preenche “R$ 30,00 - pernoite”.
+        <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.
       </div>
       <div id="listaB"></div>
     </div>
 
     <div id="stepC" class="card step">
       <h3>Painel C – Alimentação</h3>
-      <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = <b>NÃO</b>. (Botão somente para Almoço)</div>
+      <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = <b>NÃO</b>.</div>
       <div class="toolsRow">
         <button class="light" onclick="toggleAllAlmoco(true)">Todos Almoço</button>
         <button class="light" onclick="toggleAllAlmoco(false)">Limpar Almoço</button>
@@ -199,31 +162,18 @@
   </div>
 </div>
 
-<!-- MODAL ÚNICO (reutilizável) -->
-<div id="modalOverlay" class="modalOverlay">
-  <div class="modal">
-    <div class="modalHeader">
-      <div class="modalTitle" id="modalTitle">Atenção</div>
-      <button class="xbtn" onclick="closeModal()">Fechar</button>
-    </div>
-    <div class="modalBody" id="modalBody"></div>
-    <div class="modalFooter" id="modalFooter"></div>
-  </div>
-</div>
-
 <script>
-/** ✅ TROQUE SÓ AQUI (sua API do Worker) */
-const API_URL = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
+/** ✅ AQUI você aponta para o Worker */
+const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev"; // <-- TROQUE AQUI
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
 let step = "A";
 let form = {};
 let busy = false;
-let loaded = false;
+let loadedOnce = false;
 
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN"; // PIN | ADMIN
-
 const PROSSEGUIR = (st) => (String(st||"").trim() === "OK" || String(st||"").trim() === "Logística");
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
@@ -253,23 +203,12 @@ function logoutForcado(msg){
   token = "";
   ctx = null;
   form = {};
-  loaded = false;
+  loadedOnce = false;
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
-  updateBottomBarVisibility_();
 }
 
-function logout(){
-  // opcional: avisar servidor
-  apiCall_("logout", { token }).catch(()=>{});
-  logoutForcado("Logout realizado.");
-}
-
-function updateBottomBarVisibility_(){
-  // ✅ só mostra depois de carregar com sucesso
-  if (loaded) show("bottomBar");
-  else hide("bottomBar");
-}
+function logout(){ logoutForcado("Logout realizado."); }
 
 function setLoginMode(mode){
   loginMode = mode;
@@ -296,170 +235,57 @@ function setLoginMode(mode){
   document.getElementById("loginStatus").innerText = "";
 }
 
-async function apiCall_(action, data){
-  const r = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, ...data })
+/** API helper */
+async function api(action, args){
+  const res = await fetch(API_BASE, {
+    method:"POST",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, ...(args||{}) })
   });
-  const txt = await r.text();
-  try { return JSON.parse(txt); } catch(e){ return { ok:false, error: txt || "Resposta inválida" }; }
+  const txt = await res.text();
+  try { return JSON.parse(txt); }
+  catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
 }
 
-function openModal({ title="Atenção", bodyHtml="", footerButtons=[] }){
-  document.getElementById("modalTitle").innerText = title;
-  document.getElementById("modalBody").innerHTML = bodyHtml;
-
-  const footer = document.getElementById("modalFooter");
-  footer.innerHTML = "";
-  footerButtons.forEach(btn=>{
-    const b = document.createElement("button");
-    b.textContent = btn.text;
-    if(btn.className) b.className = btn.className;
-    b.onclick = btn.onClick;
-    footer.appendChild(b);
-  });
-
-  document.getElementById("modalOverlay").style.display = "flex";
-}
-function closeModal(){
-  document.getElementById("modalOverlay").style.display = "none";
-  document.getElementById("modalBody").innerHTML = "";
-  document.getElementById("modalFooter").innerHTML = "";
-}
-
-function modalAlert(title, message){
-  openModal({
-    title,
-    bodyHtml: `<div class="hintBox">${esc(message)}</div>`,
-    footerButtons: [{ text:"OK", className:"secondary", onClick: closeModal }]
-  });
-}
-
-function modalPrompt(title, label, placeholder="", defaultValue=""){
-  return new Promise(resolve=>{
-    const id = "mp_" + Math.random().toString(16).slice(2);
-    openModal({
-      title,
-      bodyHtml: `
-        <div class="muted" style="margin-bottom:8px;">${esc(label)}</div>
-        <input id="${id}" placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">
-      `,
-      footerButtons: [
-        { text:"Cancelar", className:"secondary", onClick: ()=>{ closeModal(); resolve(null); } },
-        { text:"Confirmar", onClick: ()=>{ const v = (document.getElementById(id).value||"").trim(); closeModal(); resolve(v || null); } }
-      ]
-    });
-    setTimeout(()=>{ const el = document.getElementById(id); if(el) el.focus(); }, 50);
-  });
-}
-
-/** Modal de Upload */
-function modalUploadAtestado({ nome, dataRef }){
-  return new Promise(resolve=>{
-    const fid = "f_" + Math.random().toString(16).slice(2);
-    openModal({
-      title: "Anexar Atestado",
-      bodyHtml: `
-        <div class="hintBox" style="margin-bottom:10px;">
-          Colaborador: <b>${esc(nome)}</b><br>
-          Data: <b>${esc(dataRef)}</b><br>
-          Envie PDF ou imagem (máx 8MB).
-        </div>
-        <input id="${fid}" type="file" accept="application/pdf,image/*">
-        <div class="muted" id="upStatus" style="margin-top:8px;"></div>
-      `,
-      footerButtons: [
-        { text:"Cancelar", className:"secondary", onClick: ()=>{ closeModal(); resolve({ ok:false, canceled:true }); } },
-        { text:"Enviar", onClick: async ()=>{
-            const input = document.getElementById(fid);
-            const f = input?.files?.[0];
-            if(!f){ modalAlert("Faltou arquivo","Selecione um arquivo para enviar."); return; }
-
-            const st = document.getElementById("upStatus");
-            st.innerText = "Enviando...";
-
-            try{
-              const fd = new FormData();
-              fd.append("file", f);
-              fd.append("nome", nome);
-              fd.append("dataRef", dataRef);
-              fd.append("token", token);
-
-              const r = await fetch(API_URL + "/uploadAtestado", { method:"POST", body: fd });
-              const txt = await r.text();
-              let out; try{ out = JSON.parse(txt); }catch{ out = { ok:false, error: txt }; }
-
-              if(!out || !out.ok){
-                if(isAuthError_(out?.error||"")) { closeModal(); logoutForcado(out.error); resolve(out); return; }
-                st.innerText = out?.error || "Erro ao enviar.";
-                return;
-              }
-
-              st.innerText = "✅ Enviado com sucesso!";
-              setTimeout(()=>{ closeModal(); resolve(out); }, 600);
-            }catch(e){
-              st.innerText = "Erro: " + (e?.message || e);
-            }
-          }
-        }
-      ]
-    });
-  });
-}
-
-/***************
- * LOGIN
- ***************/
 async function login(){
-  const raw = document.getElementById("loginInput").value.trim();
+  const raw = document.getElementById("loginInput").value;
   document.getElementById("loginStatus").innerText = "Entrando...";
   setBusy(true);
 
-  try{
-    let res;
-    if(loginMode === "ADMIN") res = await apiCall_("loginAdminCPF", { cpf: raw });
-    else res = await apiCall_("loginPIN", { pin: raw });
+  const out = (loginMode === "ADMIN")
+    ? await api("loginAdminCPF", { cpf: raw })
+    : await api("loginPIN", { pin: raw });
 
-    setBusy(false);
+  setBusy(false);
 
-    if(!res || !res.ok){
-      document.getElementById("loginStatus").innerText = res?.error || "Erro";
-      return;
-    }
-
-    token = res.token;
-    localStorage.setItem("DESP_TOKEN", token);
-
-    hide("loginCard"); show("app");
-    loaded = false;
-    updateBottomBarVisibility_();
-    await carregarDataPadrao();
-    document.getElementById("loginStatus").innerText = "";
-  }catch(e){
-    setBusy(false);
-    document.getElementById("loginStatus").innerText = "Erro: " + (e?.message || e);
+  if(!out || !out.ok){
+    document.getElementById("loginStatus").innerText = out?.error || "Erro";
+    return;
   }
+
+  token = out.token;
+  localStorage.setItem("DESP_TOKEN", token);
+
+  hide("loginCard");
+  show("app");
+  hide("bottomBar"); // ✅ só aparece depois do carregar
+  loadedOnce = false;
+
+  await carregarDataPadrao();
 }
 
 async function carregarDataPadrao(){
-  try{
-    const res = await apiCall_("getDataPadrao", {});
-    if(!res || !res.ok) return;
-    document.getElementById("dataRef").value = res.data || "";
-    const permit = res.janela?.permitidas || [];
-    document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
-  }catch(e){
-    setDebug("getDataPadrao falhou: " + (e?.message || e));
-  }
+  const res = await api("getDataPadrao", {});
+  if(!res || !res.ok) return;
+  document.getElementById("dataRef").value = res.data || "";
+  const permit = res.janela?.permitidas || [];
+  document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
 }
 
-/***************
- * GROUP
- ***************/
 function getSupOf_(nome){
   return (ctx?.mapSupPorNome && ctx.mapSupPorNome[nome]) ? ctx.mapSupPorNome[nome] : "SEM SUPERVISÃO";
 }
+
 function groupByCoordSup_(names){
   const tree = {};
   names.forEach(n=>{
@@ -472,6 +298,7 @@ function groupByCoordSup_(names){
   const coords = Object.keys(tree).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   return { tree, coords };
 }
+
 function renderGrouped_(names, rowHtmlFn){
   const { tree, coords } = groupByCoordSup_(names);
   if(!coords.length) return `<div class="muted">Nenhum colaborador.</div>`;
@@ -507,76 +334,66 @@ async function carregar(){
   const d = document.getElementById("dataRef").value.trim();
   setBusy(true);
   setDebug("Carregando...");
-  loaded = false;
-  updateBottomBarVisibility_();
+  hide("bottomBar");
 
-  try{
-    const res = await apiCall_("carregarContexto", { token, dataRef: d });
+  const res = await api("carregarContexto", { token, dataRef: d });
 
-    setBusy(false);
+  setBusy(false);
 
-    if(!res || !res.ok){
-      const err = res?.error || "Erro ao carregar";
-      if(isAuthError_(err)) { logoutForcado(err); return; }
-      modalAlert("Erro ao carregar", err);
-      setDebug(err);
-      return;
-    }
-
-    ctx = res;
-
-    const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
-    const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
-    document.getElementById("topInfo").innerText =
-      `${perfil} | Coordenações: ${coordStr} | Liberados: ${(res.liberados||[]).length} | Bloqueados: ${(res.bloqueados||[]).length}`;
-
-    const permit = res.janela?.permitidas || [];
-    document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
-
-    form = {};
-    const lanc = res.lancamentos || {};
-
-    (res.liberados || []).forEach(p=>{
-      const nome = p.colaborador;
-      const prev = lanc[nome] || {};
-
-      form[nome] = {
-        coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
-        disponibilidade_status: prev.disponibilidade_status ?? "OK",
-        disponibilidade_obs: prev.disponibilidade_obs ?? "",
-        logistica_default_obs: "",
-        logistica_obs_editada: false,
-
-        estadia_tipo: prev.estadia_tipo ?? "Casa",
-        estadia_obs: prev.estadia_obs ?? "",
-
-        cafe_valor: (prev.cafe_valor ?? "NÃO"),
-        almoco_valor: (prev.almoco_valor ?? "NÃO"),
-        janta_valor: (prev.janta_valor ?? "NÃO"),
-
-        deslocamento_tipo: prev.deslocamento_tipo ?? "",
-        deslocamento_obs: prev.deslocamento_obs ?? "",
-
-        extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
-        extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
-        extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
-        extras_obs: prev.extras_obs ?? ""
-      };
-    });
-
-    renderA();
-    setStep("A");
-
-    loaded = true;
-    updateBottomBarVisibility_();
-    setDebug("OK");
-  }catch(e){
-    setBusy(false);
-    const msg = "Falha no servidor: " + (e?.message || e);
-    if(isAuthError_(msg)) { logoutForcado(msg); return; }
-    modalAlert("Falha no servidor", msg);
-    setDebug(msg);
+  if(!res || !res.ok){
+    const err = res?.error || "Erro ao carregar";
+    if(isAuthError_(err)) { logoutForcado(err); return; }
+    alert(err);
+    setDebug(err);
+    return;
   }
+
+  ctx = res;
+  loadedOnce = true;
+
+  const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
+  const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
+  document.getElementById("topInfo").innerText =
+    `${perfil} | Coordenações: ${coordStr} | Liberados: ${(res.liberados||[]).length} | Bloqueados: ${(res.bloqueados||[]).length}`;
+
+  const permit = res.janela?.permitidas || [];
+  document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+
+  form = {};
+  const lanc = res.lancamentos || {};
+
+  (res.liberados || []).forEach(p=>{
+    const nome = p.colaborador;
+    const prev = lanc[nome] || {};
+
+    form[nome] = {
+      coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
+      disponibilidade_status: prev.disponibilidade_status ?? "OK",
+      disponibilidade_obs: prev.disponibilidade_obs ?? "",
+      logistica_default_obs: "",
+      logistica_obs_editada: false,
+
+      estadia_tipo: prev.estadia_tipo ?? "Casa",
+      estadia_obs: prev.estadia_obs ?? "",
+
+      cafe_valor: (prev.cafe_valor ?? "NÃO"),
+      almoco_valor: (prev.almoco_valor ?? "NÃO"),
+      janta_valor: (prev.janta_valor ?? "NÃO"),
+
+      deslocamento_tipo: prev.deslocamento_tipo ?? "",
+      deslocamento_obs: prev.deslocamento_obs ?? "",
+
+      extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
+      extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
+      extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
+      extras_obs: prev.extras_obs ?? ""
+    };
+  });
+
+  renderA();
+  setStep("A");
+  setDebug("OK");
+  show("bottomBar"); // ✅ agora sim
 }
 
 /***************
@@ -597,8 +414,14 @@ function normalizeHotelObs_(tipo, obs){
   return s;
 }
 
+function chunkArray(arr, size){
+  const out = [];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+
 async function salvarEtapaAtual_(){
-  if(!ctx){ modalAlert("Atenção","Carregue a data primeiro."); return { ok:false }; }
+  if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
 
@@ -653,38 +476,52 @@ async function salvarEtapaAtual_(){
 
   const saveEl = document.getElementById("saveStatus");
   if(step==="E" && saveEl) saveEl.innerText = "Salvando...";
+
   setBusy(true);
 
-  const res = await apiCall_("salvarEtapa", { token, payload: { dataReferencia: dataRef, etapa: step, registros: regs } });
+  // ✅ salva em pedaços (mais leve no celular)
+  const parts = chunkArray(regs, 25);
+  let lastRes = null;
+
+  for (let i=0;i<parts.length;i++){
+    const r = await api("salvarEtapa", { token, payload: { dataReferencia: dataRef, etapa: step, registros: parts[i] } });
+    lastRes = r;
+
+    if(!r || !r.ok){
+      setBusy(false);
+      const err = r?.error || "Erro ao salvar etapa";
+      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+      alert(err);
+      return { ok:false };
+    }
+
+    if(step==="E" && saveEl){
+      const conf = (r.conferencia_synced != null) ? `\n📌 Conferência: ${r.conferencia_synced} linha(s)` : "";
+      saveEl.innerText = `✅ Salvando... (${i+1}/${parts.length})${conf}`;
+    }
+  }
+
   setBusy(false);
-
-  if(!res || !res.ok){
-    const err = res?.error || "Erro ao salvar etapa";
-    if(isAuthError_(err)) { logoutForcado(err); return res; }
-    modalAlert("Erro ao salvar", err);
-    return res || { ok:false, error: err };
-  }
-
-  if(step==="E" && saveEl){
-    saveEl.innerText = `✅ Etapa ${res.etapa} salva (Atualizados: ${res.updated} | Novos: ${res.inserted})`;
-  }
-  return res;
+  return lastRes || { ok:true };
 }
 
 async function avancar(){
-  const saved = await salvarEtapaAtual_();
-  if(!saved?.ok) return;
+  const res = await salvarEtapaAtual_();
+  if(!res || !res.ok) return;
 
   const namesAll = Object.keys(form);
   if(step==="A"){
     const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    if(!lista.length){ modalAlert("Atenção","Nenhum colaborador para seguir (somente OK/Logística)."); return; }
+    if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK/Logística)."); return; }
     renderB(); setStep("B"); return;
   }
   if(step==="B"){ renderC(); setStep("C"); return; }
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
-  if(step==="E"){ modalAlert("Tudo certo","✅ Tudo salvo!"); return; }
+  if(step==="E"){
+    alert("✅ Tudo salvo!");
+    return;
+  }
 }
 function voltar(){
   if(busy) return;
@@ -701,27 +538,19 @@ async function onDispChange(ne, val){
   const nome = decName(ne);
   form[nome].disponibilidade_status = val;
 
-  // ✅ Atestado: abre upload (sem link, só salva na pasta)
-  if(val === "Tem atestado"){
-    const dataRef = document.getElementById("dataRef").value.trim();
-    await modalUploadAtestado({ nome, dataRef });
-  }
-
   if(val === "Logística"){
     form[nome].deslocamento_tipo = "Frota (motorista)";
 
     const el = document.getElementById("dobs_"+idSafe(nome));
     if(el) el.value = "Buscando veículo...";
 
-    const res = await apiCall_("getPrimeiroVeiculoPorFuncionario", { token, nome });
+    const res = await api("getPrimeiroVeiculoPorFuncionario", { token, nome });
     if(!res || !res.ok){
       if(el) el.value="";
-      if(isAuthError_(res?.error||"")) { logoutForcado(res.error); return; }
-      modalAlert("Erro", res?.error || "Erro ao buscar veículo");
+      alert(res?.error || "Erro ao buscar veículo");
       renderA();
       return;
     }
-
     const ident = res.found ? res.identificacao : "";
     const sugestao = ident ? `Veículo: ${ident}` : "";
     form[nome].logistica_default_obs = sugestao;
@@ -747,7 +576,7 @@ function onDispObsInput(ne, val){
     const def = String(form[nome].logistica_default_obs||"").trim();
     const cur = String(val||"").trim();
     if(def && cur && cur !== def){
-      modalAlert("Atenção","⚠️ Obs alterada em Logística.\nSolicite a leitura do patrimônio do veículo associado.");
+      alert("⚠️ Obs alterada em Logística.\nSolicite a leitura do patrimônio do veículo associado.");
     }
   }
 }
@@ -804,24 +633,18 @@ async function onEstadiaChange(ne, val){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
 
-  const res = await apiCall_("verificarHotelD1", { token, nome, dataRef });
+  const res = await api("verificarHotelD1", { token, nome, dataRef });
   if(!res || !res.ok){
     const msg = res?.error || "Erro";
-    if(isAuthError_(msg)) { logoutForcado(msg); return; }
     if(el){ el.value = msg; form[nome].estadia_obs = msg; }
-    modalAlert("Erro", msg);
+    alert(msg);
     renderB();
     return;
   }
 
   if(!res.found){
-    // ✅ pede CIDADE + UF
-    const cidadeUf = await modalPrompt(
-      "Hotel (não encontrado no D-1)",
-      `Não encontrei hospedagem no D-1 (${res.d1}).\nInforme a Cidade + UF (ex: Cascavel - PR):`,
-      "Cascavel - PR"
-    );
-    const txt = normalizeHotelObs_("Hotel", cidadeUf || "");
+    const cidadeUF = (prompt(`Hotel marcado.\nNão encontrei no D-1 (${res.d1}).\nInforme CIDADE e UF (ex: Cascavel, PR):`) || "").trim();
+    const txt = normalizeHotelObs_("Hotel", cidadeUF);
     form[nome].estadia_obs = txt;
     if(el) el.value = txt;
     renderB();
@@ -836,31 +659,19 @@ async function onEstadiaChange(ne, val){
     `D-1: ${res.d1}`
   ].filter(Boolean).join(" | ");
 
-  // confirma via modal
-  openModal({
-    title: "Hotel encontrado no D-1",
-    bodyHtml: `<div class="hintBox">${esc(sugestao)}</div><div class="muted" style="margin-top:10px;">Continuará na mesma cidade?</div>`,
-    footerButtons: [
-      { text:"Não", className:"secondary", onClick: async ()=>{
-          closeModal();
-          const cidadeUf = await modalPrompt("Informe Cidade + UF", "Ex: Cascavel - PR", "Cascavel - PR", res.cidade || "");
-          let txt = normalizeHotelObs_("Hotel", cidadeUf || "");
-          if(res.embarque) txt += ` | Embarque: ${res.embarque}`;
-          form[nome].estadia_obs = txt;
-          if(el) el.value = txt;
-          renderB();
-        }
-      },
-      { text:"Sim", onClick: ()=>{
-          closeModal();
-          const txt = normalizeHotelObs_("Hotel", sugestao);
-          form[nome].estadia_obs = txt;
-          if(el) el.value = txt;
-          renderB();
-        }
-      }
-    ]
-  });
+  const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestao}\n\nContinuará na mesma cidade?`);
+
+  let txt = sugestao;
+  if(!same){
+    const cidadeUF = (prompt(`Informe CIDADE e UF (ex: Cascavel, PR):`, res.cidade || "") || "").trim();
+    txt = normalizeHotelObs_("Hotel", cidadeUF) + (res.embarque ? ` | Embarque: ${res.embarque}` : "");
+  } else {
+    txt = normalizeHotelObs_("Hotel", txt);
+  }
+
+  form[nome].estadia_obs = txt;
+  if(el) el.value = txt;
+  renderB();
 }
 
 function renderB(){
@@ -885,7 +696,7 @@ function renderB(){
         </select>
 
         <input id="eobs_${idSafe(n)}"
-          placeholder="Ex.: Cascavel - PR | Embarque: ..."
+          placeholder="Ex.: Cascavel, PR | Embarque: ..."
           value="${esc(form[n].estadia_obs)}"
           oninput="form[decName('${ne}')].estadia_obs=this.value"
           onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
@@ -1066,18 +877,16 @@ window.onload = async () => {
 
   show("loginCard");
   hide("app");
-  loaded = false;
-  updateBottomBarVisibility_();
+  hide("bottomBar");
 
-  // se tem token salvo, valida no servidor
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
-    const res = await apiCall_("ping", { token });
+    const res = await api("ping", { token });
     if(res && res.ok){
       hide("loginCard");
       show("app");
-      loaded = false;
-      updateBottomBarVisibility_();
+      hide("bottomBar"); // só depois do carregar
+      loadedOnce = false;
       await carregarDataPadrao();
       document.getElementById("loginStatus").innerText = "";
     } else {
