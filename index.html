@@ -58,63 +58,31 @@
       .inlineVal input[type="number"]{ width:100%; }
     }
 
-    /* ===== MODAL (Dialog central) ===== */
-    .modalBack{
+    /* ===== MODAL ===== */
+    .dlgBack{
       position:fixed; inset:0;
-      background:rgba(0,0,0,.45);
-      display:none;
-      align-items:center; justify-content:center;
-      z-index:9999;
-      padding:18px;
+      background:rgba(17,24,39,.55);
+      display:none; align-items:center; justify-content:center;
+      padding:18px; z-index:9999;
     }
-    .modalBack.show{ display:flex; }
-    .modal{
-      width:min(520px, 96vw);
-      background:#fff;
-      border-radius:18px;
-      box-shadow:0 18px 60px rgba(0,0,0,.25);
+    .dlg{
+      width:min(520px, 100%);
+      background:#fff; border-radius:18px;
+      box-shadow:0 18px 50px rgba(0,0,0,.25);
       overflow:hidden;
-      transform:scale(.98);
-      animation: pop .12s ease-out forwards;
     }
-    @keyframes pop { to { transform:scale(1); } }
-    .modalHead{
-      padding:14px 16px;
-      border-bottom:1px solid #e5e7eb;
-      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
-    }
-    .modalTitle{
-      font-weight:800; font-size:15px; margin:0;
-    }
-    .modalClose{
-      border:none; background:transparent; cursor:pointer;
-      font-size:18px; line-height:1; padding:6px 10px; border-radius:10px;
-    }
-    .modalBody{ padding:14px 16px; }
-    .modalMsg{ margin:0 0 12px; color:#374151; font-size:13px; white-space:pre-line; }
-    .modalFormRow{ display:flex; gap:10px; flex-wrap:wrap; }
-    .modalFormRow .field{ flex:1; min-width:160px; }
-    .modalFormRow label{ display:block; font-size:12px; color:#6b7280; margin:0 0 6px; }
-    .modalFormRow input, .modalFormRow select{
-      width:100%;
-      padding:10px;
-      border-radius:12px;
-      border:1px solid #d1d5db;
-      font-size:14px;
-    }
-    .modalFoot{
-      padding:12px 16px;
-      border-top:1px solid #e5e7eb;
+    .dlgHeader{ padding:14px 16px; border-bottom:1px solid #eef2f7; }
+    .dlgTitle{ font-weight:800; margin:0; font-size:16px; }
+    .dlgMsg{ margin-top:6px; color:#6b7280; font-size:13px; line-height:1.35; }
+    .dlgBody{ padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+    .dlgBody label{ font-size:12px; color:#6b7280; }
+    .dlgBody input{ width:100%; }
+    .dlgFooter{
+      padding:12px 16px; border-top:1px solid #eef2f7;
       display:flex; gap:10px; justify-content:flex-end;
     }
-    .modalBtn{
-      border:none; border-radius:12px;
-      padding:10px 14px;
-      cursor:pointer;
-      font-weight:700;
-    }
-    .modalBtn.secondary{ background:#e5e7eb; color:#111827; }
-    .modalBtn.primary{ background:#166534; color:#fff; }
+    .dlgFooter button{ width:auto; padding:10px 14px; border-radius:12px; }
+    .dlgFooter .cancel{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; }
   </style>
 </head>
 
@@ -184,7 +152,7 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige Cidade + UF (ex.: Cascavel, PR).<br>
+        <b>Hotel</b>: consulta D-1 e exige Cidade/UF (ex.: “Cascavel, PR” salva como “Cidade: Cascavel, PR”).<br>
         <b>Fazenda</b>: se Obs vazio, preenche “R$ 30,00 - pernoite”.
       </div>
       <div id="listaB"></div>
@@ -221,38 +189,22 @@
   </div>
 </div>
 
-<!-- ===== MODAL ===== -->
-<div class="modalBack" id="modalBack" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modalHead">
-      <div>
-        <h3 class="modalTitle" id="modalTitle">Atenção</h3>
-        <div class="muted" id="modalSub" style="margin-top:4px; display:none;"></div>
-      </div>
-      <button class="modalClose" onclick="modalCancel()" aria-label="Fechar">✕</button>
+<!-- MODAL -->
+<div class="dlgBack" id="dlgBack">
+  <div class="dlg">
+    <div class="dlgHeader">
+      <div class="dlgTitle" id="dlgTitle">Atenção</div>
+      <div class="dlgMsg" id="dlgMsg"></div>
     </div>
-
-    <div class="modalBody">
-      <p class="modalMsg" id="modalMsg"></p>
-      <div id="modalFields"></div>
-    </div>
-
-    <div class="modalFoot">
-      <button class="modalBtn secondary" id="modalBtnCancel" onclick="modalCancel()">Cancelar</button>
-      <button class="modalBtn primary" id="modalBtnOk" onclick="modalOk()">Confirmar</button>
+    <div class="dlgBody" id="dlgBody"></div>
+    <div class="dlgFooter">
+      <button class="cancel" id="dlgCancel" onclick="dlgClose(false)">Cancelar</button>
+      <button id="dlgOk" onclick="dlgClose(true)">OK</button>
     </div>
   </div>
 </div>
 
 <script>
-/***********************
- * CONFIG (GITHUB -> API)
- ***********************/
-const API_URL = "https://script.google.com/macros/s/AKfycbwgb-73w2UdpgYrQoLyXhcV5kcbZifQ33nB5zIEXg6ZZcS9RD0uw0MbP5bLJp0VFbar/exec"; // ex: https://script.google.com/macros/s/XXXX/exec
-
-/***************
- * STATE
- ***************/
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
 let step = "A";
@@ -263,9 +215,6 @@ let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN"; // PIN | ADMIN
 
 const PROSSEGUIR = (st) => (String(st||"").trim() === "OK" || String(st||"").trim() === "Logística");
 
-/***************
- * HELPERS
- ***************/
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 function encName(n){ return encodeURIComponent(String(n||"")); }
 function decName(n){ return decodeURIComponent(String(n||"")); }
@@ -283,6 +232,76 @@ function setBusy(v){
   });
 }
 
+/* ===== MODAL API (Promise) ===== */
+let __dlgResolve = null;
+
+function dlgOpen({ title="Atenção", message="", fields=[], okText="OK", cancelText="Cancelar", showCancel=true, values={} }){
+  document.getElementById("dlgTitle").innerText = title;
+  document.getElementById("dlgMsg").innerText = message || "";
+
+  const body = document.getElementById("dlgBody");
+  body.innerHTML = "";
+
+  fields.forEach(f=>{
+    const wrap = document.createElement("div");
+
+    const lab = document.createElement("label");
+    lab.innerText = f.label || "";
+    wrap.appendChild(lab);
+
+    const inp = document.createElement("input");
+    inp.type = f.type || "text";
+    inp.placeholder = f.placeholder || "";
+    inp.id = "dlg_" + f.name;
+    inp.value = values[f.name] || "";
+    if(f.maxLength) inp.maxLength = f.maxLength;
+    wrap.appendChild(inp);
+
+    body.appendChild(wrap);
+  });
+
+  const btnOk = document.getElementById("dlgOk");
+  const btnCancel = document.getElementById("dlgCancel");
+
+  btnOk.innerText = okText;
+  btnCancel.innerText = cancelText;
+  btnCancel.style.display = showCancel ? "inline-block" : "none";
+
+  document.getElementById("dlgBack").style.display = "flex";
+
+  // foco no primeiro input
+  setTimeout(()=>{
+    const first = fields[0]?.name ? document.getElementById("dlg_"+fields[0].name) : null;
+    if(first) first.focus();
+  }, 50);
+
+  return new Promise(resolve => { __dlgResolve = resolve; });
+}
+
+function dlgClose(ok){
+  const back = document.getElementById("dlgBack");
+  const body = document.getElementById("dlgBody");
+
+  const inputs = body.querySelectorAll("input");
+  const vals = {};
+  inputs.forEach(i => vals[i.id.replace("dlg_","")] = i.value);
+
+  back.style.display = "none";
+  const r = __dlgResolve;
+  __dlgResolve = null;
+  if(r) r({ ok, values: vals });
+}
+
+async function dlgAlert(message, title="Atenção"){
+  await dlgOpen({ title, message, fields:[], okText:"OK", showCancel:false });
+}
+
+async function dlgConfirm(message, title="Confirmar"){
+  const res = await dlgOpen({ title, message, fields:[], okText:"Sim", cancelText:"Não", showCancel:true });
+  return !!res.ok;
+}
+
+/* ===== Auth helpers ===== */
 function isAuthError_(text){
   const t = String(text||"").toLowerCase();
   return t.includes("sessão expirada") || t.includes("sessao expirada") || t.includes("faça login") || t.includes("faca login");
@@ -299,124 +318,6 @@ function logoutForcado(msg){
 
 function logout(){ logoutForcado("Logout realizado."); }
 
-/***************
- * API (POST JSON)
- ***************/
-async function api(action, payload={}){
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, ...payload })
-  });
-  const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
-  return data;
-}
-
-/***************
- * MODAL (Promise)
- ***************/
-let __modalResolve = null;
-let __modalReject = null;
-
-function openModal({ title="Atenção", sub="", message="", fields=[], okText="Confirmar", cancelText="Cancelar", hideCancel=false }) {
-  const back = document.getElementById("modalBack");
-  const elTitle = document.getElementById("modalTitle");
-  const elSub = document.getElementById("modalSub");
-  const elMsg = document.getElementById("modalMsg");
-  const elFields = document.getElementById("modalFields");
-  const btnOk = document.getElementById("modalBtnOk");
-  const btnCancel = document.getElementById("modalBtnCancel");
-
-  elTitle.innerText = title;
-  if(sub){
-    elSub.style.display = "block";
-    elSub.innerText = sub;
-  } else {
-    elSub.style.display = "none";
-    elSub.innerText = "";
-  }
-  elMsg.innerText = message;
-
-  btnOk.innerText = okText || "Confirmar";
-  btnCancel.innerText = cancelText || "Cancelar";
-  btnCancel.style.display = hideCancel ? "none" : "inline-block";
-
-  elFields.innerHTML = "";
-  if(fields && fields.length){
-    const wrap = document.createElement("div");
-    wrap.className = "modalFormRow";
-    fields.forEach(f=>{
-      const d = document.createElement("div");
-      d.className = "field";
-      d.innerHTML = `
-        <label>${esc(f.label || "")}</label>
-        ${f.type === "select"
-          ? `<select id="${esc(f.id)}">
-              ${(f.options||[]).map(op=>`<option value="${esc(op.value)}">${esc(op.label)}</option>`).join("")}
-            </select>`
-          : `<input id="${esc(f.id)}" type="${esc(f.type||"text")}" placeholder="${esc(f.placeholder||"")}" value="${esc(f.value||"")}" ${f.maxLength?`maxlength="${f.maxLength}"`:``} ${f.inputMode?`inputmode="${f.inputMode}"`:``} />`
-        }
-      `;
-      wrap.appendChild(d);
-
-      if(f.type==="select" && f.value != null){
-        setTimeout(()=>{
-          const sel = document.getElementById(f.id);
-          if(sel) sel.value = String(f.value);
-        },0);
-      }
-    });
-    elFields.appendChild(wrap);
-  }
-
-  back.classList.add("show");
-  back.setAttribute("aria-hidden", "false");
-
-  setTimeout(()=>{
-    const first = fields?.[0]?.id ? document.getElementById(fields[0].id) : null;
-    if(first) first.focus();
-  },50);
-
-  return new Promise((resolve, reject)=>{
-    __modalResolve = resolve;
-    __modalReject = reject;
-  });
-}
-
-function closeModal_(){
-  const back = document.getElementById("modalBack");
-  back.classList.remove("show");
-  back.setAttribute("aria-hidden", "true");
-}
-
-function modalOk(){
-  try{
-    const elFields = document.getElementById("modalFields");
-    const inputs = elFields.querySelectorAll("input, select, textarea");
-    const values = {};
-    inputs.forEach(i=> values[i.id] = i.value);
-
-    closeModal_();
-    if(__modalResolve) __modalResolve(values);
-  } finally {
-    __modalResolve = null;
-    __modalReject = null;
-  }
-}
-
-function modalCancel(){
-  try{
-    closeModal_();
-    if(__modalReject) __modalReject(new Error("cancelled"));
-  } finally {
-    __modalResolve = null;
-    __modalReject = null;
-  }
-}
-
-/***************
- * LOGIN
- ***************/
 function setLoginMode(mode){
   loginMode = mode;
   localStorage.setItem("DESP_LOGIN_MODE", loginMode);
@@ -431,64 +332,58 @@ function setLoginMode(mode){
     input.placeholder = "CPF (11 dígitos)";
     input.maxLength = 14;
     input.value = "";
-    input.inputMode = "numeric";
   } else {
     title.innerText = "Login do Gestor";
     hint.innerHTML  = "Informe seu <b>PIN (4 dígitos)</b>.";
     input.placeholder = "PIN";
     input.maxLength = 4;
     input.value = "";
-    input.inputMode = "numeric";
   }
 
   document.getElementById("loginStatus").innerText = "";
 }
 
-async function login(){
+function login(){
   const raw = document.getElementById("loginInput").value;
   document.getElementById("loginStatus").innerText = "Entrando...";
   setBusy(true);
 
-  try{
-    const res = (loginMode === "ADMIN")
-      ? await api("loginAdminCPF", { raw })
-      : await api("loginPIN", { raw });
+  const runner = google.script.run
+    .withSuccessHandler(res=>{
+      setBusy(false);
+      if(!res || !res.ok){
+        document.getElementById("loginStatus").innerText = res?.error || "Erro";
+        return;
+      }
+      token = res.token;
+      localStorage.setItem("DESP_TOKEN", token);
 
-    setBusy(false);
+      hide("loginCard");
+      show("app");
+      hide("bottomBar"); // ✅ só libera depois de carregar OK
+      carregarDataPadrao();
+    })
+    .withFailureHandler(err=>{
+      setBusy(false);
+      document.getElementById("loginStatus").innerText = "Erro: " + (err?.message || err);
+    });
 
-    if(!res || !res.ok){
-      document.getElementById("loginStatus").innerText = res?.error || "Erro";
-      return;
-    }
-
-    token = res.token;
-    localStorage.setItem("DESP_TOKEN", token);
-
-    hide("loginCard"); show("app"); show("bottomBar");
-    await carregarDataPadrao();
-
-  } catch(err){
-    setBusy(false);
-    document.getElementById("loginStatus").innerText = "Erro: " + (err?.message || err);
-  }
+  if(loginMode === "ADMIN") runner.loginAdminCPF(raw);
+  else runner.loginPIN(raw);
 }
 
-async function carregarDataPadrao(){
-  try{
-    const res = await api("getDataPadrao", {});
-    if(!res || !res.ok) return;
-
-    document.getElementById("dataRef").value = res.data || "";
-    const permit = res.janela?.permitidas || [];
-    document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
-  } catch(err){
-    setDebug("getDataPadrao falhou: " + (err?.message || err));
-  }
+function carregarDataPadrao(){
+  google.script.run
+    .withSuccessHandler(res=>{
+      if(!res || !res.ok) return;
+      document.getElementById("dataRef").value = res.data || "";
+      const permit = res.janela?.permitidas || [];
+      document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+    })
+    .withFailureHandler(err=> setDebug("getDataPadrao falhou: " + (err?.message || err)))
+    .getDataPadrao();
 }
 
-/***************
- * GROUP / RENDER BASE
- ***************/
 function getSupOf_(nome){
   return (ctx?.mapSupPorNome && ctx.mapSupPorNome[nome]) ? ctx.mapSupPorNome[nome] : "SEM SUPERVISÃO";
 }
@@ -535,78 +430,85 @@ function renderGrouped_(names, rowHtmlFn){
 }
 
 /***************
- * CARREGAR CONTEXTO
+ * CARREGAR
  ***************/
-async function carregar(){
+function carregar(){
   const d = document.getElementById("dataRef").value.trim();
+
+  // ✅ enquanto carrega, esconde a barra de navegação
+  hide("bottomBar");
+
   setBusy(true);
   setDebug("Carregando...");
 
-  try{
-    const res = await api("carregarContexto", { token, data: d });
-    setBusy(false);
+  google.script.run
+    .withSuccessHandler(res=>{
+      setBusy(false);
 
-    if(!res || !res.ok){
-      const err = res?.error || "Erro ao carregar";
-      if(isAuthError_(err)) { logoutForcado(err); return; }
+      if(!res || !res.ok){
+        const err = res?.error || "Erro ao carregar";
+        if(isAuthError_(err)) { logoutForcado(err); return; }
+        dlgAlert(err, "Falha ao carregar");
+        setDebug(err);
+        hide("bottomBar");
+        return;
+      }
 
-      await openModal({ title:"Erro", message: err, okText:"Ok", hideCancel:true }).catch(()=>{});
-      setDebug(err);
-      return;
-    }
+      ctx = res;
+      show("bottomBar"); // ✅ só agora libera Voltar/Próximo
 
-    ctx = res;
+      const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
+      const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
+      document.getElementById("topInfo").innerText =
+        `${perfil} | Coordenações: ${coordStr} | Liberados: ${(res.liberados||[]).length} | Bloqueados: ${(res.bloqueados||[]).length}`;
 
-    const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
-    const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
-    document.getElementById("topInfo").innerText =
-      `${perfil} | Coordenações: ${coordStr} | Liberados: ${(res.liberados||[]).length} | Bloqueados: ${(res.bloqueados||[]).length}`;
+      const permit = res.janela?.permitidas || [];
+      document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
 
-    const permit = res.janela?.permitidas || [];
-    document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+      form = {};
+      const lanc = res.lancamentos || {};
 
-    form = {};
-    const lanc = res.lancamentos || {};
+      (res.liberados || []).forEach(p=>{
+        const nome = p.colaborador;
+        const prev = lanc[nome] || {};
 
-    (res.liberados || []).forEach(p=>{
-      const nome = p.colaborador;
-      const prev = lanc[nome] || {};
+        form[nome] = {
+          coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
+          disponibilidade_status: prev.disponibilidade_status ?? "OK",
+          disponibilidade_obs: prev.disponibilidade_obs ?? "",
+          logistica_default_obs: "",
+          logistica_obs_editada: false,
 
-      form[nome] = {
-        coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
-        disponibilidade_status: prev.disponibilidade_status ?? "OK",
-        disponibilidade_obs: prev.disponibilidade_obs ?? "",
-        logistica_default_obs: "",
-        logistica_obs_editada: false,
+          estadia_tipo: prev.estadia_tipo ?? "Casa",
+          estadia_obs: prev.estadia_obs ?? "",
 
-        estadia_tipo: prev.estadia_tipo ?? "Casa",
-        estadia_obs: prev.estadia_obs ?? "",
+          cafe_valor: (prev.cafe_valor ?? "NÃO"),
+          almoco_valor: (prev.almoco_valor ?? "NÃO"),
+          janta_valor: (prev.janta_valor ?? "NÃO"),
 
-        cafe_valor: (prev.cafe_valor ?? "NÃO"),
-        almoco_valor: (prev.almoco_valor ?? "NÃO"),
-        janta_valor: (prev.janta_valor ?? "NÃO"),
+          deslocamento_tipo: prev.deslocamento_tipo ?? "",
+          deslocamento_obs: prev.deslocamento_obs ?? "",
 
-        deslocamento_tipo: prev.deslocamento_tipo ?? "",
-        deslocamento_obs: prev.deslocamento_obs ?? "",
+          extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
+          extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
+          extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
+          extras_obs: prev.extras_obs ?? ""
+        };
+      });
 
-        extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
-        extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
-        extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
-        extras_obs: prev.extras_obs ?? ""
-      };
-    });
-
-    renderA();
-    setStep("A");
-    setDebug("OK");
-
-  } catch(err){
-    setBusy(false);
-    const msg = "Falha no servidor: " + (err?.message || err);
-    if(isAuthError_(msg)) { logoutForcado(msg); return; }
-    await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
-    setDebug(msg);
-  }
+      renderA();
+      setStep("A");
+      setDebug("OK");
+    })
+    .withFailureHandler(err=>{
+      setBusy(false);
+      const msg = "Falha no servidor: " + (err?.message || err);
+      if(isAuthError_(msg)) { logoutForcado(msg); return; }
+      dlgAlert(msg, "Falha no servidor");
+      setDebug(msg);
+      hide("bottomBar");
+    })
+    .carregarContexto(token, d);
 }
 
 /***************
@@ -627,16 +529,12 @@ function normalizeHotelObs_(tipo, obs){
   return s;
 }
 
-async function salvarEtapaAtual_(){
-  if(!ctx){
-    await openModal({ title:"Atenção", message:"Carregue a data primeiro.", okText:"Ok", hideCancel:true }).catch(()=>{});
-    return { ok:false };
-  }
-
+function salvarEtapaAtual_(cb){
+  if(!ctx){ dlgAlert("Carregue a data primeiro.", "Atenção"); return; }
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
-  let regs = [];
 
+  let regs = [];
   if(step === "A"){
     regs = namesAll.map(n => ({
       colaborador: n,
@@ -689,54 +587,43 @@ async function salvarEtapaAtual_(){
   if(step==="E" && saveEl) saveEl.innerText = "Salvando...";
   setBusy(true);
 
-  try{
-    const res = await api("salvarEtapa", { token, dataReferencia: dataRef, etapa: step, registros: regs });
-    setBusy(false);
-
-    if(!res || !res.ok){
-      const err = res?.error || "Erro ao salvar etapa";
-      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
-      await openModal({ title:"Erro ao salvar", message: err, okText:"Ok", hideCancel:true }).catch(()=>{});
-      return { ok:false };
-    }
-
-    if(step==="E" && saveEl){
-      saveEl.innerText = `✅ Etapa ${res.etapa} salva (Atualizados: ${res.updated} | Novos: ${res.inserted})`;
-    }
-
-    return { ok:true, res };
-
-  } catch(err){
-    setBusy(false);
-    const msg = "Falha ao salvar etapa: " + (err?.message || err);
-    if(isAuthError_(msg)) { logoutForcado(msg); return { ok:false }; }
-    await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
-    return { ok:false };
-  }
+  google.script.run
+    .withSuccessHandler(res=>{
+      setBusy(false);
+      if(!res || !res.ok){
+        const err = res?.error || "Erro ao salvar etapa";
+        if(isAuthError_(err)) { logoutForcado(err); return; }
+        dlgAlert(err, "Erro ao salvar");
+        return;
+      }
+      if(step==="E" && saveEl){
+        saveEl.innerText = `✅ Etapa ${res.etapa} salva (Atualizados: ${res.updated} | Novos: ${res.inserted})`;
+      }
+      cb && cb();
+    })
+    .withFailureHandler(err=>{
+      setBusy(false);
+      const msg = "Falha ao salvar etapa: " + (err?.message || err);
+      if(isAuthError_(msg)) { logoutForcado(msg); return; }
+      dlgAlert(msg, "Falha ao salvar");
+    })
+    .salvarEtapa(token, { dataReferencia: dataRef, etapa: step, registros: regs });
 }
 
-async function avancar(){
-  const s = await salvarEtapaAtual_();
-  if(!s.ok) return;
-
-  const namesAll = Object.keys(form);
-  if(step==="A"){
-    const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    if(!lista.length){
-      await openModal({ title:"Atenção", message:"Nenhum colaborador para seguir (somente OK/Logística).", okText:"Ok", hideCancel:true }).catch(()=>{});
-      return;
+function avancar(){
+  salvarEtapaAtual_(()=>{
+    const namesAll = Object.keys(form);
+    if(step==="A"){
+      const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+      if(!lista.length){ dlgAlert("Nenhum colaborador para seguir (somente OK/Logística).", "Atenção"); return; }
+      renderB(); setStep("B"); return;
     }
-    renderB(); setStep("B"); return;
-  }
-  if(step==="B"){ renderC(); setStep("C"); return; }
-  if(step==="C"){ renderD(); setStep("D"); return; }
-  if(step==="D"){ renderE(); setStep("E"); return; }
-  if(step==="E"){
-    await openModal({ title:"Tudo certo ✅", message:"Tudo salvo!", okText:"Ok", hideCancel:true }).catch(()=>{});
-    return;
-  }
+    if(step==="B"){ renderC(); setStep("C"); return; }
+    if(step==="C"){ renderD(); setStep("D"); return; }
+    if(step==="D"){ renderE(); setStep("E"); return; }
+    if(step==="E"){ dlgAlert("✅ Tudo salvo!", "Concluído"); return; }
+  });
 }
-
 function voltar(){
   if(busy) return;
   if(step==="B"){ renderA(); setStep("A"); return; }
@@ -748,38 +635,37 @@ function voltar(){
 /***************
  * PAINEL A
  ***************/
-async function onDispChange(ne, val){
+function onDispChange(ne, val){
   const nome = decName(ne);
   form[nome].disponibilidade_status = val;
 
   if(val === "Logística"){
     form[nome].deslocamento_tipo = "Frota (motorista)";
+
     const el = document.getElementById("dobs_"+idSafe(nome));
     if(el) el.value = "Buscando veículo...";
 
-    try{
-      const res = await api("getPrimeiroVeiculoPorFuncionario", { token, nome });
-      if(!res || !res.ok){
-        if(el) el.value="";
-        await openModal({ title:"Erro", message:(res?.error || "Erro ao buscar veículo"), okText:"Ok", hideCancel:true }).catch(()=>{});
-        renderA();
-        return;
-      }
-      const ident = res.found ? res.identificacao : "";
-      const sugestao = ident ? `Veículo: ${ident}` : "";
-      form[nome].logistica_default_obs = sugestao;
+    google.script.run
+      .withSuccessHandler(res=>{
+        if(!res || !res.ok){ if(el) el.value=""; dlgAlert(res?.error || "Erro ao buscar veículo","Erro"); renderA(); return; }
+        const ident = res.found ? res.identificacao : "";
+        const sugestao = ident ? `Veículo: ${ident}` : "";
+        form[nome].logistica_default_obs = sugestao;
 
-      const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
-      if(!obsAtual || !form[nome].logistica_obs_editada){
-        form[nome].disponibilidade_obs = sugestao;
-        form[nome].logistica_obs_editada = false;
-      }
-      renderA();
-    } catch(err){
-      if(el) el.value="";
-      await openModal({ title:"Erro", message:"Falha ao buscar veículo: " + (err?.message || err), okText:"Ok", hideCancel:true }).catch(()=>{});
-      renderA();
-    }
+        const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
+        if(!obsAtual || !form[nome].logistica_obs_editada){
+          form[nome].disponibilidade_obs = sugestao;
+          form[nome].logistica_obs_editada = false;
+        }
+        renderA();
+      })
+      .withFailureHandler(err=>{
+        if(el) el.value="";
+        dlgAlert("Falha ao buscar veículo: " + (err?.message || err), "Erro");
+        renderA();
+      })
+      .getPrimeiroVeiculoPorFuncionario(token, nome);
+
     return;
   }
 
@@ -795,12 +681,7 @@ function onDispObsInput(ne, val){
     const def = String(form[nome].logistica_default_obs||"").trim();
     const cur = String(val||"").trim();
     if(def && cur && cur !== def){
-      openModal({
-        title:"Obs alterada em Logística",
-        message:"⚠️ Você alterou a observação.\nSolicite a leitura do patrimônio do veículo associado.",
-        okText:"Ok",
-        hideCancel:true
-      }).catch(()=>{});
+      dlgAlert("⚠️ Obs alterada em Logística.\nSolicite a leitura do patrimônio do veículo associado.", "Atenção");
     }
   }
 }
@@ -832,9 +713,36 @@ function renderA(){
 }
 
 /***************
- * PAINEL B – Estadia (Modal cidade+UF)
+ * PAINEL B – Estadia (modal cidade/UF)
  ***************/
-async function onEstadiaChange(ne, val){
+async function pedirCidadeUf_(defaultCidade="", defaultUf=""){
+  const r = await dlgOpen({
+    title: "Hospedagem (Hotel)",
+    message: "Informe a cidade e o estado (UF) da hospedagem.",
+    fields: [
+      { name:"cidade", label:"Cidade", placeholder:"Ex.: Cascavel", type:"text" },
+      { name:"uf", label:"UF", placeholder:"Ex.: PR", type:"text", maxLength:2 }
+    ],
+    okText: "Confirmar",
+    cancelText: "Cancelar",
+    showCancel: true,
+    values: { cidade: defaultCidade, uf: defaultUf }
+  });
+
+  if(!r.ok) return null;
+
+  const cidade = String(r.values.cidade||"").trim();
+  const uf = String(r.values.uf||"").trim().toUpperCase();
+
+  if(!cidade || uf.length !== 2){
+    await dlgAlert("Preencha Cidade e UF (2 letras).", "Dados obrigatórios");
+    return await pedirCidadeUf_(cidade, uf);
+  }
+
+  return `${cidade}, ${uf}`;
+}
+
+function onEstadiaChange(ne, val){
   const nome = decName(ne);
   form[nome].estadia_tipo = val;
 
@@ -857,129 +765,70 @@ async function onEstadiaChange(ne, val){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
 
-  try{
-    const res = await api("verificarHotelD1", { token, nome, dataRef });
+  google.script.run
+    .withSuccessHandler(async res=>{
+      if(!res || !res.ok){
+        const msg = res?.error || "Erro";
+        if(el){ el.value = msg; form[nome].estadia_obs = msg; }
+        await dlgAlert(msg, "Erro");
+        renderB();
+        return;
+      }
 
-    if(!res || !res.ok){
-      const msg = res?.error || "Erro ao verificar D-1";
-      if(el){ el.value = msg; form[nome].estadia_obs = msg; }
-      await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
+      if(!res.found){
+        // ✅ não achou no D-1 -> pede Cidade/UF
+        const cidadeUf = await pedirCidadeUf_();
+        if(!cidadeUf){
+          form[nome].estadia_obs = "";
+          if(el) el.value = "";
+          renderB();
+          return;
+        }
+        const txt = normalizeHotelObs_("Hotel", cidadeUf);
+        form[nome].estadia_obs = txt;
+        if(el) el.value = txt;
+        renderB();
+        return;
+      }
+
+      const sugestao = [
+        res.cidade ? `Cidade: ${res.cidade}` : "",
+        res.embarque ? `Embarque: ${res.embarque}` : "",
+        res.hotel ? `Hotel: ${res.hotel}` : "",
+        res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
+        `D-1: ${res.d1}`
+      ].filter(Boolean).join(" | ");
+
+      const same = await dlgConfirm(`Encontrei D-1 (${res.d1}).\n\n${sugestao}\n\nContinuará na mesma cidade?`, "Confirmar");
+
+      let txt = sugestao;
+      if(!same){
+        const cidadeUf = await pedirCidadeUf_(
+          String(res.cidade||"").split(",")[0] || "",
+          (String(res.cidade||"").split(",")[1]||"").trim().slice(0,2)
+        );
+        if(!cidadeUf){
+          form[nome].estadia_obs = "";
+          if(el) el.value = "";
+          renderB();
+          return;
+        }
+        txt = normalizeHotelObs_("Hotel", cidadeUf) + (res.embarque ? ` | Embarque: ${res.embarque}` : "");
+      } else {
+        txt = normalizeHotelObs_("Hotel", txt);
+      }
+
+      form[nome].estadia_obs = txt;
+      if(el) el.value = txt;
       renderB();
-      return;
-    }
-
-    // não encontrou no D-1 -> pede cidade+UF
-    if(!res.found){
-      try{
-        const ans = await openModal({
-          title:"Hospedagem – Informe o destino",
-          sub:`Colaborador: ${nome}`,
-          message:`Hotel marcado, mas não encontrei no D-1 (${res.d1}).\nInforme a cidade e o estado (UF) para hospedagem.`,
-          fields:[
-            { id:"cidade", label:"Cidade", type:"text", placeholder:"Ex.: Cascavel" },
-            { id:"uf", label:"UF", type:"text", placeholder:"Ex.: PR", maxLength:2, inputMode:"text" }
-          ],
-          okText:"Salvar",
-          cancelText:"Cancelar"
-        });
-
-        const cidade = String(ans.cidade||"").trim();
-        const uf = String(ans.uf||"").trim().toUpperCase();
-
-        if(!cidade || uf.length !== 2){
-          await openModal({ title:"Dados incompletos", message:"Preencha Cidade e UF (2 letras).", okText:"Ok", hideCancel:true }).catch(()=>{});
-          if(el){ el.value = ""; form[nome].estadia_obs = ""; }
-          renderB();
-          return;
-        }
-
-        const txt = normalizeHotelObs_("Hotel", `${cidade}, ${uf}`);
-        form[nome].estadia_obs = txt;
-        if(el) el.value = txt;
-        renderB();
-        return;
-
-      } catch(_cancel){
-        if(el){ el.value = ""; form[nome].estadia_obs = ""; }
-        renderB();
-        return;
-      }
-    }
-
-    // encontrou no D-1
-    const sugestao = [
-      res.cidade ? `Cidade: ${res.cidade}` : "",
-      res.embarque ? `Embarque: ${res.embarque}` : "",
-      res.hotel ? `Hotel: ${res.hotel}` : "",
-      res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
-      `D-1: ${res.d1}`
-    ].filter(Boolean).join(" | ");
-
-    // modal Sim/Não
-    let same = true;
-    try{
-      await openModal({
-        title:"D-1 encontrado ✅",
-        sub:`Colaborador: ${nome}`,
-        message:`Encontrei no D-1 (${res.d1}):\n${sugestao}\n\nContinuará na mesma cidade?`,
-        okText:"Sim",
-        cancelText:"Não"
-      });
-      same = true;
-    } catch(_no){
-      same = false;
-    }
-
-    if(!same){
-      try{
-        const ans = await openModal({
-          title:"Alterar destino",
-          sub:`Colaborador: ${nome}`,
-          message:"Informe a nova cidade e UF do hotel.",
-          fields:[
-            { id:"cidade", label:"Cidade", type:"text", placeholder:"Ex.: Londrina", value: (res.cidade||"") },
-            { id:"uf", label:"UF", type:"text", placeholder:"Ex.: PR", maxLength:2, inputMode:"text" }
-          ],
-          okText:"Salvar",
-          cancelText:"Cancelar"
-        });
-
-        const cidade = String(ans.cidade||"").trim();
-        const uf = String(ans.uf||"").trim().toUpperCase();
-        if(!cidade || uf.length !== 2){
-          await openModal({ title:"Dados incompletos", message:"Preencha Cidade e UF (2 letras).", okText:"Ok", hideCancel:true }).catch(()=>{});
-          form[nome].estadia_obs = normalizeHotelObs_("Hotel", sugestao);
-          if(el) el.value = form[nome].estadia_obs;
-          renderB();
-          return;
-        }
-
-        let txt = normalizeHotelObs_("Hotel", `${cidade}, ${uf}`);
-        if(res.embarque) txt += ` | Embarque: ${res.embarque}`;
-        form[nome].estadia_obs = txt;
-        if(el) el.value = txt;
-        renderB();
-        return;
-
-      } catch(_cancel){
-        form[nome].estadia_obs = normalizeHotelObs_("Hotel", sugestao);
-        if(el) el.value = form[nome].estadia_obs;
-        renderB();
-        return;
-      }
-    }
-
-    const txt = normalizeHotelObs_("Hotel", sugestao);
-    form[nome].estadia_obs = txt;
-    if(el) el.value = txt;
-    renderB();
-
-  } catch(err){
-    const msg = "Falha no servidor: " + (err?.message || err);
-    if(el){ el.value = msg; form[nome].estadia_obs = msg; }
-    await openModal({ title:"Erro", message: msg, okText:"Ok", hideCancel:true }).catch(()=>{});
-    renderB();
-  }
+    })
+    .withFailureHandler(async err=>{
+      const msg = "Falha no servidor: " + (err?.message || err);
+      if(el){ el.value = msg; form[nome].estadia_obs = msg; }
+      await dlgAlert(msg, "Falha no servidor");
+      renderB();
+    })
+    .verificarHotelD1(token, nome, dataRef);
 }
 
 function renderB(){
@@ -1070,7 +919,7 @@ function renderC(){
 }
 
 /***************
- * PAINEL D – Deslocamento
+ * PAINEL D
  ***************/
 function renderD(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
@@ -1180,28 +1029,28 @@ function renderE(){
 /***************
  * AUTO START
  ***************/
-window.onload = async () => {
+window.onload = () => {
   setLoginMode(loginMode);
 
   show("loginCard");
   hide("app");
-  hide("bottomBar");
+  hide("bottomBar"); // ✅ sempre começa escondido
 
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
-    try{
-      const res = await api("ping", { token });
-      if(res && res.ok){
-        hide("loginCard");
-        show("app");
-        show("bottomBar");
-        await carregarDataPadrao();
-      } else {
-        logoutForcado("Sessão expirada. Faça login novamente.");
-      }
-    } catch(_){
-      logoutForcado("Sessão expirada. Faça login novamente.");
-    }
+    google.script.run
+      .withSuccessHandler(res=>{
+        if(res && res.ok){
+          hide("loginCard");
+          show("app");
+          hide("bottomBar"); // ✅ só aparece após Carregar OK
+          carregarDataPadrao();
+        } else {
+          logoutForcado("Sessão expirada. Faça login novamente.");
+        }
+      })
+      .withFailureHandler(()=> logoutForcado("Sessão expirada. Faça login novamente."))
+      .ping(token);
   }
 };
 </script>
