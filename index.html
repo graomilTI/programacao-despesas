@@ -402,6 +402,10 @@ async function carregar(){
 
   ctx = res;
   loadedOnce = true;
+  
+  // ✅ sinaliza no front que já existe algo salvo
+  ctx.programacao_ja_enviada = !!res.programacao_ja_enviada;
+  window.__CONFIRMOU_ALTERACAO__ = false;
 
   const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
   const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
@@ -492,6 +496,14 @@ async function salvarEtapaPayload_(dataRef, etapa, regs){
 }
 
 async function salvarEtapaAtual_(){
+
+  // ✅ se já existe programação salva no dia, confirma alteração UMA vez
+if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
+  const ok = confirm("⚠️ Programação do dia já foi enviada.\nDeseja realizar ALTERAÇÕES?");
+  if(!ok) return { ok:false };
+  window.__CONFIRMOU_ALTERACAO__ = true;
+}
+
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
   const dataRef = document.getElementById("dataRef").value.trim();
@@ -1014,3 +1026,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
