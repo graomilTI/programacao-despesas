@@ -522,9 +522,13 @@ async function avancar(){
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
   if(step==="E"){
-    alert("✅ Tudo salvo!");
-    return;
-  }
+    alert("✅ Programação salva com sucesso!");
+    setTimeout(() => {
+    logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação.");
+  }, 800);
+  return;
+}
+
 }
 function voltar(){
   if(busy) return;
@@ -913,3 +917,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
