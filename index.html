@@ -383,6 +383,9 @@ async function carregar(){
       deslocamento_tipo: prev.deslocamento_tipo ?? "",
       deslocamento_obs: prev.deslocamento_obs ?? "",
 
+      // ✅ NOVO: controla se o gestor já alterou o deslocamento manualmente
+      deslocamento_editado: false,
+
       extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
       extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
       extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
@@ -539,7 +542,13 @@ async function onDispChange(ne, val){
   form[nome].disponibilidade_status = val;
 
   if(val === "Logística"){
-    form[nome].deslocamento_tipo = "Frota (motorista)";
+    // ✅ REGRA NOVA:
+    // preenche Frota como sugestão, mas o gestor pode alterar no Painel D.
+    // Só sobrescreve se estiver vazio OU se ainda não foi editado manualmente.
+    const atual = String(form[nome].deslocamento_tipo || "").trim();
+    if(!atual || form[nome].deslocamento_editado === false){
+      form[nome].deslocamento_tipo = "Frota (motorista)";
+    }
 
     const el = document.getElementById("dobs_"+idSafe(nome));
     if(el) el.value = "Buscando veículo...";
@@ -764,6 +773,13 @@ function renderC(){
 /***************
  * PAINEL D
  ***************/
+// ✅ NOVO: marca que o gestor alterou o deslocamento manualmente
+function onDeslocamentoChange(ne, val){
+  const nome = decName(ne);
+  form[nome].deslocamento_tipo = val;
+  form[nome].deslocamento_editado = true;
+}
+
 function renderD(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
 
@@ -776,7 +792,7 @@ function renderD(){
           <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
         </div>
 
-        <select onchange="form[decName('${ne}')].deslocamento_tipo=this.value">
+        <select onchange="onDeslocamentoChange('${ne}', this.value)">
           ${["","Frota (motorista)","Carona","Uber","Km"].map(op=>`
             <option ${form[n].deslocamento_tipo===op?"selected":""}>${op}</option>
           `).join("")}
