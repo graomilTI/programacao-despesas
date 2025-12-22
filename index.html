@@ -567,6 +567,11 @@ async function onDispChange(ne, val){
     const ident = res.found ? res.identificacao : "";
     const sugestao = ident ? `Veículo: ${ident}` : "";
     form[nome].logistica_default_obs = sugestao;
+    // ✅ NOVO: aviso leitura em atraso
+if(res && res.ok && res.leituraAtrasada){
+  alert("⚠️ Solicite que o colaborador do veículo realize leitura do patrimônio e atualize o Checklist.");
+}
+
 
     const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
     if(!obsAtual || !form[nome].logistica_obs_editada){
@@ -917,4 +922,5 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
 
