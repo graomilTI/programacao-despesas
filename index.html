@@ -126,7 +126,7 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.
+        <b>Hotel</b>: consulta D-1 e sugere apenas <b>Cidade</b>.
       </div>
       <div id="listaB"></div>
     </div>
@@ -282,6 +282,18 @@ async function carregarDataPadrao(){
   document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
 }
 
+// ✅ sexta-feira?
+function isFriday_(ddmmyyyy){
+  const m = String(ddmmyyyy||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m) return false;
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  return d.getDay() === 5; // sexta
+}
+function weekendEligible_(tipo){
+  const t = String(tipo||"").trim().toUpperCase();
+  return (t === "HOTEL" || t === "FAZENDA" || t === "ALOJAMENTO");
+}
+
 function getSupOf_(nome){
   return (ctx?.mapSupPorNome && ctx.mapSupPorNome[nome]) ? ctx.mapSupPorNome[nome] : "SEM SUPERVISÃO";
 }
@@ -375,6 +387,8 @@ async function carregar(){
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
+      // ✅ NOVO
+      estadia_weekend: !!(prev.estadia_weekend ?? false),
 
       cafe_valor: (prev.cafe_valor ?? "NÃO"),
       almoco_valor: (prev.almoco_valor ?? "NÃO"),
@@ -382,8 +396,6 @@ async function carregar(){
 
       deslocamento_tipo: prev.deslocamento_tipo ?? "",
       deslocamento_obs: prev.deslocamento_obs ?? "",
-
-      // ✅ NOVO: controla se o gestor já alterou o deslocamento manualmente
       deslocamento_editado: false,
 
       extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
@@ -396,7 +408,7 @@ async function carregar(){
   renderA();
   setStep("A");
   setDebug("OK");
-  show("bottomBar"); // ✅ agora sim
+  show("bottomBar");
 }
 
 /***************
@@ -409,6 +421,7 @@ function setStep(s){
 }
 
 function normalizeHotelObs_(tipo, obs){
+  // ✅ agora guarda só a cidade (se Hotel e tiver texto, mantém prefixo Cidade:)
   const t = String(tipo||"").trim();
   let s = String(obs||"").trim();
   if(t === "Hotel"){
@@ -438,12 +451,14 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "B"){
-    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    // ✅ REGRA: painel B salva TODOS, mesmo que não seja OK/Logística
+    const names = namesAll;
     regs = names.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       estadia_tipo: form[n].estadia_tipo,
-      estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
+      estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs),
+      estadia_weekend: !!form[n].estadia_weekend
     }));
   }
   if(step === "C"){
@@ -482,7 +497,6 @@ async function salvarEtapaAtual_(){
 
   setBusy(true);
 
-  // ✅ salva em pedaços (mais leve no celular)
   const parts = chunkArray(regs, 25);
   let lastRes = null;
 
@@ -524,12 +538,12 @@ async function avancar(){
   if(step==="E"){
     alert("✅ Programação salva com sucesso!");
     setTimeout(() => {
-    logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação.");
-  }, 800);
-  return;
+      logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação.");
+    }, 800);
+    return;
+  }
 }
 
-}
 function voltar(){
   if(busy) return;
   if(step==="B"){ renderA(); setStep("A"); return; }
@@ -546,9 +560,6 @@ async function onDispChange(ne, val){
   form[nome].disponibilidade_status = val;
 
   if(val === "Logística"){
-    // ✅ REGRA NOVA:
-    // preenche Frota como sugestão, mas o gestor pode alterar no Painel D.
-    // Só sobrescreve se estiver vazio OU se ainda não foi editado manualmente.
     const atual = String(form[nome].deslocamento_tipo || "").trim();
     if(!atual || form[nome].deslocamento_editado === false){
       form[nome].deslocamento_tipo = "Frota (motorista)";
@@ -567,11 +578,10 @@ async function onDispChange(ne, val){
     const ident = res.found ? res.identificacao : "";
     const sugestao = ident ? `Veículo: ${ident}` : "";
     form[nome].logistica_default_obs = sugestao;
-    // ✅ NOVO: aviso leitura em atraso
-if(res && res.ok && res.leituraAtrasada){
-  alert("⚠️ Solicite que o colaborador do veículo realize leitura do patrimônio e atualize o Checklist.");
-}
 
+    if(res && res.ok && res.leituraAtrasada){
+      alert("⚠️ Solicite que o colaborador do veículo realize leitura do patrimônio e atualize o Checklist.");
+    }
 
     const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
     if(!obsAtual || !form[nome].logistica_obs_editada){
@@ -632,6 +642,11 @@ async function onEstadiaChange(ne, val){
   const nome = decName(ne);
   form[nome].estadia_tipo = val;
 
+  // ✅ se não for elegível, desmarca weekend
+  if(!weekendEligible_(val)){
+    form[nome].estadia_weekend = false;
+  }
+
   const el = document.getElementById("eobs_"+idSafe(nome));
 
   if(val === "Fazenda"){
@@ -660,7 +675,8 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
-  if(!res.found){
+  // ✅ só cidade
+  if(!res.found || !res.cidade){
     const cidadeUF = (prompt(`Hotel marcado.\nNão encontrei no D-1 (${res.d1}).\nInforme CIDADE e UF (ex: Cascavel, PR):`) || "").trim();
     const txt = normalizeHotelObs_("Hotel", cidadeUF);
     form[nome].estadia_obs = txt;
@@ -669,20 +685,13 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
-  const sugestao = [
-    res.cidade ? `Cidade: ${res.cidade}` : "",
-    res.embarque ? `Embarque: ${res.embarque}` : "",
-    res.hotel ? `Hotel: ${res.hotel}` : "",
-    res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
-    `D-1: ${res.d1}`
-  ].filter(Boolean).join(" | ");
+  const sugestaoCidade = `Cidade: ${res.cidade}`;
+  const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestaoCidade}\n\nContinuará na mesma cidade?`);
 
-  const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestao}\n\nContinuará na mesma cidade?`);
-
-  let txt = sugestao;
+  let txt = sugestaoCidade;
   if(!same){
     const cidadeUF = (prompt(`Informe CIDADE e UF (ex: Cascavel, PR):`, res.cidade || "") || "").trim();
-    txt = normalizeHotelObs_("Hotel", cidadeUF) + (res.embarque ? ` | Embarque: ${res.embarque}` : "");
+    txt = normalizeHotelObs_("Hotel", cidadeUF);
   } else {
     txt = normalizeHotelObs_("Hotel", txt);
   }
@@ -693,13 +702,19 @@ async function onEstadiaChange(ne, val){
 }
 
 function renderB(){
-  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+  // ✅ Painel B: mostra TODOS
+  const names = Object.keys(form);
   names.forEach(n=>{
     if(!String(form[n].estadia_tipo||"").trim()) form[n].estadia_tipo = "Casa";
   });
 
+  const dataRef = document.getElementById("dataRef").value.trim();
+  const isFriday = isFriday_(dataRef);
+
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
+    const showWeekend = isFriday && weekendEligible_(form[n].estadia_tipo);
+
     return `
       <div class="nomeRow">
         <div class="nomeMain">
@@ -709,15 +724,26 @@ function renderB(){
 
         <select onchange="onEstadiaChange('${ne}', this.value)">
           ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
-            <option ${form[n].estadia_tipo===op?"selected":""}>${op}</option>
+            <option ${String(form[n].estadia_tipo)===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
 
-        <input id="eobs_${idSafe(n)}"
-          placeholder="Ex.: Cascavel, PR | Embarque: ..."
-          value="${esc(form[n].estadia_obs)}"
-          oninput="form[decName('${ne}')].estadia_obs=this.value"
-          onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <input id="eobs_${idSafe(n)}"
+            style="flex:1; min-width:220px;"
+            placeholder="Ex.: Cascavel, PR"
+            value="${esc(form[n].estadia_obs)}"
+            oninput="form[decName('${ne}')].estadia_obs=this.value"
+            onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
+
+          ${showWeekend ? `
+            <label class="chkRow" style="margin:0;">
+              <input type="checkbox" ${form[n].estadia_weekend ? "checked":""}
+                onchange="form[decName('${ne}')].estadia_weekend=this.checked">
+              <span>Fica sáb/dom</span>
+            </label>
+          ` : ``}
+        </div>
       </div>
     `;
   });
@@ -782,7 +808,6 @@ function renderC(){
 /***************
  * PAINEL D
  ***************/
-// ✅ NOVO: marca que o gestor alterou o deslocamento manualmente
 function onDeslocamentoChange(ne, val){
   const nome = decName(ne);
   form[nome].deslocamento_tipo = val;
@@ -910,7 +935,7 @@ window.onload = async () => {
     if(res && res.ok){
       hide("loginCard");
       show("app");
-      hide("bottomBar"); // só depois do carregar
+      hide("bottomBar");
       loadedOnce = false;
       await carregarDataPadrao();
       document.getElementById("loginStatus").innerText = "";
@@ -922,5 +947,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
-
