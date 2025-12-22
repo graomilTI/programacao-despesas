@@ -461,14 +461,15 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "B"){
-    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    regs = names.map(n => ({
+    // ✅ Painel B salva TODOS, independente do status do Painel A
+    regs = namesAll.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       estadia_tipo: form[n].estadia_tipo,
       estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
     }));
   }
+
   if(step === "C"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     regs = names.map(n => ({
@@ -712,7 +713,7 @@ async function onEstadiaChange(ne, val){
 }
 
 function renderB(){
-  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+ const names = Object.keys(form);;
   names.forEach(n=>{
     if(!String(form[n].estadia_tipo||"").trim()) form[n].estadia_tipo = "Casa";
   });
@@ -941,3 +942,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
