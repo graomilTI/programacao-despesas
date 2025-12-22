@@ -105,7 +105,7 @@
       <div class="row" style="margin-top:10px;">
         <div class="col">
           <label class="muted">Data</label>
-          <input id="dataRef" placeholder="dd/mm/aaaa">
+          <input id="dataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
         </div>
         <div class="col">
           <label class="muted">&nbsp;</label>
@@ -126,7 +126,7 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e sugere apenas <b>Cidade</b>.
+        <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.
       </div>
       <div id="listaB"></div>
     </div>
@@ -210,6 +210,22 @@ function logoutForcado(msg){
 
 function logout(){ logoutForcado("Logout realizado."); }
 
+/** 🔧 máscara simples */
+function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+function maskCPF(s){
+  const d = onlyDigits(s).slice(0,11);
+  if(d.length <= 3) return d;
+  if(d.length <= 6) return d.replace(/^(\d{3})(\d+)/,"$1.$2");
+  if(d.length <= 9) return d.replace(/^(\d{3})(\d{3})(\d+)/,"$1.$2.$3");
+  return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2}).*/,"$1.$2.$3-$4");
+}
+function maskData(s){
+  const d = onlyDigits(s).slice(0,8);
+  if(d.length <= 2) return d;
+  if(d.length <= 4) return d.replace(/^(\d{2})(\d+)/,"$1/$2");
+  return d.replace(/^(\d{2})(\d{2})(\d+)/,"$1/$2/$3");
+}
+
 function setLoginMode(mode){
   loginMode = mode;
   localStorage.setItem("DESP_LOGIN_MODE", loginMode);
@@ -224,24 +240,32 @@ function setLoginMode(mode){
     input.placeholder = "CPF (11 dígitos)";
     input.maxLength = 14;
     input.value = "";
+    input.inputMode = "numeric";
   } else {
     title.innerText = "Login do Gestor";
     hint.innerHTML  = "Informe seu <b>PIN (4 dígitos)</b>.";
     input.placeholder = "PIN";
     input.maxLength = 4;
     input.value = "";
+    input.inputMode = "numeric";
   }
 
   document.getElementById("loginStatus").innerText = "";
 }
 
-/** API helper */
+/** ✅ API helper (agora já inclui token quando existir) */
 async function api(action, args){
+  const payload = { action, ...(args||{}) };
+  if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
+    payload.token = token;
+  }
+
   const res = await fetch(API_BASE, {
     method:"POST",
     headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, ...(args||{}) })
+    body: JSON.stringify(payload)
   });
+
   const txt = await res.text();
   try { return JSON.parse(txt); }
   catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
@@ -249,6 +273,7 @@ async function api(action, args){
 
 async function login(){
   const raw = document.getElementById("loginInput").value;
+
   document.getElementById("loginStatus").innerText = "Entrando...";
   setBusy(true);
 
@@ -280,18 +305,6 @@ async function carregarDataPadrao(){
   document.getElementById("dataRef").value = res.data || "";
   const permit = res.janela?.permitidas || [];
   document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
-}
-
-// ✅ sexta-feira?
-function isFriday_(ddmmyyyy){
-  const m = String(ddmmyyyy||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if(!m) return false;
-  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-  return d.getDay() === 5; // sexta
-}
-function weekendEligible_(tipo){
-  const t = String(tipo||"").trim().toUpperCase();
-  return (t === "HOTEL" || t === "FAZENDA" || t === "ALOJAMENTO");
 }
 
 function getSupOf_(nome){
@@ -348,7 +361,7 @@ async function carregar(){
   setDebug("Carregando...");
   hide("bottomBar");
 
-  const res = await api("carregarContexto", { token, dataRef: d });
+  const res = await api("carregarContexto", { dataRef: d });
 
   setBusy(false);
 
@@ -387,8 +400,6 @@ async function carregar(){
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
-      // ✅ NOVO
-      estadia_weekend: !!(prev.estadia_weekend ?? false),
 
       cafe_valor: (prev.cafe_valor ?? "NÃO"),
       almoco_valor: (prev.almoco_valor ?? "NÃO"),
@@ -421,7 +432,6 @@ function setStep(s){
 }
 
 function normalizeHotelObs_(tipo, obs){
-  // ✅ agora guarda só a cidade (se Hotel e tiver texto, mantém prefixo Cidade:)
   const t = String(tipo||"").trim();
   let s = String(obs||"").trim();
   if(t === "Hotel"){
@@ -451,14 +461,12 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "B"){
-    // ✅ REGRA: painel B salva TODOS, mesmo que não seja OK/Logística
-    const names = namesAll;
+    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     regs = names.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       estadia_tipo: form[n].estadia_tipo,
-      estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs),
-      estadia_weekend: !!form[n].estadia_weekend
+      estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
     }));
   }
   if(step === "C"){
@@ -501,7 +509,7 @@ async function salvarEtapaAtual_(){
   let lastRes = null;
 
   for (let i=0;i<parts.length;i++){
-    const r = await api("salvarEtapa", { token, payload: { dataReferencia: dataRef, etapa: step, registros: parts[i] } });
+    const r = await api("salvarEtapa", { payload: { dataReferencia: dataRef, etapa: step, registros: parts[i] } });
     lastRes = r;
 
     if(!r || !r.ok){
@@ -568,13 +576,14 @@ async function onDispChange(ne, val){
     const el = document.getElementById("dobs_"+idSafe(nome));
     if(el) el.value = "Buscando veículo...";
 
-    const res = await api("getPrimeiroVeiculoPorFuncionario", { token, nome });
+    const res = await api("getPrimeiroVeiculoPorFuncionario", { nome });
     if(!res || !res.ok){
       if(el) el.value="";
       alert(res?.error || "Erro ao buscar veículo");
       renderA();
       return;
     }
+
     const ident = res.found ? res.identificacao : "";
     const sugestao = ident ? `Veículo: ${ident}` : "";
     form[nome].logistica_default_obs = sugestao;
@@ -636,16 +645,11 @@ function renderA(){
 }
 
 /***************
- * PAINEL B – Estadia
+ * PAINEL B
  ***************/
 async function onEstadiaChange(ne, val){
   const nome = decName(ne);
   form[nome].estadia_tipo = val;
-
-  // ✅ se não for elegível, desmarca weekend
-  if(!weekendEligible_(val)){
-    form[nome].estadia_weekend = false;
-  }
 
   const el = document.getElementById("eobs_"+idSafe(nome));
 
@@ -666,7 +670,7 @@ async function onEstadiaChange(ne, val){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
 
-  const res = await api("verificarHotelD1", { token, nome, dataRef });
+  const res = await api("verificarHotelD1", { nome, dataRef });
   if(!res || !res.ok){
     const msg = res?.error || "Erro";
     if(el){ el.value = msg; form[nome].estadia_obs = msg; }
@@ -675,8 +679,7 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
-  // ✅ só cidade
-  if(!res.found || !res.cidade){
+  if(!res.found){
     const cidadeUF = (prompt(`Hotel marcado.\nNão encontrei no D-1 (${res.d1}).\nInforme CIDADE e UF (ex: Cascavel, PR):`) || "").trim();
     const txt = normalizeHotelObs_("Hotel", cidadeUF);
     form[nome].estadia_obs = txt;
@@ -685,13 +688,20 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
-  const sugestaoCidade = `Cidade: ${res.cidade}`;
-  const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestaoCidade}\n\nContinuará na mesma cidade?`);
+  const sugestao = [
+    res.cidade ? `Cidade: ${res.cidade}` : "",
+    res.embarque ? `Embarque: ${res.embarque}` : "",
+    res.hotel ? `Hotel: ${res.hotel}` : "",
+    res.localizacaoHotel ? `Localização: ${res.localizacaoHotel}` : "",
+    `D-1: ${res.d1}`
+  ].filter(Boolean).join(" | ");
 
-  let txt = sugestaoCidade;
+  const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestao}\n\nContinuará na mesma cidade?`);
+
+  let txt = sugestao;
   if(!same){
     const cidadeUF = (prompt(`Informe CIDADE e UF (ex: Cascavel, PR):`, res.cidade || "") || "").trim();
-    txt = normalizeHotelObs_("Hotel", cidadeUF);
+    txt = normalizeHotelObs_("Hotel", cidadeUF) + (res.embarque ? ` | Embarque: ${res.embarque}` : "");
   } else {
     txt = normalizeHotelObs_("Hotel", txt);
   }
@@ -702,19 +712,13 @@ async function onEstadiaChange(ne, val){
 }
 
 function renderB(){
-  // ✅ Painel B: mostra TODOS
-  const names = Object.keys(form);
+  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   names.forEach(n=>{
     if(!String(form[n].estadia_tipo||"").trim()) form[n].estadia_tipo = "Casa";
   });
 
-  const dataRef = document.getElementById("dataRef").value.trim();
-  const isFriday = isFriday_(dataRef);
-
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
-    const showWeekend = isFriday && weekendEligible_(form[n].estadia_tipo);
-
     return `
       <div class="nomeRow">
         <div class="nomeMain">
@@ -724,26 +728,15 @@ function renderB(){
 
         <select onchange="onEstadiaChange('${ne}', this.value)">
           ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
-            <option ${String(form[n].estadia_tipo)===op?"selected":""}>${op}</option>
+            <option ${form[n].estadia_tipo===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
 
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <input id="eobs_${idSafe(n)}"
-            style="flex:1; min-width:220px;"
-            placeholder="Ex.: Cascavel, PR"
-            value="${esc(form[n].estadia_obs)}"
-            oninput="form[decName('${ne}')].estadia_obs=this.value"
-            onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
-
-          ${showWeekend ? `
-            <label class="chkRow" style="margin:0;">
-              <input type="checkbox" ${form[n].estadia_weekend ? "checked":""}
-                onchange="form[decName('${ne}')].estadia_weekend=this.checked">
-              <span>Fica sáb/dom</span>
-            </label>
-          ` : ``}
-        </div>
+        <input id="eobs_${idSafe(n)}"
+          placeholder="Ex.: Cascavel, PR | Embarque: ..."
+          value="${esc(form[n].estadia_obs)}"
+          oninput="form[decName('${ne}')].estadia_obs=this.value"
+          onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
       </div>
     `;
   });
@@ -752,7 +745,7 @@ function renderB(){
 }
 
 /***************
- * PAINEL C – Alimentação
+ * PAINEL C
  ***************/
 function setSimNao_(ne, campo, checked){
   const nome = decName(ne);
@@ -766,10 +759,8 @@ function toggleAllAlmoco(on){
   names.forEach(n => form[n].almoco_valor = on ? "SIM" : "NÃO");
   renderC();
 }
-
 function renderC(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
     return `
@@ -801,7 +792,6 @@ function renderC(){
       </div>
     `;
   });
-
   document.getElementById("listaC").innerHTML = html;
 }
 
@@ -813,10 +803,8 @@ function onDeslocamentoChange(ne, val){
   form[nome].deslocamento_tipo = val;
   form[nome].deslocamento_editado = true;
 }
-
 function renderD(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
     return `
@@ -838,34 +826,28 @@ function renderD(){
       </div>
     `;
   });
-
   document.getElementById("listaD").innerHTML = html;
 }
 
 /***************
- * PAINEL E – Extras
+ * PAINEL E
  ***************/
 function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
-
 function setExtraChecked_(ne, campo, checked){
   const n = decName(ne);
   if(!checked) form[n][campo] = 0;
   else if(Number(form[n][campo]||0) === 0) form[n][campo] = 0.01;
   renderE();
 }
-
 function setExtraValor_(ne, campo, val){
   const n = decName(ne);
   const num = Number(String(val||"").replace(",", "."));
   form[n][campo] = isNaN(num) ? 0 : num;
 }
-
 function renderE(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
-
     const recOn = isExtraOn_(n,"extras_recarga_valor");
     const pasOn = isExtraOn_(n,"extras_passagem_valor");
     const lavOn = isExtraOn_(n,"extras_lavagem_valor");
@@ -925,13 +907,25 @@ function renderE(){
 window.onload = async () => {
   setLoginMode(loginMode);
 
+  // 🔧 handlers (Enter) + máscaras
+  const loginInput = document.getElementById("loginInput");
+  loginInput.addEventListener("input", () => {
+    if(loginMode === "ADMIN") loginInput.value = maskCPF(loginInput.value);
+    else loginInput.value = onlyDigits(loginInput.value).slice(0,4);
+  });
+  loginInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") login(); });
+
+  const dataRef = document.getElementById("dataRef");
+  dataRef.addEventListener("input", ()=>{ dataRef.value = maskData(dataRef.value); });
+  dataRef.addEventListener("keydown", (e)=>{ if(e.key === "Enter") carregar(); });
+
   show("loginCard");
   hide("app");
   hide("bottomBar");
 
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
-    const res = await api("ping", { token });
+    const res = await api("ping", {});
     if(res && res.ok){
       hide("loginCard");
       show("app");
