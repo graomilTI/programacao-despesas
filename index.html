@@ -352,6 +352,54 @@ function renderGrouped_(names, rowHtmlFn){
   }).join("");
 }
 
+function pickStateForStep_(stepKey){
+  if(!ctx || !form) return null;
+
+  const dataRef = (document.getElementById("dataRef")?.value || "").trim();
+  const namesAll = Object.keys(form || {}).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+
+  // pega exatamente os campos que aquela etapa salva
+  const state = {
+    dataRef,
+    step: stepKey,
+    items: namesAll.map(n => {
+      const f = form[n] || {};
+      if(stepKey === "A"){
+        return [n, f.coordenacao||"", f.disponibilidade_status||"", f.disponibilidade_obs||""];
+      }
+      if(stepKey === "B"){
+        return [n, f.coordenacao||"", f.estadia_tipo||"", normalizeHotelObs_(f.estadia_tipo, f.estadia_obs||""), !!f.wknd_hosp];
+      }
+      if(stepKey === "C"){
+        // mesma regra de envio da C
+        if(!PROSSEGUIR(f.disponibilidade_status)) return null;
+        return [n, f.coordenacao||"", f.cafe_valor||"NÃO", f.almoco_valor||"NÃO", f.janta_valor||"NÃO"];
+      }
+      if(stepKey === "D"){
+        if(!PROSSEGUIR(f.disponibilidade_status)) return null;
+        return [n, f.coordenacao||"", f.deslocamento_tipo||"", f.deslocamento_obs||""];
+      }
+      if(stepKey === "E"){
+        if(!PROSSEGUIR(f.disponibilidade_status)) return null;
+        return [n, f.coordenacao||"", Number(f.extras_recarga_valor||0), Number(f.extras_passagem_valor||0), Number(f.extras_lavagem_valor||0), f.extras_obs||""];
+      }
+      return null;
+    }).filter(Boolean)
+  };
+
+  return JSON.stringify(state);
+}
+
+function setBaseline_(){
+  window.__BASELINE_STATE__ = pickStateForStep_(step);
+}
+
+function hasChanges_(){
+  const cur = pickStateForStep_(step);
+  return !!cur && cur !== window.__BASELINE_STATE__;
+}
+
+
 /** =========================
  * DATA helpers (sexta / addDays)
 ========================= */
@@ -452,6 +500,9 @@ async function carregar(){
   setStep("A");
   setDebug("OK");
   show("bottomBar");
+  window.__CONFIRMOU_ALTERACAO__ = false;
+  setBaseline_();
+
 }
 
 /** =========================
@@ -497,12 +548,15 @@ async function salvarEtapaPayload_(dataRef, etapa, regs){
 
 async function salvarEtapaAtual_(){
 
-  // ✅ se já existe programação salva no dia, confirma alteração UMA vez
+// ✅ confirma alteração UMA vez, mas SÓ se houver mudanças
 if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
-  const ok = confirm("⚠️ Programação do dia já foi enviada.\nDeseja realizar ALTERAÇÕES?");
-  if(!ok) return { ok:false };
-  window.__CONFIRMOU_ALTERACAO__ = true;
+  if(hasChanges_()){
+    const ok = confirm("⚠️ Programação do dia já foi enviada.\nDeseja realizar ALTERAÇÕES?");
+    if(!ok) return { ok:false };
+    window.__CONFIRMOU_ALTERACAO__ = true;
+  }
 }
+
 
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -595,6 +649,10 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
   }
 
   setBusy(false);
+
+  // ✅ depois de salvar, considera como enviada e atualiza baseline
+ctx.programacao_ja_enviada = true;
+setBaseline_();
   return r;
 }
 
@@ -1026,4 +1084,5 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
 
