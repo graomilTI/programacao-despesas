@@ -163,17 +163,19 @@
 </div>
 
 <script>
-/** ✅ AQUI você aponta para o Worker */
+/** ✅ Worker */
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
+
+/** ✅ BLINDAGEM: evita ReferenceError se algum trecho antigo ainda referenciar "reg" */
+var reg = null; // <-- (não é usado na lógica nova; é só proteção contra cache/trecho antigo)
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
 let step = "A";
 let form = {};
 let busy = false;
-let loadedOnce = false;
 
-let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN"; // PIN | ADMIN
+let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 const PROSSEGUIR = (st) => (String(st||"").trim() === "OK" || String(st||"").trim() === "Logística");
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
@@ -193,23 +195,6 @@ function setBusy(v){
   });
 }
 
-function isAuthError_(text){
-  const t = String(text||"").toLowerCase();
-  return t.includes("sessão expirada") || t.includes("sessao expirada") || t.includes("faça login") || t.includes("faca login");
-}
-
-function logoutForcado(msg){
-  try{ localStorage.removeItem("DESP_TOKEN"); }catch(e){}
-  token = "";
-  ctx = null;
-  form = {};
-  loadedOnce = false;
-  hide("app"); hide("bottomBar"); show("loginCard");
-  document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
-}
-function logout(){ logoutForcado("Logout realizado."); }
-
-/** 🔧 máscaras */
 function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
 function maskCPF(s){
   const d = onlyDigits(s).slice(0,11);
@@ -225,15 +210,11 @@ function maskData(s){
   return d.replace(/^(\d{2})(\d{2})(\d+)/,"$1/$2/$3");
 }
 
-/** =========================
- * DATA helpers
-========================= */
 function parseDMY_(s){
   const m = String(s||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if(!m) return null;
   const d = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
   if(isNaN(d.getTime())) return null;
-  // valida dia/mês (evita 32/13/2025 virar data “válida” por overflow)
   if(d.getDate() !== Number(m[1]) || (d.getMonth()+1) !== Number(m[2])) return null;
   return d;
 }
@@ -255,9 +236,21 @@ function isFriday_(dataRef){
   return d.getDay() === 5;
 }
 
-/** =========================
- * LOGIN MODE
-========================= */
+function isAuthError_(text){
+  const t = String(text||"").toLowerCase();
+  return t.includes("sessão expirada") || t.includes("sessao expirada") || t.includes("faça login") || t.includes("faca login");
+}
+
+function logoutForcado(msg){
+  try{ localStorage.removeItem("DESP_TOKEN"); }catch(e){}
+  token = "";
+  ctx = null;
+  form = {};
+  hide("app"); hide("bottomBar"); show("loginCard");
+  document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
+}
+function logout(){ logoutForcado("Logout realizado."); }
+
 function setLoginMode(mode){
   loginMode = mode;
   localStorage.setItem("DESP_LOGIN_MODE", loginMode);
@@ -285,7 +278,6 @@ function setLoginMode(mode){
   document.getElementById("loginStatus").innerText = "";
 }
 
-/** ✅ API helper */
 async function api(action, args){
   const payload = { action, ...(args||{}) };
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
@@ -315,8 +307,8 @@ async function login(){
   setBusy(true);
 
   const out = (loginMode === "ADMIN")
-    ? await api("loginAdminCPF", { cpf: onlyDigits(raw) })                 // ✅ CORRIGIDO
-    : await api("loginPIN", { pin: onlyDigits(raw).slice(0,4) });         // ✅ CORRIGIDO
+    ? await api("loginAdminCPF", { cpf: onlyDigits(raw) })
+    : await api("loginPIN", { pin: onlyDigits(raw).slice(0,4) });
 
   setBusy(false);
 
@@ -331,7 +323,6 @@ async function login(){
   hide("loginCard");
   show("app");
   hide("bottomBar");
-  loadedOnce = false;
 
   await carregarDataPadrao();
 }
@@ -389,43 +380,49 @@ function renderGrouped_(names, rowHtmlFn){
   }).join("");
 }
 
-function pickStateForStep_(stepKey){
-  if(!ctx || !form) return null;
-  const dataRef = (document.getElementById("dataRef")?.value || "").trim();
-  const namesAll = Object.keys(form || {}).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-
-  const state = {
-    dataRef,
-    step: stepKey,
-    items: namesAll.map(n => {
-      const f = form[n] || {};
-      if(stepKey === "A"){
-        return [n, f.coordenacao||"", f.disponibilidade_status||"", f.disponibilidade_obs||""];
-      }
-      if(stepKey === "B"){
-        return [n, f.coordenacao||"", f.estadia_tipo||"", normalizeHotelObs_(f.estadia_tipo, f.estadia_obs||""), !!f.wknd_hosp];
-      }
-      if(stepKey === "C"){
-        if(!PROSSEGUIR(f.disponibilidade_status)) return null;
-        return [n, f.coordenacao||"", f.cafe_valor||"NÃO", f.almoco_valor||"NÃO", f.janta_valor||"NÃO"];
-      }
-      if(stepKey === "D"){
-        if(!PROSSEGUIR(f.disponibilidade_status)) return null;
-        return [n, f.coordenacao||"", f.deslocamento_tipo||"", f.deslocamento_obs||""];
-      }
-      if(stepKey === "E"){
-        if(!PROSSEGUIR(f.disponibilidade_status)) return null;
-        return [n, f.coordenacao||"", Number(f.extras_recarga_valor||0), Number(f.extras_passagem_valor||0), Number(f.extras_lavagem_valor||0), f.extras_obs||""];
-      }
-      return null;
-    }).filter(Boolean)
-  };
-
-  return JSON.stringify(state);
+function setStep(s){
+  step = s;
+  ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
+  document.getElementById("step"+s).classList.add("active");
 }
 
-function setBaseline_(){ window.__BASELINE_STATE__ = pickStateForStep_(step); }
-function hasChanges_(){ const cur = pickStateForStep_(step); return !!cur && cur !== window.__BASELINE_STATE__; }
+function normalizeHotelObs_(tipo, obs){
+  const t = String(tipo||"").trim();
+  let s = String(obs||"").trim();
+  if(t === "Hotel"){
+    if(s && !/cidade\s*:/i.test(s)) s = "Cidade: " + s;
+  }
+  return s;
+}
+
+function chunkArray(arr, size){
+  const out = [];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+
+/** ✅ CORRIGIDO: função de salvar NÃO usa "reg" em lugar nenhum */
+async function salvarEtapaPayload_(dataRef, etapa, registros){
+  const parts = chunkArray(registros || [], 25);
+
+  for (let i=0;i<parts.length;i++){
+    const r = await api("salvarEtapa", {
+      payload: {
+        dataReferencia: dataRef,
+        etapa: etapa,
+        registros: parts[i] // ✅ sempre definido
+      }
+    });
+
+    if(!r || !r.ok){
+      const err = r?.error || "Erro ao salvar etapa";
+      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+      alert(err);
+      return { ok:false };
+    }
+  }
+  return { ok:true };
+}
 
 async function carregar(){
   const dStr = document.getElementById("dataRef").value.trim();
@@ -451,10 +448,6 @@ async function carregar(){
   }
 
   ctx = res;
-  loadedOnce = true;
-
-  ctx.programacao_ja_enviada = !!res.programacao_ja_enviada;
-  window.__CONFIRMOU_ALTERACAO__ = false;
 
   const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
   const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
@@ -470,7 +463,6 @@ async function carregar(){
   (res.liberados || []).forEach(p=>{
     const nome = p.colaborador;
     const prev = lanc[nome] || {};
-
     form[nome] = {
       coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
       disponibilidade_status: prev.disponibilidade_status ?? "OK",
@@ -501,65 +493,17 @@ async function carregar(){
   setStep("A");
   setDebug("OK");
   show("bottomBar");
-  window.__CONFIRMOU_ALTERACAO__ = false;
-  setBaseline_();
-}
-
-function setStep(s){
-  step = s;
-  ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
-  document.getElementById("step"+s).classList.add("active");
-  try { setBaseline_(); } catch(e) {}
-}
-
-function normalizeHotelObs_(tipo, obs){
-  const t = String(tipo||"").trim();
-  let s = String(obs||"").trim();
-  if(t === "Hotel"){
-    if(s && !/cidade\s*:/i.test(s)) s = "Cidade: " + s;
-  }
-  return s;
-}
-
-function chunkArray(arr, size){
-  const out = [];
-  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
-  return out;
-}
-
-async function salvarEtapaPayload_(dataRef, etapa, regs){
-  const parts = chunkArray(regs, 25);
-  let lastRes = null;
-
-  for (let i=0;i<parts.length;i++){
-    const r = await api("salvarEtapa", { payload: { dataReferencia: dataRef, etapa: etapa, registros: parts[i] } });
-    lastRes = r;
-    if(!r || !r.ok){
-      const err = r?.error || "Erro ao salvar etapa";
-      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
-      alert(err);
-      return { ok:false };
-    }
-  }
-  return lastRes || { ok:true };
 }
 
 async function salvarEtapaAtual_(){
-  if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
-    if(hasChanges_()){
-      const ok = confirm("⚠️ Programação do dia já foi enviada.\nDeseja realizar ALTERAÇÕES?");
-      if(!ok) return { ok:false };
-      window.__CONFIRMOU_ALTERACAO__ = true;
-    }
-  }
-
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
+
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
 
-  let regs = [];
+  let registros = [];
   if(step === "A"){
-    regs = namesAll.map(n => ({
+    registros = namesAll.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       disponibilidade_status: form[n].disponibilidade_status,
@@ -567,7 +511,7 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "B"){
-    regs = namesAll.map(n => ({
+    registros = namesAll.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       estadia_tipo: form[n].estadia_tipo,
@@ -576,7 +520,7 @@ async function salvarEtapaAtual_(){
   }
   if(step === "C"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    regs = names.map(n => ({
+    registros = names.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       cafe_valor: form[n].cafe_valor,
@@ -586,7 +530,7 @@ async function salvarEtapaAtual_(){
   }
   if(step === "D"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    regs = names.map(n => ({
+    registros = names.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       deslocamento_tipo: form[n].deslocamento_tipo,
@@ -595,7 +539,7 @@ async function salvarEtapaAtual_(){
   }
   if(step === "E"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    regs = names.map(n => ({
+    registros = names.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
@@ -605,12 +549,8 @@ async function salvarEtapaAtual_(){
     }));
   }
 
-  const saveEl = document.getElementById("saveStatus");
-  if(step==="E" && saveEl) saveEl.innerText = "Salvando...";
-
   setBusy(true);
-
-  let r = await salvarEtapaPayload_(dataRef, step, regs);
+  const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
   if(step === "B" && isFriday_(dataRef)){
@@ -637,10 +577,7 @@ async function salvarEtapaAtual_(){
   }
 
   setBusy(false);
-
-  ctx.programacao_ja_enviada = true;
-  setBaseline_();
-  return r;
+  return { ok:true };
 }
 
 async function avancar(){
@@ -658,8 +595,7 @@ async function avancar(){
   if(step==="D"){ renderE(); setStep("E"); return; }
   if(step==="E"){
     alert("✅ Programação salva com sucesso!");
-    setTimeout(() => { logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."); }, 800);
-    return;
+    setTimeout(() => logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."), 800);
   }
 }
 
@@ -671,12 +607,10 @@ function voltar(){
   if(step==="E"){ renderD(); setStep("D"); return; }
 }
 
-/** =========================
- * PAINEL A
-========================= */
+/** ===== Painel A ===== */
 async function onDispChange(ne, val){
   const nome = decName(ne);
-  if(!form[nome]) return; // ✅ guard
+  if(!form[nome]) return;
   form[nome].disponibilidade_status = val;
 
   if(val === "Logística"){
@@ -718,7 +652,7 @@ async function onDispChange(ne, val){
 
 function onDispObsInput(ne, val){
   const nome = decName(ne);
-  if(!form[nome]) return; // ✅ guard
+  if(!form[nome]) return;
   form[nome].disponibilidade_obs = val;
 
   if(form[nome].disponibilidade_status === "Logística"){
@@ -757,15 +691,12 @@ function renderA(){
   document.getElementById("listaA").innerHTML = html;
 }
 
-/** =========================
- * PAINEL B
-========================= */
+/** ===== Painel B ===== */
 async function onEstadiaChange(ne, val){
   const nome = decName(ne);
-  if(!form[nome]) return; // ✅ guard
+  if(!form[nome]) return;
   form[nome].estadia_tipo = val;
 
-  // ✅ se não é tipo que permite wknd, zera
   if(!["Hotel","Fazenda","Alojamento"].includes(String(val||"").trim())){
     form[nome].wknd_hosp = false;
   }
@@ -837,7 +768,6 @@ function renderB(){
 
   names.forEach(n=>{
     if(!String(form[n].estadia_tipo||"").trim()) form[n].estadia_tipo = "Casa";
-    // ✅ garante consistência do wknd
     const tipo = String(form[n].estadia_tipo||"").trim();
     if(!["Hotel","Fazenda","Alojamento"].includes(tipo)) form[n].wknd_hosp = false;
   });
@@ -882,9 +812,7 @@ function renderB(){
   document.getElementById("listaB").innerHTML = html;
 }
 
-/** =========================
- * PAINEL C
-========================= */
+/** ===== Painel C ===== */
 function setSimNao_(ne, campo, checked){
   const nome = decName(ne);
   if(!form[nome]) return;
@@ -934,9 +862,7 @@ function renderC(){
   document.getElementById("listaC").innerHTML = html;
 }
 
-/** =========================
- * PAINEL D
-========================= */
+/** ===== Painel D ===== */
 function onDeslocamentoChange(ne, val){
   const nome = decName(ne);
   if(!form[nome]) return;
@@ -969,15 +895,12 @@ function renderD(){
   document.getElementById("listaD").innerHTML = html;
 }
 
-/** =========================
- * PAINEL E
-========================= */
+/** ===== Painel E ===== */
 function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
 function setExtraChecked_(ne, campo, checked){
   const n = decName(ne);
   if(!form[n]) return;
   if(!checked) form[n][campo] = 0;
-  else if(Number(form[n][campo]||0) === 0) form[n][campo] = 0; // ✅ não força 0.01
   renderE();
 }
 function setExtraValor_(ne, campo, val){
@@ -1043,9 +966,7 @@ function renderE(){
   document.getElementById("listaE").innerHTML = html;
 }
 
-/** =========================
- * AUTO START
-========================= */
+/** ===== START ===== */
 window.onload = async () => {
   setLoginMode(loginMode);
 
@@ -1071,7 +992,6 @@ window.onload = async () => {
       hide("loginCard");
       show("app");
       hide("bottomBar");
-      loadedOnce = false;
       await carregarDataPadrao();
       document.getElementById("loginStatus").innerText = "";
     } else {
