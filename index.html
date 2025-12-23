@@ -903,11 +903,18 @@ function setExtraChecked_(ne, campo, checked){
   if(!checked) form[n][campo] = 0;
   renderE();
 }
-function setExtraValor_(ne, campo, val){
+function setExtraChecked_(ne, campo, checked){
   const n = decName(ne);
   if(!form[n]) return;
-  const num = Number(String(val||"").replace(",", "."));
-  form[n][campo] = isNaN(num) ? 0 : num;
+
+  if(!checked){
+    form[n][campo] = 0;
+  } else {
+    // ✅ precisa virar > 0 para permanecer marcado após o render
+    if(Number(form[n][campo] || 0) <= 0) form[n][campo] = 1.00;
+  }
+
+  renderE();
 }
 function renderE(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
@@ -1002,3 +1009,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
