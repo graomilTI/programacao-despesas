@@ -176,7 +176,12 @@ let form = {};
 let busy = false;
 
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
-const PROSSEGUIR = (st) => (String(st||"").trim() === "OK" || String(st||"").trim() === "Logística");
+
+/** ✅ ROBUSTO: aceita OK/Logística independentemente de acento/caixa */
+const PROSSEGUIR = (st) => {
+  const s = String(st||"").trim().toUpperCase();
+  return (s === "OK" || s === "LOGÍSTICA" || s === "LOGISTICA");
+};
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 function encName(n){ return encodeURIComponent(String(n||"")); }
@@ -401,16 +406,16 @@ function chunkArray(arr, size){
   return out;
 }
 
-/** ✅ CORRIGIDO: função de salvar NÃO usa "reg" em lugar nenhum */
+/** ✅ mais rápido: chunk 500 (como você pediu) */
 async function salvarEtapaPayload_(dataRef, etapa, registros){
-  const parts = chunkArray(registros || [], 25);
+  const parts = chunkArray(registros || [], 500);
 
   for (let i=0;i<parts.length;i++){
     const r = await api("salvarEtapa", {
       payload: {
         dataReferencia: dataRef,
         etapa: etapa,
-        registros: parts[i] // ✅ sempre definido
+        registros: parts[i]
       }
     });
 
@@ -550,9 +555,21 @@ async function salvarEtapaAtual_(){
   }
 
   setBusy(true);
+
+  // ✅ salva etapa “principal”
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
+  // ✅ Pós-processo assíncrono: NÃO trava o gestor (RH/Hospedagem/Conferência)
+  api("posProcessar", {
+    payload: {
+      dataReferencia: dataRef,
+      etapa: step,
+      registros: registros
+    }
+  }).catch(()=>{});
+
+  // ✅ regra sexta (hospedagem sab/dom) continua síncrona para garantir consistência
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -897,12 +914,7 @@ function renderD(){
 
 /** ===== Painel E ===== */
 function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
-function setExtraChecked_(ne, campo, checked){
-  const n = decName(ne);
-  if(!form[n]) return;
-  if(!checked) form[n][campo] = 0;
-  renderE();
-}
+
 function setExtraChecked_(ne, campo, checked){
   const n = decName(ne);
   if(!form[n]) return;
@@ -913,9 +925,16 @@ function setExtraChecked_(ne, campo, checked){
     // ✅ precisa virar > 0 para permanecer marcado após o render
     if(Number(form[n][campo] || 0) <= 0) form[n][campo] = 1.00;
   }
-
   renderE();
 }
+
+function setExtraValor_(ne, campo, val){
+  const n = decName(ne);
+  if(!form[n]) return;
+  const num = Number(String(val||"").replace(",", "."));
+  form[n][campo] = isNaN(num) ? 0 : num;
+}
+
 function renderE(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   const html = renderGrouped_(names, (n, coord, sup)=>{
@@ -1009,4 +1028,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
