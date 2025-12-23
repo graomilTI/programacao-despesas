@@ -120,53 +120,8 @@ Marque e informe valores:
 ---
 
 ## 📤 Envio para “Programação de Despesas” (Conferência)
-Ao finalizar a **Etapa E**, o sistema sincroniza para a planilha:
+Ao finalizar a **Etapa E**, o sistema sincroniza para a planilha de despesas
 
-**Programação de Despesas**  
-ID: `18gNonsMrYRsV6m0HD07yi3m5Zb_JyYimvFC-XrkeAFY`
-
-Abas destino:
-- MARIA
-- ANDREA
-- GRAZI
-- RENATA
-- TAINA
-
-A aba é escolhida automaticamente conforme a **Coordenação** (mapeamento interno).
-
----
-
-## 📋 Estrutura esperada nas planilhas
-
-### 1) Despesas_log (registro geral)
-A aba “Despesas” precisa conter os cabeçalhos padrão:
-- Timestamp
-- DataReferencia
-- Coordenação
-- Colaborador
-- Disponibilidade_Status
-- Disponibilidade_Obs
-- Estadia_Tipo
-- Estadia_Obs
-- Cafe_Valor
-- Almoco_Valor
-- Janta_Valor
-- Deslocamento_Tipo
-- Deslocamento_Obs
-- Extras_Recarga_Valor
-- Extras_Passagem_Valor
-- Extras_Lavagem_Valor
-- Extras_Obs
-
-### 2) Programação de Despesas (conferência)
-As abas (MARIA/ANDREA/...) precisam ter cabeçalhos:
-- DATA | COORDENAÇÃO | SUPERVISÃO | COLABORADOR | DISPONIBILIDADE | ESTADIA | CAFÉ | ALMOÇO | JANTA | DESLOCAMENTO | RECARGA | PASSAGEM | LAVAGEM
-
-### 3) LOG_RH (BotConversa)
-Aba: `LOG_RH`  
-Planilha: `1yjbkCdsF15GfIdOeYFNJDVxnAGZC5rk1Djz1cn_v0Oc`
-
----
 
 ## ✅ Dicas rápidas
 - Sempre confira a **Data de referência** antes de iniciar.
@@ -177,22 +132,3 @@ Planilha: `1yjbkCdsF15GfIdOeYFNJDVxnAGZC5rk1Djz1cn_v0Oc`
   - `Cidade: Nome da cidade | ...`
 
 ---
-
-## 🧪 Testes recomendados
-1. Faça login com PIN.
-2. Lance 1 colaborador em cada painel.
-3. Finalize Etapa E.
-4. Confirme:
-   - Linha criada/atualizada em **Despesas**
-   - Registro na **Programação de Despesas**
-   - Hotel registrado na aba **Programação** (se aplicável)
-   - LOG_RH + notificação RH (quando houver falta/folga/atestado)
-
----
-
-## Suporte
-Se algo não gravar/atualizar:
-- conferir implantação do Apps Script (/exec)
-- conferir CORS do Worker
-- validar cabeçalhos das planilhas
-- verificar permissões do Apps Script e IDs configurados
