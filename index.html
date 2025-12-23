@@ -512,6 +512,9 @@ function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
   document.getElementById("step"+s).classList.add("active");
+
+  // ✅ baseline do painel atual (evita confirmar "alteração" sem ninguém mexer)
+  try { setBaseline_(); } catch(e) {}
 }
 
 function normalizeHotelObs_(tipo, obs){
@@ -1084,5 +1087,6 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
 
 
