@@ -10,7 +10,7 @@
     .card{ background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
     h2,h3{ margin:0 0 8px; }
     .muted{ color:#6b7280; font-size:12px; white-space:pre-line; }
-    input,select,button{ width:100%; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px; }
+    input,select,button{ width:100%; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px; box-sizing:border-box; }
     button{ cursor:pointer; border:none; background:#166534; color:#fff; }
     button.secondary{ background:#374151; }
     button.light{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; width:auto; padding:8px 12px; border-radius:999px; }
@@ -164,7 +164,7 @@
 
 <script>
 /** ✅ AQUI você aponta para o Worker */
-const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev"; // <-- TROQUE AQUI SE PRECISAR
+const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
@@ -207,10 +207,9 @@ function logoutForcado(msg){
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
 }
-
 function logout(){ logoutForcado("Logout realizado."); }
 
-/** 🔧 máscara simples */
+/** 🔧 máscaras */
 function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
 function maskCPF(s){
   const d = onlyDigits(s).slice(0,11);
@@ -226,6 +225,39 @@ function maskData(s){
   return d.replace(/^(\d{2})(\d{2})(\d+)/,"$1/$2/$3");
 }
 
+/** =========================
+ * DATA helpers
+========================= */
+function parseDMY_(s){
+  const m = String(s||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m) return null;
+  const d = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
+  if(isNaN(d.getTime())) return null;
+  // valida dia/mês (evita 32/13/2025 virar data “válida” por overflow)
+  if(d.getDate() !== Number(m[1]) || (d.getMonth()+1) !== Number(m[2])) return null;
+  return d;
+}
+function formatDMY_(d){
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+function addDays_(dataRef, days){
+  const d = parseDMY_(dataRef);
+  if(!d) return dataRef;
+  d.setDate(d.getDate()+Number(days||0));
+  return formatDMY_(d);
+}
+function isFriday_(dataRef){
+  const d = parseDMY_(dataRef);
+  if(!d) return false;
+  return d.getDay() === 5;
+}
+
+/** =========================
+ * LOGIN MODE
+========================= */
 function setLoginMode(mode){
   loginMode = mode;
   localStorage.setItem("DESP_LOGIN_MODE", loginMode);
@@ -260,13 +292,18 @@ async function api(action, args){
     payload.token = token;
   }
 
-  const res = await fetch(API_BASE, {
-    method:"POST",
-    headers:{ "Content-Type":"text/plain;charset=utf-8" },
-    body: JSON.stringify(payload)
-  });
+  let txt = "";
+  try{
+    const res = await fetch(API_BASE, {
+      method:"POST",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    txt = await res.text();
+  }catch(e){
+    return { ok:false, error:"Falha de rede / CORS", raw:String(e) };
+  }
 
-  const txt = await res.text();
   try { return JSON.parse(txt); }
   catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
 }
@@ -278,8 +315,8 @@ async function login(){
   setBusy(true);
 
   const out = (loginMode === "ADMIN")
-    ? await api("loginAdminCPF", { cpf: raw })
-    : await api("loginPIN", { pin: raw });
+    ? await api("loginAdminCPF", { cpf: onlyDigits(raw) })                 // ✅ CORRIGIDO
+    : await api("loginPIN", { pin: onlyDigits(raw).slice(0,4) });         // ✅ CORRIGIDO
 
   setBusy(false);
 
@@ -293,7 +330,7 @@ async function login(){
 
   hide("loginCard");
   show("app");
-  hide("bottomBar"); // só aparece depois do carregar
+  hide("bottomBar");
   loadedOnce = false;
 
   await carregarDataPadrao();
@@ -354,11 +391,9 @@ function renderGrouped_(names, rowHtmlFn){
 
 function pickStateForStep_(stepKey){
   if(!ctx || !form) return null;
-
   const dataRef = (document.getElementById("dataRef")?.value || "").trim();
   const namesAll = Object.keys(form || {}).sort((a,b)=>a.localeCompare(b,'pt-BR'));
 
-  // pega exatamente os campos que aquela etapa salva
   const state = {
     dataRef,
     step: stepKey,
@@ -371,7 +406,6 @@ function pickStateForStep_(stepKey){
         return [n, f.coordenacao||"", f.estadia_tipo||"", normalizeHotelObs_(f.estadia_tipo, f.estadia_obs||""), !!f.wknd_hosp];
       }
       if(stepKey === "C"){
-        // mesma regra de envio da C
         if(!PROSSEGUIR(f.disponibilidade_status)) return null;
         return [n, f.coordenacao||"", f.cafe_valor||"NÃO", f.almoco_valor||"NÃO", f.janta_valor||"NÃO"];
       }
@@ -390,53 +424,21 @@ function pickStateForStep_(stepKey){
   return JSON.stringify(state);
 }
 
-function setBaseline_(){
-  window.__BASELINE_STATE__ = pickStateForStep_(step);
-}
+function setBaseline_(){ window.__BASELINE_STATE__ = pickStateForStep_(step); }
+function hasChanges_(){ const cur = pickStateForStep_(step); return !!cur && cur !== window.__BASELINE_STATE__; }
 
-function hasChanges_(){
-  const cur = pickStateForStep_(step);
-  return !!cur && cur !== window.__BASELINE_STATE__;
-}
-
-
-/** =========================
- * DATA helpers (sexta / addDays)
-========================= */
-function parseDMY_(s){
-  const m = String(s||"").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if(!m) return null;
-  const d = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
-  return isNaN(d.getTime()) ? null : d;
-}
-function formatDMY_(d){
-  const dd = String(d.getDate()).padStart(2,"0");
-  const mm = String(d.getMonth()+1).padStart(2,"0");
-  const yy = d.getFullYear();
-  return `${dd}/${mm}/${yy}`;
-}
-function addDays_(dataRef, days){
-  const d = parseDMY_(dataRef);
-  if(!d) return dataRef;
-  d.setDate(d.getDate()+Number(days||0));
-  return formatDMY_(d);
-}
-function isFriday_(dataRef){
-  const d = parseDMY_(dataRef);
-  if(!d) return false;
-  return d.getDay() === 5; // sex
-}
-
-/** =========================
- * CARREGAR
-========================= */
 async function carregar(){
-  const d = document.getElementById("dataRef").value.trim();
+  const dStr = document.getElementById("dataRef").value.trim();
+  if(!parseDMY_(dStr)){
+    alert("❌ Data inválida. Use dd/mm/aaaa.");
+    return;
+  }
+
   setBusy(true);
   setDebug("Carregando...");
   hide("bottomBar");
 
-  const res = await api("carregarContexto", { dataRef: d });
+  const res = await api("carregarContexto", { dataRef: dStr });
 
   setBusy(false);
 
@@ -450,8 +452,7 @@ async function carregar(){
 
   ctx = res;
   loadedOnce = true;
-  
-  // ✅ sinaliza no front que já existe algo salvo
+
   ctx.programacao_ja_enviada = !!res.programacao_ja_enviada;
   window.__CONFIRMOU_ALTERACAO__ = false;
 
@@ -479,7 +480,7 @@ async function carregar(){
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
-      wknd_hosp: false, // ✅ sexta -> sab/dom
+      wknd_hosp: false,
 
       cafe_valor: (prev.cafe_valor ?? "NÃO"),
       almoco_valor: (prev.almoco_valor ?? "NÃO"),
@@ -502,18 +503,12 @@ async function carregar(){
   show("bottomBar");
   window.__CONFIRMOU_ALTERACAO__ = false;
   setBaseline_();
-
 }
 
-/** =========================
- * STEP + SAVE
-========================= */
 function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
   document.getElementById("step"+s).classList.add("active");
-
-  // ✅ baseline do painel atual (evita confirmar "alteração" sem ninguém mexer)
   try { setBaseline_(); } catch(e) {}
 }
 
@@ -550,19 +545,15 @@ async function salvarEtapaPayload_(dataRef, etapa, regs){
 }
 
 async function salvarEtapaAtual_(){
-
-// ✅ confirma alteração UMA vez, mas SÓ se houver mudanças
-if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
-  if(hasChanges_()){
-    const ok = confirm("⚠️ Programação do dia já foi enviada.\nDeseja realizar ALTERAÇÕES?");
-    if(!ok) return { ok:false };
-    window.__CONFIRMOU_ALTERACAO__ = true;
+  if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
+    if(hasChanges_()){
+      const ok = confirm("⚠️ Programação do dia já foi enviada.\nDeseja realizar ALTERAÇÕES?");
+      if(!ok) return { ok:false };
+      window.__CONFIRMOU_ALTERACAO__ = true;
+    }
   }
-}
-
 
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
-
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
 
@@ -575,7 +566,6 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
       disponibilidade_obs: form[n].disponibilidade_obs
     }));
   }
-
   if(step === "B"){
     regs = namesAll.map(n => ({
       colaborador: n,
@@ -584,7 +574,6 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
       estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
     }));
   }
-
   if(step === "C"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     regs = names.map(n => ({
@@ -595,7 +584,6 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
       janta_valor: form[n].janta_valor
     }));
   }
-
   if(step === "D"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     regs = names.map(n => ({
@@ -605,7 +593,6 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
       deslocamento_obs: form[n].deslocamento_obs
     }));
   }
-
   if(step === "E"){
     const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     regs = names.map(n => ({
@@ -623,11 +610,9 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
 
   setBusy(true);
 
-  // ✅ salva etapa normal da dataRef
   let r = await salvarEtapaPayload_(dataRef, step, regs);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  // ✅ SEXTA -> salva sábado/domingo (somente para Hotel/Fazenda/Alojamento marcados + checkbox)
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -653,9 +638,8 @@ if(ctx?.programacao_ja_enviada && !window.__CONFIRMOU_ALTERACAO__){
 
   setBusy(false);
 
-  // ✅ depois de salvar, considera como enviada e atualiza baseline
-ctx.programacao_ja_enviada = true;
-setBaseline_();
+  ctx.programacao_ja_enviada = true;
+  setBaseline_();
   return r;
 }
 
@@ -674,9 +658,7 @@ async function avancar(){
   if(step==="D"){ renderE(); setStep("E"); return; }
   if(step==="E"){
     alert("✅ Programação salva com sucesso!");
-    setTimeout(() => {
-      logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação.");
-    }, 800);
+    setTimeout(() => { logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."); }, 800);
     return;
   }
 }
@@ -690,10 +672,11 @@ function voltar(){
 }
 
 /** =========================
- * PAINEL A (Logística -> veículo)
+ * PAINEL A
 ========================= */
 async function onDispChange(ne, val){
   const nome = decName(ne);
+  if(!form[nome]) return; // ✅ guard
   form[nome].disponibilidade_status = val;
 
   if(val === "Logística"){
@@ -735,6 +718,7 @@ async function onDispChange(ne, val){
 
 function onDispObsInput(ne, val){
   const nome = decName(ne);
+  if(!form[nome]) return; // ✅ guard
   form[nome].disponibilidade_obs = val;
 
   if(form[nome].disponibilidade_status === "Logística"){
@@ -774,11 +758,17 @@ function renderA(){
 }
 
 /** =========================
- * PAINEL B (Hotel D-1 / Fazenda pernoite / Sexta->wknd)
+ * PAINEL B
 ========================= */
 async function onEstadiaChange(ne, val){
   const nome = decName(ne);
+  if(!form[nome]) return; // ✅ guard
   form[nome].estadia_tipo = val;
+
+  // ✅ se não é tipo que permite wknd, zera
+  if(!["Hotel","Fazenda","Alojamento"].includes(String(val||"").trim())){
+    form[nome].wknd_hosp = false;
+  }
 
   const el = document.getElementById("eobs_"+idSafe(nome));
 
@@ -847,12 +837,14 @@ function renderB(){
 
   names.forEach(n=>{
     if(!String(form[n].estadia_tipo||"").trim()) form[n].estadia_tipo = "Casa";
+    // ✅ garante consistência do wknd
+    const tipo = String(form[n].estadia_tipo||"").trim();
+    if(!["Hotel","Fazenda","Alojamento"].includes(tipo)) form[n].wknd_hosp = false;
   });
 
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
     const tipo = String(form[n].estadia_tipo||"").trim();
-
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
 
     return `
@@ -872,13 +864,13 @@ function renderB(){
           <input id="eobs_${idSafe(n)}"
             placeholder="Ex.: Cascavel, PR | Embarque: ..."
             value="${esc(form[n].estadia_obs)}"
-            oninput="form[decName('${ne}')].estadia_obs=this.value"
-            onblur="this.value=(form[decName('${ne}')].estadia_obs=normalizeHotelObs_(form[decName('${ne}')].estadia_tipo,this.value))">
+            oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].estadia_obs=this.value) : null)"
+            onblur="(window.form && form[decodeURIComponent('${ne}')] ? (this.value=(form[decodeURIComponent('${ne}')].estadia_obs=normalizeHotelObs_(form[decodeURIComponent('${ne}')].estadia_tipo,this.value))) : null)">
 
           ${showWknd ? `
             <div class="chkRow" style="margin-top:8px;">
               <input type="checkbox" ${form[n].wknd_hosp ? "checked" : ""}
-                onchange="form[decName('${ne}')].wknd_hosp=this.checked">
+                onchange="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].wknd_hosp=this.checked) : null)">
               <span>Hospedar sábado/domingo</span>
             </div>
           ` : ``}
@@ -895,6 +887,7 @@ function renderB(){
 ========================= */
 function setSimNao_(ne, campo, checked){
   const nome = decName(ne);
+  if(!form[nome]) return;
   form[nome][campo] = checked ? "SIM" : "NÃO";
 }
 function isSim_(nome, campo){
@@ -946,6 +939,7 @@ function renderC(){
 ========================= */
 function onDeslocamentoChange(ne, val){
   const nome = decName(ne);
+  if(!form[nome]) return;
   form[nome].deslocamento_tipo = val;
   form[nome].deslocamento_editado = true;
 }
@@ -968,7 +962,7 @@ function renderD(){
 
         <input placeholder="Obs..."
           value="${esc(form[n].deslocamento_obs)}"
-          oninput="form[decName('${ne}')].deslocamento_obs=this.value">
+          oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].deslocamento_obs=this.value) : null)">
       </div>
     `;
   });
@@ -976,17 +970,19 @@ function renderD(){
 }
 
 /** =========================
- * PAINEL E (Extras com box + valor)
+ * PAINEL E
 ========================= */
 function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
 function setExtraChecked_(ne, campo, checked){
   const n = decName(ne);
+  if(!form[n]) return;
   if(!checked) form[n][campo] = 0;
-  else if(Number(form[n][campo]||0) === 0) form[n][campo] = 0.01;
+  else if(Number(form[n][campo]||0) === 0) form[n][campo] = 0; // ✅ não força 0.01
   renderE();
 }
 function setExtraValor_(ne, campo, val){
   const n = decName(ne);
+  if(!form[n]) return;
   const num = Number(String(val||"").replace(",", "."));
   form[n][campo] = isNaN(num) ? 0 : num;
 }
@@ -1039,7 +1035,7 @@ function renderE(){
 
       <div style="margin:8px 0 14px;">
         <input placeholder="Extras_Obs..." value="${esc(form[n].extras_obs||"")}"
-          oninput="form[decName('${ne}')].extras_obs=this.value">
+          oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].extras_obs=this.value) : null)">
       </div>
     `;
   });
@@ -1053,7 +1049,6 @@ function renderE(){
 window.onload = async () => {
   setLoginMode(loginMode);
 
-  // handlers (Enter) + máscaras
   const loginInput = document.getElementById("loginInput");
   loginInput.addEventListener("input", () => {
     if(loginMode === "ADMIN") loginInput.value = maskCPF(loginInput.value);
@@ -1087,6 +1082,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
-
-
