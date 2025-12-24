@@ -57,6 +57,88 @@
       .nomeRow{ grid-template-columns: 1fr; gap:8px; }
       .inlineVal input[type="number"]{ width:100%; }
     }
+    /* === AJUDA (Grão 1000) === */
+.helpBtn{
+  width:auto;
+  padding:9px 14px;
+  border-radius:999px;
+  background:#e9f6ef;          /* verde clarinho */
+  color:#166534;               /* mesmo verde do seu botão principal */
+  border:1px solid #b7e2c7;
+  font-weight:800;
+}
+.helpBtn:hover{ filter:brightness(0.98); }
+
+/* Modal */
+.helpModal{ position:fixed; inset:0; display:none; z-index:9999; }
+.helpModal.open{ display:block; }
+.helpBackdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
+
+.helpPanel{
+  position:relative;
+  width:min(980px, calc(100% - 24px));
+  margin: 14px auto;
+  background:#fff;
+  border-radius:16px;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+  overflow:hidden;
+}
+
+.helpTop{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  padding:14px;
+  background:#166534;   /* padrão do seu botão principal */
+  color:#fff;
+}
+.helpTitle{ font-size:16px; font-weight:900; margin:0; }
+.helpSub{ font-size:12px; opacity:.92; margin-top:4px; }
+
+.helpClose{
+  width:auto;
+  border:none;
+  background:rgba(255,255,255,.16);
+  color:#fff;
+  border-radius:12px;
+  padding:8px 10px;
+  cursor:pointer;
+}
+
+.helpGrid{
+  padding:14px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:12px;
+}
+@media (min-width: 720px){
+  .helpGrid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (min-width: 1024px){
+  .helpGrid{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+
+.helpCard{
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:12px;
+  background:#fff;
+}
+.helpCard h4{
+  margin:0 0 6px;
+  font-size:13px;
+  color:#166534;
+}
+.helpCard p{
+  margin:0;
+  font-size:13px;
+  line-height:1.45;
+  color:#111827;
+}
+
+.helpCard.warn{
+  background:#fff7e6;
+  border-color: rgba(244,180,0,.40);
+}
+.helpCard.warn h4{ color:#7a4b00; }
   </style>
 </head>
 
@@ -97,9 +179,10 @@
           <div id="topInfo" class="muted" style="margin-top:4px;"></div>
           <div id="janelaInfo" class="muted"></div>
         </div>
-        <div class="right">
-          <button class="logoutBtn" onclick="logout()">Logout</button>
-        </div>
+      <div class="right">
+      <button class="helpBtn" type="button" onclick="openHelpModal()" title="Ajuda">❓ Ajuda</button>
+      <button class="logoutBtn" onclick="logout()">Logout</button>
+      </div>
       </div>
 
       <div class="row" style="margin-top:10px;">
@@ -162,6 +245,68 @@
   </div>
 </div>
 
+  <!-- MODAL AJUDA -->
+<div id="helpModal" class="helpModal" aria-hidden="true">
+  <div class="helpBackdrop" onclick="closeHelpModal()"></div>
+
+  <div class="helpPanel" role="dialog" aria-modal="true">
+    <div class="helpTop">
+      <div>
+        <div class="helpTitle">Programação de Despesas – Guia Rápido</div>
+        <div class="helpSub">Uso do painel web (sem planilhas)</div>
+      </div>
+      <button class="helpClose" type="button" onclick="closeHelpModal()" aria-label="Fechar">✕</button>
+    </div>
+
+    <div class="helpGrid">
+      <div class="helpCard">
+        <h4>🗓️ 1) Data</h4>
+        <p>Selecione a <b>Data de Referência</b> e clique em <b>Carregar</b>.</p>
+      </div>
+
+      <div class="helpCard">
+        <h4>👤 2) Colaborador</h4>
+        <p>O colaborador aparece nos painéis conforme a situação do dia.</p>
+      </div>
+
+      <div class="helpCard warn">
+        <h4>🚫 3) Indisponível</h4>
+        <p><b>Não aparece mensagem.</b> Se os painéis <b>C, D e E não aparecem</b>, o colaborador está indisponível.</p>
+      </div>
+
+      <div class="helpCard">
+        <h4>✅ 4) Painel A</h4>
+        <p>Defina <b>Disponibilidade</b>. Só <b>OK</b> e <b>Logística</b> seguem.</p>
+      </div>
+
+      <div class="helpCard">
+        <h4>🏨 5) Painel B</h4>
+        <p>Defina <b>Estadia</b>. Em <b>Hotel</b>, o sistema tenta consultar D-1.</p>
+      </div>
+
+      <div class="helpCard">
+        <h4>🍽️ 6) Painel C</h4>
+        <p>Alimentação (checkbox SIM/NÃO). <span class="muted">Somente quando disponível.</span></p>
+      </div>
+
+      <div class="helpCard">
+        <h4>🚗 7) Painel D</h4>
+        <p>Deslocamento. <span class="muted">Somente quando disponível.</span></p>
+      </div>
+
+      <div class="helpCard">
+        <h4>➕ 8) Painel E</h4>
+        <p>Extras. Ao marcar, informe valor <b>&gt; 0</b>. <span class="muted">Somente quando disponível.</span></p>
+      </div>
+
+      <div class="helpCard">
+        <h4>💾 9) Próximo / Salvar</h4>
+        <p>Clique em <b>Próximo</b> para salvar a etapa e avançar.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /** ✅ Worker */
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
@@ -191,6 +336,25 @@ function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
+function openHelpModal(){
+  const m = document.getElementById("helpModal");
+  if(!m) return;
+  m.classList.add("open");
+  m.setAttribute("aria-hidden","false");
+}
+function closeHelpModal(){
+  const m = document.getElementById("helpModal");
+  if(!m) return;
+  m.classList.remove("open");
+  m.setAttribute("aria-hidden","true");
+}
+document.addEventListener("keydown", (e)=>{
+  if(e.key === "Escape"){
+    const m = document.getElementById("helpModal");
+    if(m && m.classList.contains("open")) closeHelpModal();
+  }
+});
+
 
 function setBusy(v){
   busy = !!v;
@@ -1028,3 +1192,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
