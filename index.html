@@ -57,88 +57,89 @@
       .nomeRow{ grid-template-columns: 1fr; gap:8px; }
       .inlineVal input[type="number"]{ width:100%; }
     }
+
     /* === AJUDA (Grão 1000) === */
-.helpBtn{
-  width:auto;
-  padding:9px 14px;
-  border-radius:999px;
-  background:#e9f6ef;          /* verde clarinho */
-  color:#166534;               /* mesmo verde do seu botão principal */
-  border:1px solid #b7e2c7;
-  font-weight:800;
-}
-.helpBtn:hover{ filter:brightness(0.98); }
+    .helpBtn{
+      width:auto;
+      padding:9px 14px;
+      border-radius:999px;
+      background:#e9f6ef;
+      color:#166534;
+      border:1px solid #b7e2c7;
+      font-weight:800;
+    }
+    .helpBtn:hover{ filter:brightness(0.98); }
 
-/* Modal */
-.helpModal{ position:fixed; inset:0; display:none; z-index:9999; }
-.helpModal.open{ display:block; }
-.helpBackdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
+    /* Modal */
+    .helpModal{ position:fixed; inset:0; display:none; z-index:9999; }
+    .helpModal.open{ display:block; }
+    .helpBackdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
 
-.helpPanel{
-  position:relative;
-  width:min(980px, calc(100% - 24px));
-  margin: 14px auto;
-  background:#fff;
-  border-radius:16px;
-  box-shadow:0 8px 24px rgba(0,0,0,.18);
-  overflow:hidden;
-}
+    .helpPanel{
+      position:relative;
+      width:min(980px, calc(100% - 24px));
+      margin: 14px auto;
+      background:#fff;
+      border-radius:16px;
+      box-shadow:0 8px 24px rgba(0,0,0,.18);
+      overflow:hidden;
+    }
 
-.helpTop{
-  display:flex; justify-content:space-between; align-items:flex-start;
-  padding:14px;
-  background:#166534;   /* padrão do seu botão principal */
-  color:#fff;
-}
-.helpTitle{ font-size:16px; font-weight:900; margin:0; }
-.helpSub{ font-size:12px; opacity:.92; margin-top:4px; }
+    .helpTop{
+      display:flex; justify-content:space-between; align-items:flex-start;
+      padding:14px;
+      background:#166534;
+      color:#fff;
+    }
+    .helpTitle{ font-size:16px; font-weight:900; margin:0; }
+    .helpSub{ font-size:12px; opacity:.92; margin-top:4px; }
 
-.helpClose{
-  width:auto;
-  border:none;
-  background:rgba(255,255,255,.16);
-  color:#fff;
-  border-radius:12px;
-  padding:8px 10px;
-  cursor:pointer;
-}
+    .helpClose{
+      width:auto;
+      border:none;
+      background:rgba(255,255,255,.16);
+      color:#fff;
+      border-radius:12px;
+      padding:8px 10px;
+      cursor:pointer;
+    }
 
-.helpGrid{
-  padding:14px;
-  display:grid;
-  grid-template-columns: 1fr;
-  gap:12px;
-}
-@media (min-width: 720px){
-  .helpGrid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-}
-@media (min-width: 1024px){
-  .helpGrid{ grid-template-columns: repeat(3, minmax(0,1fr)); }
-}
+    .helpGrid{
+      padding:14px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+    }
+    @media (min-width: 720px){
+      .helpGrid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (min-width: 1024px){
+      .helpGrid{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
 
-.helpCard{
-  border:1px solid #e5e7eb;
-  border-radius:14px;
-  padding:12px;
-  background:#fff;
-}
-.helpCard h4{
-  margin:0 0 6px;
-  font-size:13px;
-  color:#166534;
-}
-.helpCard p{
-  margin:0;
-  font-size:13px;
-  line-height:1.45;
-  color:#111827;
-}
+    .helpCard{
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+    }
+    .helpCard h4{
+      margin:0 0 6px;
+      font-size:13px;
+      color:#166534;
+    }
+    .helpCard p{
+      margin:0;
+      font-size:13px;
+      line-height:1.45;
+      color:#111827;
+    }
 
-.helpCard.warn{
-  background:#fff7e6;
-  border-color: rgba(244,180,0,.40);
-}
-.helpCard.warn h4{ color:#7a4b00; }
+    .helpCard.warn{
+      background:#fff7e6;
+      border-color: rgba(244,180,0,.40);
+    }
+    .helpCard.warn h4{ color:#7a4b00; }
   </style>
 </head>
 
@@ -179,10 +180,10 @@
           <div id="topInfo" class="muted" style="margin-top:4px;"></div>
           <div id="janelaInfo" class="muted"></div>
         </div>
-      <div class="right">
-      <button class="helpBtn" type="button" onclick="openHelpModal()" title="Ajuda">❓ Ajuda</button>
-      <button class="logoutBtn" onclick="logout()">Logout</button>
-      </div>
+        <div class="right">
+          <button class="helpBtn" type="button" onclick="openHelpModal()" title="Ajuda">❓ Ajuda</button>
+          <button class="logoutBtn" onclick="logout()">Logout</button>
+        </div>
       </div>
 
       <div class="row" style="margin-top:10px;">
@@ -245,7 +246,7 @@
   </div>
 </div>
 
-  <!-- MODAL AJUDA -->
+<!-- MODAL AJUDA -->
 <div id="helpModal" class="helpModal" aria-hidden="true">
   <div class="helpBackdrop" onclick="closeHelpModal()"></div>
 
@@ -336,6 +337,7 @@ function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
+
 function openHelpModal(){
   const m = document.getElementById("helpModal");
   if(!m) return;
@@ -354,7 +356,6 @@ document.addEventListener("keydown", (e)=>{
     if(m && m.classList.contains("open")) closeHelpModal();
   }
 });
-
 
 function setBusy(v){
   busy = !!v;
@@ -549,10 +550,18 @@ function renderGrouped_(names, rowHtmlFn){
   }).join("");
 }
 
+/* ✅ Atualiza texto do botão conforme etapa */
+function updateNavButtons_(){
+  const btn = document.getElementById("btnProximo");
+  if(!btn) return;
+  btn.innerText = (step === "E") ? "Salvar e baixar PDF" : "Próximo";
+}
+
 function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
   document.getElementById("step"+s).classList.add("active");
+  updateNavButtons_();
 }
 
 function normalizeHotelObs_(tipo, obs){
@@ -570,7 +579,7 @@ function chunkArray(arr, size){
   return out;
 }
 
-/** ✅ mais rápido: chunk 500 (como você pediu) */
+/** ✅ mais rápido: chunk 500 */
 async function salvarEtapaPayload_(dataRef, etapa, registros){
   const parts = chunkArray(registros || [], 500);
 
@@ -591,6 +600,34 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
     }
   }
   return { ok:true };
+}
+
+/* ✅ PDF: abre ou força download */
+function abrirOuBaixarPDF_(url){
+  try{
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    if(w) return;
+  }catch(e){}
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* ✅ Chama API para gerar PDF (GAS/Worker precisa implementar action gerarPDFProgramacao) */
+async function gerarPDFDaProgramacao_(dataRef){
+  const j = await api("gerarPDFProgramacao", { dataRef });
+  if(!j || !j.ok){
+    const err = j?.error || "Erro ao gerar PDF";
+    if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+    alert(err);
+    return { ok:false };
+  }
+  abrirOuBaixarPDF_(j.url);
+  return { ok:true, url:j.url, fileName:j.fileName };
 }
 
 async function carregar(){
@@ -733,7 +770,7 @@ async function salvarEtapaAtual_(){
     }
   }).catch(()=>{});
 
-  // ✅ regra sexta (hospedagem sab/dom) continua síncrona para garantir consistência
+  // ✅ regra sexta (hospedagem sab/dom) continua síncrona
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -761,11 +798,13 @@ async function salvarEtapaAtual_(){
   return { ok:true };
 }
 
+/* ✅ Avançar: na etapa E salva e baixa PDF */
 async function avancar(){
   const res = await salvarEtapaAtual_();
   if(!res || !res.ok) return;
 
   const namesAll = Object.keys(form);
+
   if(step==="A"){
     const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK/Logística)."); return; }
@@ -774,9 +813,21 @@ async function avancar(){
   if(step==="B"){ renderC(); setStep("C"); return; }
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
+
   if(step==="E"){
-    alert("✅ Programação salva com sucesso!");
-    setTimeout(() => logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."), 800);
+    const dataRef = document.getElementById("dataRef").value.trim();
+    setBusy(true);
+    document.getElementById("saveStatus").innerText = "✅ Programação salva. Gerando PDF...";
+    const pdf = await gerarPDFDaProgramacao_(dataRef);
+    setBusy(false);
+
+    if(pdf.ok){
+      document.getElementById("saveStatus").innerText = "✅ PDF gerado e aberto para download.";
+      alert("✅ Programação salva! O PDF foi aberto para baixar.");
+      setTimeout(() => logoutForcado("✅ Programação concluída. Faça login novamente para uma nova programação."), 900);
+    } else {
+      document.getElementById("saveStatus").innerText = "✅ Programação salva, mas não foi possível gerar o PDF.";
+    }
   }
 }
 
@@ -1086,7 +1137,6 @@ function setExtraChecked_(ne, campo, checked){
   if(!checked){
     form[n][campo] = 0;
   } else {
-    // ✅ precisa virar > 0 para permanecer marcado após o render
     if(Number(form[n][campo] || 0) <= 0) form[n][campo] = 1.00;
   }
   renderE();
@@ -1175,6 +1225,8 @@ window.onload = async () => {
   hide("app");
   hide("bottomBar");
 
+  updateNavButtons_();
+
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
     const res = await api("ping", {});
@@ -1192,4 +1244,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
