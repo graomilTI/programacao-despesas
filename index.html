@@ -15,6 +15,10 @@
     button.secondary{ background:#374151; }
     button.light{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; width:auto; padding:8px 12px; border-radius:999px; }
     button:disabled{ opacity:.6; cursor:not-allowed; }
+
+    /* ✅ Etapa E: botão SALVAR (verde mais escuro) */
+    button.saveDark{ background:#14532d; } /* verde escuro */
+
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .col{ flex:1; min-width:180px; }
     .pill{ display:inline-block; padding:4px 10px; background:#e0f2fe; border-radius:999px; font-size:12px; margin-top:6px; }
@@ -239,6 +243,7 @@
   </div>
 </div>
 
+<!-- ✅ Bottom bar única: em E vira SALVAR (verde escuro) -->
 <div class="bottomBar" id="bottomBar" style="display:none;">
   <div class="inner">
     <button id="btnVoltar" class="secondary" onclick="voltar()">Voltar</button>
@@ -302,7 +307,7 @@
 
       <div class="helpCard">
         <h4>💾 9) Próximo / Salvar</h4>
-        <p>Clique em <b>Próximo</b> para salvar a etapa e avançar.</p>
+        <p>Nas etapas A–D: <b>Próximo</b>. Na etapa E: <b>Salvar</b> e baixar o PDF.</p>
       </div>
     </div>
   </div>
@@ -313,7 +318,7 @@
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
 
 /** ✅ BLINDAGEM: evita ReferenceError se algum trecho antigo ainda referenciar "reg" */
-var reg = null; // <-- (não é usado na lógica nova; é só proteção contra cache/trecho antigo)
+var reg = null;
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
@@ -550,18 +555,24 @@ function renderGrouped_(names, rowHtmlFn){
   }).join("");
 }
 
-/* ✅ Atualiza texto do botão conforme etapa */
-function updateNavButtons_(){
-  const btn = document.getElementById("btnProximo");
-  if(!btn) return;
-  btn.innerText = (step === "E") ? "Salvar e baixar PDF" : "Próximo";
-}
-
 function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
   document.getElementById("step"+s).classList.add("active");
-  updateNavButtons_();
+  updateBottomBarButtons_();
+}
+
+/** ✅ troca Próximo -> SALVAR (verde escuro) na Etapa E */
+function updateBottomBarButtons_(){
+  const btn = document.getElementById("btnProximo");
+  if(!btn) return;
+  if(step === "E"){
+    btn.innerText = "SALVAR";
+    btn.classList.add("saveDark");
+  } else {
+    btn.innerText = "Próximo";
+    btn.classList.remove("saveDark");
+  }
 }
 
 function normalizeHotelObs_(tipo, obs){
@@ -600,34 +611,6 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
     }
   }
   return { ok:true };
-}
-
-/* ✅ PDF: abre ou força download */
-function abrirOuBaixarPDF_(url){
-  try{
-    const w = window.open(url, "_blank", "noopener,noreferrer");
-    if(w) return;
-  }catch(e){}
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-/* ✅ Chama API para gerar PDF (GAS/Worker precisa implementar action gerarPDFProgramacao) */
-async function gerarPDFDaProgramacao_(dataRef){
-  const j = await api("gerarPDFProgramacao", { dataRef });
-  if(!j || !j.ok){
-    const err = j?.error || "Erro ao gerar PDF";
-    if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
-    alert(err);
-    return { ok:false };
-  }
-  abrirOuBaixarPDF_(j.url);
-  return { ok:true, url:j.url, fileName:j.fileName };
 }
 
 async function carregar(){
@@ -757,20 +740,16 @@ async function salvarEtapaAtual_(){
 
   setBusy(true);
 
-  // ✅ salva etapa “principal”
+  // ✅ salva etapa “principal” no LOG (aba Despesas)
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  // ✅ Pós-processo assíncrono: NÃO trava o gestor (RH/Hospedagem/Conferência)
+  // ✅ Pós-processo assíncrono (Hospedagem/Conferência/RH)
   api("posProcessar", {
-    payload: {
-      dataReferencia: dataRef,
-      etapa: step,
-      registros: registros
-    }
+    payload: { dataReferencia: dataRef, etapa: step, registros }
   }).catch(()=>{});
 
-  // ✅ regra sexta (hospedagem sab/dom) continua síncrona
+  // ✅ regra sexta (hospedagem sab/dom) síncrona
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -795,11 +774,29 @@ async function salvarEtapaAtual_(){
   }
 
   setBusy(false);
+  return { ok:true, registros };
+}
+
+/** ✅ Etapa E: SALVAR = salva + gera PDF + baixa */
+async function gerarPDFDownload_(){
+  const dataRef = document.getElementById("dataRef").value.trim();
+  const resp = await api("gerarPDFProgramacao", { dataRef });
+  if(!resp || !resp.ok){
+    const err = resp?.error || "Erro ao gerar PDF";
+    if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+    alert(err);
+    return { ok:false };
+  }
+  if(resp.url){
+    window.open(resp.url, "_blank");
+  }else{
+    alert("PDF gerado, mas não recebi a URL de download.");
+  }
   return { ok:true };
 }
 
-/* ✅ Avançar: na etapa E salva e baixa PDF */
 async function avancar(){
+  // ✅ sempre salva a etapa atual
   const res = await salvarEtapaAtual_();
   if(!res || !res.ok) return;
 
@@ -814,20 +811,22 @@ async function avancar(){
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
 
+  // ✅ Etapa E: SALVAR + BAIXAR PDF
   if(step==="E"){
-    const dataRef = document.getElementById("dataRef").value.trim();
+    document.getElementById("saveStatus").innerText = "Gerando PDF...";
     setBusy(true);
-    document.getElementById("saveStatus").innerText = "✅ Programação salva. Gerando PDF...";
-    const pdf = await gerarPDFDaProgramacao_(dataRef);
+    const pdf = await gerarPDFDownload_();
     setBusy(false);
 
-    if(pdf.ok){
-      document.getElementById("saveStatus").innerText = "✅ PDF gerado e aberto para download.";
-      alert("✅ Programação salva! O PDF foi aberto para baixar.");
-      setTimeout(() => logoutForcado("✅ Programação concluída. Faça login novamente para uma nova programação."), 900);
-    } else {
-      document.getElementById("saveStatus").innerText = "✅ Programação salva, mas não foi possível gerar o PDF.";
+    if(pdf && pdf.ok){
+      document.getElementById("saveStatus").innerText = "✅ Programação salva e PDF gerado!";
+      alert("✅ Programação salva com sucesso! O PDF foi gerado para download.");
+      // opcional: forçar logout depois de salvar
+      // setTimeout(() => logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."), 800);
+    }else{
+      document.getElementById("saveStatus").innerText = "✅ Programação salva (PDF não gerado).";
     }
+    return;
   }
 }
 
@@ -1209,6 +1208,7 @@ function renderE(){
 /** ===== START ===== */
 window.onload = async () => {
   setLoginMode(loginMode);
+  updateBottomBarButtons_();
 
   const loginInput = document.getElementById("loginInput");
   loginInput.addEventListener("input", () => {
@@ -1224,8 +1224,6 @@ window.onload = async () => {
   show("loginCard");
   hide("app");
   hide("bottomBar");
-
-  updateNavButtons_();
 
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
