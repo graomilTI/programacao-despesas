@@ -787,12 +787,25 @@ async function gerarPDFDownload_(){
     alert(err);
     return { ok:false };
   }
-  if(resp.url){
-    window.open(resp.url, "_blank");
-  }else{
-    alert("PDF gerado, mas não recebi a URL de download.");
+
+  if(resp.b64){
+    const byteChars = atob(resp.b64);
+    const byteNums = new Array(byteChars.length);
+    for(let i=0;i<byteChars.length;i++) byteNums[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([new Uint8Array(byteNums)], { type:"application/pdf" });
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = resp.fileName || `Programacao_${dataRef.replace(/\//g,"-")}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    return { ok:true };
   }
-  return { ok:true };
+
+  alert("PDF gerado, mas não recebi o arquivo.");
+  return { ok:false };
 }
 
 async function avancar(){
@@ -1242,3 +1255,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
