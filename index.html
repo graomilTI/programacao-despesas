@@ -15,10 +15,6 @@
     button.secondary{ background:#374151; }
     button.light{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; width:auto; padding:8px 12px; border-radius:999px; }
     button:disabled{ opacity:.6; cursor:not-allowed; }
-
-    /* ✅ Etapa E: botão SALVAR (verde mais escuro) */
-    button.saveDark{ background:#14532d; } /* verde escuro */
-
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .col{ flex:1; min-width:180px; }
     .pill{ display:inline-block; padding:4px 10px; background:#e0f2fe; border-radius:999px; font-size:12px; margin-top:6px; }
@@ -74,7 +70,6 @@
     }
     .helpBtn:hover{ filter:brightness(0.98); }
 
-    /* Modal */
     .helpModal{ position:fixed; inset:0; display:none; z-index:9999; }
     .helpModal.open{ display:block; }
     .helpBackdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
@@ -214,7 +209,8 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.
+        <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.<br>
+        <b>Alojamento</b>: consulta D-1 e exige Nome do alojamento se não achar.
       </div>
       <div id="listaB"></div>
     </div>
@@ -243,7 +239,6 @@
   </div>
 </div>
 
-<!-- ✅ Bottom bar única: em E vira SALVAR (verde escuro) -->
 <div class="bottomBar" id="bottomBar" style="display:none;">
   <div class="inner">
     <button id="btnVoltar" class="secondary" onclick="voltar()">Voltar</button>
@@ -287,7 +282,7 @@
 
       <div class="helpCard">
         <h4>🏨 5) Painel B</h4>
-        <p>Defina <b>Estadia</b>. Em <b>Hotel</b>, o sistema tenta consultar D-1.</p>
+        <p>Defina <b>Estadia</b>. Em <b>Hotel</b> e <b>Alojamento</b>, o sistema tenta consultar D-1.</p>
       </div>
 
       <div class="helpCard">
@@ -307,7 +302,7 @@
 
       <div class="helpCard">
         <h4>💾 9) Próximo / Salvar</h4>
-        <p>Nas etapas A–D: <b>Próximo</b>. Na etapa E: <b>Salvar</b> e baixar o PDF.</p>
+        <p>Clique em <b>Próximo</b> para salvar a etapa e avançar.</p>
       </div>
     </div>
   </div>
@@ -318,7 +313,7 @@
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
 
 /** ✅ BLINDAGEM: evita ReferenceError se algum trecho antigo ainda referenciar "reg" */
-var reg = null;
+var reg = null; // proteção contra cache/trecho antigo
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
@@ -342,7 +337,6 @@ function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
-
 function openHelpModal(){
   const m = document.getElementById("helpModal");
   if(!m) return;
@@ -421,6 +415,7 @@ function logoutForcado(msg){
   token = "";
   ctx = null;
   form = {};
+  window.form = form; // ✅
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
 }
@@ -559,20 +554,6 @@ function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
   document.getElementById("step"+s).classList.add("active");
-  updateBottomBarButtons_();
-}
-
-/** ✅ troca Próximo -> SALVAR (verde escuro) na Etapa E */
-function updateBottomBarButtons_(){
-  const btn = document.getElementById("btnProximo");
-  if(!btn) return;
-  if(step === "E"){
-    btn.innerText = "SALVAR";
-    btn.classList.add("saveDark");
-  } else {
-    btn.innerText = "Próximo";
-    btn.classList.remove("saveDark");
-  }
 }
 
 function normalizeHotelObs_(tipo, obs){
@@ -590,7 +571,7 @@ function chunkArray(arr, size){
   return out;
 }
 
-/** ✅ mais rápido: chunk 500 */
+/** ✅ chunk 500 */
 async function salvarEtapaPayload_(dataRef, etapa, registros){
   const parts = chunkArray(registros || [], 500);
 
@@ -678,6 +659,8 @@ async function carregar(){
     };
   });
 
+  window.form = form; // ✅ CRÍTICO: habilita onchange inline do checkbox sábado/domingo
+
   renderA();
   setStep("A");
   setDebug("OK");
@@ -740,16 +723,20 @@ async function salvarEtapaAtual_(){
 
   setBusy(true);
 
-  // ✅ salva etapa “principal” no LOG (aba Despesas)
+  // ✅ salva etapa “principal”
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  // ✅ Pós-processo assíncrono (Hospedagem/Conferência/RH)
+  // ✅ Pós-processo assíncrono (RH/Hospedagem/Conferência/Alojamento)
   api("posProcessar", {
-    payload: { dataReferencia: dataRef, etapa: step, registros }
+    payload: {
+      dataReferencia: dataRef,
+      etapa: step,
+      registros: registros
+    }
   }).catch(()=>{});
 
-  // ✅ regra sexta (hospedagem sab/dom) síncrona
+  // ✅ regra sexta (hospedagem sab/dom) + dispara posProcessar para sab/dom
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -767,54 +754,23 @@ async function salvarEtapaAtual_(){
     if(regsW.length){
       const rSab = await salvarEtapaPayload_(sab, "B", regsW);
       if(!rSab || !rSab.ok){ setBusy(false); return { ok:false }; }
+      api("posProcessar", { payload:{ dataReferencia: sab, etapa:"B", registros: regsW } }).catch(()=>{});
 
       const rDom = await salvarEtapaPayload_(dom, "B", regsW);
       if(!rDom || !rDom.ok){ setBusy(false); return { ok:false }; }
+      api("posProcessar", { payload:{ dataReferencia: dom, etapa:"B", registros: regsW } }).catch(()=>{});
     }
   }
 
   setBusy(false);
-  return { ok:true, registros };
-}
-
-/** ✅ Etapa E: SALVAR = salva + gera PDF + baixa */
-async function gerarPDFDownload_(){
-  const dataRef = document.getElementById("dataRef").value.trim();
-  const resp = await api("gerarPDFProgramacao", { dataRef });
-  if(!resp || !resp.ok){
-    const err = resp?.error || "Erro ao gerar PDF";
-    if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
-    alert(err);
-    return { ok:false };
-  }
-
-  if(resp.b64){
-    const byteChars = atob(resp.b64);
-    const byteNums = new Array(byteChars.length);
-    for(let i=0;i<byteChars.length;i++) byteNums[i] = byteChars.charCodeAt(i);
-    const blob = new Blob([new Uint8Array(byteNums)], { type:"application/pdf" });
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = resp.fileName || `Programacao_${dataRef.replace(/\//g,"-")}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-    return { ok:true };
-  }
-
-  alert("PDF gerado, mas não recebi o arquivo.");
-  return { ok:false };
+  return { ok:true };
 }
 
 async function avancar(){
-  // ✅ sempre salva a etapa atual
   const res = await salvarEtapaAtual_();
   if(!res || !res.ok) return;
 
   const namesAll = Object.keys(form);
-
   if(step==="A"){
     const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK/Logística)."); return; }
@@ -823,23 +779,9 @@ async function avancar(){
   if(step==="B"){ renderC(); setStep("C"); return; }
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
-
-  // ✅ Etapa E: SALVAR + BAIXAR PDF
   if(step==="E"){
-    document.getElementById("saveStatus").innerText = "Gerando PDF...";
-    setBusy(true);
-    const pdf = await gerarPDFDownload_();
-    setBusy(false);
-
-    if(pdf && pdf.ok){
-      document.getElementById("saveStatus").innerText = "✅ Programação salva e PDF gerado!";
-      alert("✅ Programação salva com sucesso! O PDF foi gerado para download.");
-      // opcional: forçar logout depois de salvar
-      // setTimeout(() => logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."), 800);
-    }else{
-      document.getElementById("saveStatus").innerText = "✅ Programação salva (PDF não gerado).";
-    }
-    return;
+    alert("✅ Programação salva com sucesso!");
+    setTimeout(() => logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."), 800);
   }
 }
 
@@ -956,6 +898,44 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
+  // ✅ NOVO: Alojamento com consulta D-1
+  if(val === "Alojamento"){
+    const dataRef = document.getElementById("dataRef").value.trim();
+    if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
+
+    const res = await api("verificarAlojamentoD1", { nome, dataRef });
+    if(!res || !res.ok){
+      const msg = res?.error || "Erro";
+      if(el){ el.value = msg; form[nome].estadia_obs = msg; }
+      alert(msg);
+      renderB();
+      return;
+    }
+
+    if(!res.found){
+      const aloj = (prompt(`Alojamento marcado.\nNão encontrei no D-1 (${res.d1}).\nInforme o NOME do alojamento:`) || "").trim();
+      const txt = aloj ? `Alojamento: ${aloj}` : "";
+      form[nome].estadia_obs = txt;
+      if(el) el.value = txt;
+      renderB();
+      return;
+    }
+
+    const sugestao = `Alojamento: ${res.alojamento} | D-1: ${res.d1}`;
+    const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestao}\n\nContinuará no mesmo alojamento?`);
+
+    let txt = sugestao;
+    if(!same){
+      const aloj = (prompt("Informe o NOME do alojamento:", res.alojamento || "") || "").trim();
+      txt = aloj ? `Alojamento: ${aloj}` : "";
+    }
+
+    form[nome].estadia_obs = txt;
+    if(el) el.value = txt;
+    renderB();
+    return;
+  }
+
   if(val !== "Hotel"){
     renderB();
     return;
@@ -1021,6 +1001,11 @@ function renderB(){
     const tipo = String(form[n].estadia_tipo||"").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
 
+    const placeholder =
+      (tipo === "Alojamento")
+        ? "Ex.: Alojamento: Nome do alojamento"
+        : "Ex.: Cascavel, PR | Embarque: ...";
+
     return `
       <div class="nomeRow">
         <div class="nomeMain">
@@ -1036,7 +1021,7 @@ function renderB(){
 
         <div>
           <input id="eobs_${idSafe(n)}"
-            placeholder="Ex.: Cascavel, PR | Embarque: ..."
+            placeholder="${esc(placeholder)}"
             value="${esc(form[n].estadia_obs)}"
             oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].estadia_obs=this.value) : null)"
             onblur="(window.form && form[decodeURIComponent('${ne}')] ? (this.value=(form[decodeURIComponent('${ne}')].estadia_obs=normalizeHotelObs_(form[decodeURIComponent('${ne}')].estadia_tipo,this.value))) : null)">
@@ -1221,7 +1206,6 @@ function renderE(){
 /** ===== START ===== */
 window.onload = async () => {
   setLoginMode(loginMode);
-  updateBottomBarButtons_();
 
   const loginInput = document.getElementById("loginInput");
   loginInput.addEventListener("input", () => {
@@ -1255,4 +1239,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
