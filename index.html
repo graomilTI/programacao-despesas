@@ -103,6 +103,7 @@
       cursor:pointer;
     }
 
+    /* ===== AJUDA (GRID + CARDS) – 6 cards alinhados ===== */
     .helpGrid{
       padding:14px;
       display:grid;
@@ -121,24 +122,55 @@
       border-radius:14px;
       padding:12px;
       background:#fff;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      min-height:140px;
     }
+
     .helpCard h4{
-      margin:0 0 6px;
+      margin:0;
       font-size:13px;
       color:#166534;
+      display:flex;
+      align-items:center;
+      gap:8px;
     }
-    .helpCard p{
+
+    .helpCard p, .helpCard li{
       margin:0;
       font-size:13px;
       line-height:1.45;
       color:#111827;
     }
 
+    .helpCard ul{
+      margin:0;
+      padding-left:18px;
+    }
+
+    .helpCard .muted{ color:#6b7280; font-size:12px; white-space:normal; }
+
     .helpCard.warn{
       background:#fff7e6;
       border-color: rgba(244,180,0,.40);
     }
     .helpCard.warn h4{ color:#7a4b00; }
+
+    .helpLine{
+      display:flex;
+      gap:8px;
+      align-items:flex-start;
+    }
+    .helpIco{
+      width:18px;
+      flex:0 0 18px;
+      text-align:center;
+      font-weight:900;
+      line-height:1.2;
+      margin-top:1px;
+    }
+    .helpTxt{ flex:1; }
   </style>
 </head>
 
@@ -263,58 +295,85 @@
       <button class="helpClose" type="button" onclick="closeHelpModal()" aria-label="Fechar">✕</button>
     </div>
 
+    <!-- ✅ 6 CARDS (formato solicitado) -->
     <div class="helpGrid">
+
+      <!-- 1) DATA + COLABORADOR -->
       <div class="helpCard">
-        <h4>🗓️ 1) Data</h4>
-        <p>Selecione a <b>Data de Referência</b> e clique em <b>Carregar</b>.</p>
+        <h4>📅 1) Data e Colaborador</h4>
+
+        <div class="helpLine">
+          <div class="helpIco">✔</div>
+          <div class="helpTxt"><b>Data</b> é extraída automaticamente pelo sistema.</div>
+        </div>
+
+        <div class="helpLine">
+          <div class="helpIco">👤</div>
+          <div class="helpTxt">
+            <b>Colaboradores</b> são gerados automaticamente.
+            <div class="muted">Se estiver de férias/atestado, não aparecerá no painel.</div>
+          </div>
+        </div>
       </div>
 
-      <div class="helpCard">
-        <h4>👤 2) Colaborador</h4>
-        <p>O colaborador aparece nos painéis conforme a situação do dia.</p>
-      </div>
-
+      <!-- 2) DISPONIBILIDADE -->
       <div class="helpCard warn">
-        <h4>🚫 3) Indisponível</h4>
-        <p><b>Não aparece mensagem.</b> Se os painéis <b>C, D e E não aparecem</b>, o colaborador está indisponível.</p>
+        <h4>✅ 2) Disponibilidade</h4>
+        <ul>
+          <li><b>OK:</b> disponível.</li>
+          <li><b>Logística:</b> responsável pela logística.</li>
+          <li><b>Falta / Atestado / Férias / Folga:</b> colaboradores que ainda não foram informados ao RH — favor informar o motivo.</li>
+        </ul>
       </div>
 
+      <!-- 3) ESTADIA -->
       <div class="helpCard">
-        <h4>✅ 4) Painel A</h4>
-        <p>Defina <b>Disponibilidade</b>. Só <b>OK</b> e <b>Logística</b> seguem.</p>
+        <h4>🏨 3) Estadia</h4>
+
+        <div class="helpLine">
+          <div class="helpIco">✔</div>
+          <div class="helpTxt">Informar: <b>Hotel</b>, <b>Alojamento</b>, <b>Fazenda</b> ou <b>Casa</b>.</div>
+        </div>
+
+        <ul>
+          <li><b>Hotel:</b> se já hospedado, preenche automático (D-1). Se não, informe <b>cidade</b>.</li>
+          <li><b>Alojamento:</b> se já hospedado, preenche automático (D-1). Se não, informe o <b>nome do alojamento</b>.</li>
+          <li><b>Fazenda:</b> o pernoite é preenchido automaticamente.</li>
+        </ul>
       </div>
 
+      <!-- 4) ALIMENTAÇÃO -->
       <div class="helpCard">
-        <h4>🏨 5) Painel B</h4>
-        <p>Defina <b>Estadia</b>. Em <b>Hotel</b> e <b>Alojamento</b>, o sistema tenta consultar D-1.</p>
+        <h4>🍽️ 4) Alimentação</h4>
+        <p>Opções: <b>Café</b>, <b>Almoço</b> e <b>Janta</b>.</p>
+        <p class="muted">Marque ☑ somente se precisar da despesa.</p>
       </div>
 
+      <!-- 5) DESLOCAMENTO -->
       <div class="helpCard">
-        <h4>🍽️ 6) Painel C</h4>
-        <p>Alimentação (checkbox SIM/NÃO). <span class="muted">Somente quando disponível.</span></p>
+        <h4>🚗 5) Deslocamento</h4>
+        <ul>
+          <li><b>Frota:</b> se for o motorista.</li>
+          <li><b>Carona:</b> se for com o motorista.</li>
+          <li><b>Uber:</b> se precisar da despesa.</li>
+          <li><b>Km:</b> se precisar de reembolso.</li>
+        </ul>
       </div>
 
+      <!-- 6) EXTRAS -->
       <div class="helpCard">
-        <h4>🚗 7) Painel D</h4>
-        <p>Deslocamento. <span class="muted">Somente quando disponível.</span></p>
+        <h4>➕ 6) Extras</h4>
+        <p>Inserir despesas extras que o colaborador precise durante a data.</p>
+        <p class="muted">Ao marcar, informe um valor &gt; 0.</p>
       </div>
 
-      <div class="helpCard">
-        <h4>➕ 8) Painel E</h4>
-        <p>Extras. Ao marcar, informe valor <b>&gt; 0</b>. <span class="muted">Somente quando disponível.</span></p>
-      </div>
-
-      <div class="helpCard">
-        <h4>💾 9) Próximo / Salvar</h4>
-        <p>Clique em <b>Próximo</b> para salvar a etapa e avançar.</p>
-      </div>
     </div>
   </div>
 </div>
 
 <script>
 /** ✅ Worker */
-const API_BASE = "https:/programacao-diaria.workers.dev/";
+const API_BASE = "https://programacao-diaria.workers.dev";
 
 /** ✅ BLINDAGEM: evita ReferenceError se algum trecho antigo ainda referenciar "reg" */
 var reg = null; // proteção contra cache/trecho antigo
@@ -1296,4 +1355,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
