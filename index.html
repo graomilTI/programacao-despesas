@@ -231,7 +231,11 @@
     </div>
 
     <div id="stepE" class="card step">
-      <h3>Painel E – Extras</h3>
+      <div class="topbar" style="margin-bottom:6px;">
+        <h3 style="margin:0;">Painel E – Extras</h3>
+        <!-- ✅ Botão opcional para baixar manualmente -->
+        <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
+      </div>
       <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
       <div id="listaE"></div>
       <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
@@ -468,6 +472,52 @@ async function api(action, args){
 
   try { return JSON.parse(txt); }
   catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
+}
+
+/** =========================
+ * ✅ PDF (BASE64 -> download)
+ * ========================= */
+function base64ToBlob_(b64, mime){
+  const byteChars = atob(b64);
+  const byteNumbers = new Array(byteChars.length);
+  for(let i=0;i<byteChars.length;i++) byteNumbers[i] = byteChars.charCodeAt(i);
+  return new Blob([new Uint8Array(byteNumbers)], { type: mime || "application/pdf" });
+}
+
+async function baixarPDFProgramacao_(){
+  const dataRef = document.getElementById("dataRef").value.trim();
+  if(!parseDMY_(dataRef)){
+    alert("❌ Data inválida para gerar PDF.");
+    return false;
+  }
+
+  setBusy(true);
+  setDebug("Gerando PDF...");
+
+  const r = await api("gerarPDFProgramacao", { dataRef });
+
+  setBusy(false);
+
+  if(!r || !r.ok){
+    const err = r?.error || "Erro ao gerar PDF";
+    setDebug(err);
+    alert(err);
+    return false;
+  }
+
+  const blob = base64ToBlob_(r.b64, "application/pdf");
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = r.fileName || "programacao.pdf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(()=> URL.revokeObjectURL(url), 6000);
+  setDebug("PDF baixado ✅");
+  return true;
 }
 
 async function login(){
@@ -780,8 +830,15 @@ async function avancar(){
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
   if(step==="E"){
-    alert("✅ Programação salva com sucesso!");
-    setTimeout(() => logoutForcado("✅ Programação salva! Faça login novamente para uma nova programação."), 800);
+    // ✅ gera e baixa o PDF ANTES do logout
+    const okPdf = await baixarPDFProgramacao_();
+
+    alert(okPdf
+      ? "✅ Programação salva e PDF baixado!"
+      : "✅ Programação salva! (PDF não foi gerado)"
+    );
+
+    setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 1200);
   }
 }
 
