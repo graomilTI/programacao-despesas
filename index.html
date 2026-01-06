@@ -914,10 +914,91 @@ function renderA(){
 }
 
 /** ===== Painel B ===== */
+/** ===== Painel B (Hotel/Alojamento D-1) ===== */
+
 async function onEstadiaChange(ne, val){
   const nome = decName(ne);
   if(!form[nome]) return;
+
   form[nome].estadia_tipo = val;
+
+  // Se escolheu Hotel/Alojamento, tenta D-1
+  const tipo = String(val||"").trim();
+
+  // Supervisão do colaborador (pra REF do alojamento)
+  const sup =
+    String(ctx?.mapSupPorNome?.[nome] || "").trim() ||
+    String(ctx?.liberados?.find(x => x.colaborador === nome)?.supervisao || "").trim() ||
+    "SEM SUPERVISÃO";
+
+  const dataRef = document.getElementById("dataRef").value.trim();
+
+  // HOTEL: tenta D-1 na PRODUÇÃO
+  if(tipo === "Hotel"){
+    setBusy(true);
+    const r = await api("verificarHotelD1", { nome, dataRef });
+    setBusy(false);
+
+    if(r && r.ok && r.found){
+      // monta obs padrão (você pode ajustar o texto)
+      const parts = [];
+      if(r.cidade) parts.push(`Cidade: ${r.cidade}`);
+      if(r.hotel)  parts.push(`Hotel: ${r.hotel}`);
+      if(r.localizacaoHotel) parts.push(`Localização: ${r.localizacaoHotel}`);
+      if(r.embarque) parts.push(`Embarque: ${r.embarque}`);
+      form[nome].estadia_obs = parts.join(" | ");
+      renderB();
+      return;
+    }
+
+    // não achou -> pede cidade/UF (mostrar nome do colaborador)
+    const ask = prompt(`Hotel não encontrado no D-1 para:\n${nome}\n\nInforme Cidade/UF (ex: Londrina/PR):`, "");
+    form[nome].estadia_obs = ask ? `Cidade: ${ask}` : "";
+    renderB();
+    return;
+  }
+
+  // ALOJAMENTO: tenta D-1 na aba Relatórios
+  if(tipo === "Alojamento"){
+    setBusy(true);
+    const r = await api("verificarAlojamentoD1", { nome, dataRef });
+    setBusy(false);
+
+    if(r && r.ok && r.found && r.alojamento){
+      form[nome].estadia_obs = `Alojamento: ${r.alojamento}`;
+      renderB();
+      return;
+    }
+
+    // não achou -> usa REF por Supervisão (ctx.alojRefPorSupervisao)
+    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30); // limita pra não ficar enorme
+    let escolha = "";
+
+    if(opcoes.length){
+      // prompt com lista enumerada
+      const lista = opcoes.map((x,i)=> `${i+1} - ${x}`).join("\n");
+      const resp = prompt(
+        `Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nEscolha pelo número ou digite o nome:\n\n${lista}`,
+        ""
+      );
+
+      if(resp){
+        const n = Number(resp);
+        if(!isNaN(n) && n >= 1 && n <= opcoes.length) escolha = opcoes[n-1];
+        else escolha = resp.trim();
+      }
+    } else {
+      // sem REF -> digitar livre
+      const resp = prompt(`Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nDigite o nome do alojamento:`, "");
+      if(resp) escolha = resp.trim();
+    }
+
+    form[nome].estadia_obs = escolha ? `Alojamento: ${escolha}` : "";
+    renderB();
+    return;
+  }
+
+  // Casa / Fazenda -> não consulta
   renderB();
 }
 
@@ -926,7 +1007,7 @@ function renderB(){
   const dataRef = document.getElementById("dataRef").value.trim();
   const sexta = isFriday_(dataRef);
 
-  const html = renderGrouped_(names, (n)=>{
+  const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
     const tipo = String(form[n].estadia_tipo||"Casa").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
@@ -1160,3 +1241,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
