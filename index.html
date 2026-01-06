@@ -573,45 +573,31 @@ async function carregarDataPadrao(){
 
 /** =========================================
  * ✅ Linha abaixo do nome: LOCAL DE EMBARQUE
- *  - tenta vários campos do backend (compatível)
+ *  - CORRIGIDO: usa ctx.osPorNome[nome]
  * ========================================= */
 function getOSLocaisLine_(nome){
   if(!ctx) return "";
 
-  // tenta achar o registro "liberados" desse colaborador
-  let rec = null;
-  const arr = Array.isArray(ctx.liberados) ? ctx.liberados : [];
-  rec = arr.find(x => String(x?.colaborador||"").trim().toUpperCase() === String(nome||"").trim().toUpperCase()) || null;
-
-  // tenta campos comuns
-  const local =
-    rec?.localEmbarque ??
-    rec?.local_embarque ??
-    rec?.local ??
-    rec?.embarque ??
-    rec?.localDeEmbarque ??
-    "";
-
-  const os =
-    rec?.os ??
-    rec?.OS ??
-    rec?.ordemServico ??
-    rec?.ordem_servico ??
-    "";
-
-  const partes = [];
-  if(os) partes.push(`OS: ${String(os)}`);
-  if(local) partes.push(`Embarque: ${String(local)}`);
-
-  return partes.join(" | ");
+  const arr = ctx.osPorNome?.[nome] || [];
+  if(Array.isArray(arr) && arr.length){
+    const show = arr.slice(0, 2).join(" | ");
+    const more = arr.length > 2 ? ` (+${arr.length - 2})` : "";
+    return `Embarque: ${show}${more}`;
+  }
+  return "";
 }
 
+/** ✅ Agrupar por Coordenação e Supervisão (corrigido) */
 function groupByCoordSup_(names){
-  // mantém agrupamento, mas NÃO mostra mais coord/sup embaixo do nome
   const tree = {};
   names.forEach(n=>{
     const coord = String(form[n]?.coordenacao || "SEM COORDENAÇÃO").trim();
-    const sup = "GERAL"; // apenas para agrupamento visual (pode manter)
+
+    const sup =
+      String(ctx?.mapSupPorNome?.[n] || "").trim() ||
+      String(ctx?.liberados?.find(x => x.colaborador === n)?.supervisao || "").trim() ||
+      "SEM SUPERVISÃO";
+
     if(!tree[coord]) tree[coord] = {};
     if(!tree[coord][sup]) tree[coord][sup] = [];
     tree[coord][sup].push(n);
@@ -631,7 +617,6 @@ function renderGrouped_(names, rowHtmlFn){
 
     const supHtml = supKeys.map(sup=>{
       const listaNomes = (sups[sup]||[]).slice().sort((a,b)=>a.localeCompare(b,'pt-BR'));
-      // título de sup pode ser escondido se quiser; mantive simples:
       return `
         <div class="groupSup">
           <div class="groupSupTitle">Supervisão: ${esc(sup)} <span class="muted">(${listaNomes.length})</span></div>
@@ -1175,4 +1160,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
