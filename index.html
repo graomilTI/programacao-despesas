@@ -14,6 +14,7 @@
     button{ cursor:pointer; border:none; background:#166534; color:#fff; }
     button.secondary{ background:#374151; }
     button.light{ background:#e5e7eb; color:#111827; border:1px solid #d1d5db; width:auto; padding:8px 12px; border-radius:999px; }
+    button.warn{ background:#b45309; }
     button:disabled{ opacity:.6; cursor:not-allowed; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .col{ flex:1; min-width:180px; }
@@ -103,7 +104,6 @@
       cursor:pointer;
     }
 
-    /* ===== AJUDA (GRID + CARDS) – 6 cards alinhados ===== */
     .helpGrid{
       padding:14px;
       display:grid;
@@ -157,20 +157,9 @@
     }
     .helpCard.warn h4{ color:#7a4b00; }
 
-    .helpLine{
-      display:flex;
-      gap:8px;
-      align-items:flex-start;
-    }
-    .helpIco{
-      width:18px;
-      flex:0 0 18px;
-      text-align:center;
-      font-weight:900;
-      line-height:1.2;
-      margin-top:1px;
-    }
-    .helpTxt{ flex:1; }
+    /* pequeno bloco para selects de alojamento */
+    .miniLine{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+    .miniLine select{ width:100%; }
   </style>
 </head>
 
@@ -222,9 +211,18 @@
           <label class="muted">Data</label>
           <input id="dataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
         </div>
-        <div class="col">
-          <label class="muted">&nbsp;</label>
-          <button id="btnCarregar" onclick="carregar()">Carregar</button>
+
+        <div class="col" style="display:flex; gap:10px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label class="muted">&nbsp;</label>
+            <button id="btnCarregar" onclick="carregar()">Carregar</button>
+          </div>
+
+          <!-- ✅ ADMIN: botão de pré-carga (cache) -->
+          <div style="width:auto; display:none;" id="adminPreloadWrap">
+            <label class="muted">&nbsp;</label>
+            <button class="warn" style="width:auto; padding:10px 14px; border-radius:999px;" id="btnPreload" type="button" onclick="preCarregarBanco_()">⚡ Pré-carregar banco</button>
+          </div>
         </div>
       </div>
 
@@ -233,7 +231,7 @@
 
     <div id="stepA" class="card step">
       <h3>Painel A – Disponibilidade</h3>
-      <div class="muted">Somente <b>OK</b> e <b>Logística</b> seguem para os próximos painéis.</div>
+      <div class="muted">Somente <b>OK</b> segue para os próximos painéis.</div>
       <div id="listaA"></div>
     </div>
 
@@ -242,7 +240,8 @@
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
         <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.<br>
-        <b>Alojamento</b>: consulta D-1 e exige Nome do alojamento se não achar.
+        <b>Alojamento</b>: se não achar D-1, você seleciona o alojamento (lista por Supervisão) ou informa manualmente.<br>
+        <b>Fazenda</b>: o pernoite é preenchido automaticamente.
       </div>
       <div id="listaB"></div>
     </div>
@@ -265,7 +264,6 @@
     <div id="stepE" class="card step">
       <div class="topbar" style="margin-bottom:6px;">
         <h3 style="margin:0;">Painel E – Extras</h3>
-        <!-- ✅ Botão opcional para baixar manualmente -->
         <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
       </div>
       <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
@@ -295,58 +293,39 @@
       <button class="helpClose" type="button" onclick="closeHelpModal()" aria-label="Fechar">✕</button>
     </div>
 
-    <!-- ✅ 6 CARDS (formato solicitado) -->
     <div class="helpGrid">
 
-      <!-- 1) DATA + COLABORADOR -->
       <div class="helpCard">
-  <h4>📅 1) Data e Colaborador</h4>
-
-  <div class="helpcard">
-    <div class="helpTxt">
-      <b>Data</b> é extraída automaticamente pelo sistema.
-    </div>
-  </div>
-  <div class="helpcard">
-    <div class="helpTxt">
-      <b>Colaboradores</b> são gerados automaticamente.
-      <div class="muted">
-        Se estiver de férias/atestado, não aparecerá no painel.
+        <h4>📅 1) Data e Colaborador</h4>
+        <p><b>Data</b> é extraída automaticamente pelo sistema.</p>
+        <p><b>Colaboradores</b> são gerados automaticamente.</p>
+        <div class="muted">Se estiver de férias/atestado, não aparecerá no painel.</div>
       </div>
-    </div>
-  </div>
-</div>
 
-
-      <!-- 2) DISPONIBILIDADE -->
       <div class="helpCard warn">
         <h4>✅ 2) Disponibilidade</h4>
         <ul>
-          <li><b>OK:</b> disponível.</li>
-          <li><b>Logística:</b> responsável pela logística.</li>
-          <li><b>Falta / Atestado / Férias / Folga:</b> colaboradores que ainda não foram informados ao RH — favor informar o motivo.</li>
+          <li><b>OK:</b> disponível (segue para os próximos painéis).</li>
+          <li><b>Falta / Atestado / Férias / Folga:</b> informe o motivo para RH.</li>
         </ul>
       </div>
 
-      <!-- 3) ESTADIA -->
       <div class="helpCard">
         <h4>🏨 3) Estadia</h4>
-        <div class="helpcard">
         <p>Opções: <b>Casa</b>, <b>Alojamento</b>, <b>Hotel</b> e <b>Fazenda</b>.</p>
-        </div>
-          <li><b>Hotel:</b> se já hospedado, preenche automático (D-1). Se não, informe <b>cidade</b>.</li>
-          <li><b>Alojamento:</b> se já hospedado, preenche automático (D-1). Se não, informe o <b>nome do alojamento</b>.</li>
-          <li><b>Fazenda:</b> o pernoite é preenchido automaticamente.</li>
+        <ul>
+          <li><b>Hotel:</b> busca automático no D-1; se não, informe <b>cidade</b>.</li>
+          <li><b>Alojamento:</b> busca D-1; se não, selecione o <b>alojamento</b> (por Supervisão) ou informe manualmente.</li>
+          <li><b>Fazenda:</b> pernoite preenchido automaticamente.</li>
+        </ul>
       </div>
 
-      <!-- 4) ALIMENTAÇÃO -->
       <div class="helpCard">
         <h4>🍽️ 4) Alimentação</h4>
         <p>Opções: <b>Café</b>, <b>Almoço</b> e <b>Janta</b>.</p>
         <p class="muted">Marque ☑ somente se precisar da despesa.</p>
       </div>
 
-      <!-- 5) DESLOCAMENTO -->
       <div class="helpCard">
         <h4>🚗 5) Deslocamento</h4>
         <ul>
@@ -357,7 +336,6 @@
         </ul>
       </div>
 
-      <!-- 6) EXTRAS -->
       <div class="helpCard">
         <h4>➕ 6) Extras</h4>
         <p>Inserir despesas extras que o colaborador precise durante a data.</p>
@@ -373,7 +351,7 @@
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
 
 /** ✅ BLINDAGEM: evita ReferenceError se algum trecho antigo ainda referenciar "reg" */
-var reg = null; // proteção contra cache/trecho antigo
+var reg = null;
 
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
@@ -383,10 +361,10 @@ let busy = false;
 
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 
-/** ✅ ROBUSTO: aceita OK/Logística independentemente de acento/caixa */
+/** ✅ NOVO: somente OK segue */
 const PROSSEGUIR = (st) => {
   const s = String(st||"").trim().toUpperCase();
-  return (s === "OK" || s === "LOGÍSTICA" || s === "LOGISTICA");
+  return (s === "OK");
 };
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
@@ -418,7 +396,7 @@ document.addEventListener("keydown", (e)=>{
 
 function setBusy(v){
   busy = !!v;
-  ["btnProximo","btnVoltar","btnCarregar","btnLogin"].forEach(id=>{
+  ["btnProximo","btnVoltar","btnCarregar","btnLogin","btnPreload"].forEach(id=>{
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
@@ -475,7 +453,7 @@ function logoutForcado(msg){
   token = "";
   ctx = null;
   form = {};
-  window.form = form; // ✅
+  window.form = form;
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
 }
@@ -576,6 +554,34 @@ async function baixarPDFProgramacao_(){
   return true;
 }
 
+/** =========================
+ * ✅ ADMIN: pré-carregar banco
+ * ========================= */
+async function preCarregarBanco_(){
+  const dataRef = document.getElementById("dataRef").value.trim();
+  if(!parseDMY_(dataRef)){
+    alert("❌ Data inválida.");
+    return;
+  }
+
+  setBusy(true);
+  setDebug("Pré-carregando banco (cache)...");
+
+  // ⚠️ ação precisa existir no backend/worker
+  const r = await api("preCarregarBanco", { dataRef });
+
+  setBusy(false);
+
+  if(!r || !r.ok){
+    const err = r?.error || "Erro ao pré-carregar banco";
+    setDebug(err);
+    alert(err);
+    return;
+  }
+
+  setDebug("Cache preparado ✅");
+}
+
 async function login(){
   const raw = document.getElementById("loginInput").value;
 
@@ -599,6 +605,10 @@ async function login(){
   hide("loginCard");
   show("app");
   hide("bottomBar");
+
+  // mostra botão admin de preload se login for admin
+  if(loginMode === "ADMIN") show("adminPreloadWrap");
+  else hide("adminPreloadWrap");
 
   await carregarDataPadrao();
 }
@@ -700,6 +710,76 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   return { ok:true };
 }
 
+/** =========================
+ * ✅ OS / Locais Embarque (se vier do backend)
+ * ========================= */
+function splitSmart_(v){
+  if(v == null) return [];
+  if(Array.isArray(v)) return v.flatMap(x => splitSmart_(x));
+  const s = String(v).trim();
+  if(!s) return [];
+  return s.split(/[;,|]/g).map(x => String(x||"").trim()).filter(Boolean);
+}
+function uniq_(arr){
+  const out = [];
+  const seen = new Set();
+  (arr||[]).forEach(x=>{
+    const k = String(x||"").trim();
+    if(!k) return;
+    const key = k.toUpperCase();
+    if(seen.has(key)) return;
+    seen.add(key);
+    out.push(k);
+  });
+  return out;
+}
+function getLiberadoInfo_(nome){
+  const lib = ctx?.liberados || [];
+  for(const p of lib){
+    if(p && String(p.colaborador||"").trim() === String(nome||"").trim()) return p;
+  }
+  return null;
+}
+function getOSLocaisLine_(nome){
+  const p = getLiberadoInfo_(nome);
+  if(!p) return "";
+  const os = uniq_([
+    ...splitSmart_(p.os),
+    ...splitSmart_(p.OS),
+    ...splitSmart_(p.os_list),
+    ...splitSmart_(p.osList),
+    ...splitSmart_(p.ordens_servico)
+  ]);
+  const loc = uniq_([
+    ...splitSmart_(p.local_embarque),
+    ...splitSmart_(p.localEmbarque),
+    ...splitSmart_(p.locais_embarque),
+    ...splitSmart_(p.locaisEmbarque),
+    ...splitSmart_(p.embarque)
+  ]);
+
+  const parts = [];
+  if(os.length) parts.push(`OS: ${os.join(", ")}`);
+  if(loc.length) parts.push(`Embarque: ${loc.join(", ")}`);
+  return parts.join(" | ");
+}
+
+/** =========================
+ * ✅ Alojamentos REF por Supervisão (se vier do backend)
+ * - tenta ler de várias chaves (não quebra se não existir)
+ * ========================= */
+function getAlojOpcoesPorSup_(sup){
+  const s = String(sup||"").trim();
+  const cand =
+    ctx?.refAlojamentosPorSup?.[s] ||
+    ctx?.ref?.alojamentosPorSup?.[s] ||
+    ctx?.ref?.alojamentos?.[s] ||
+    ctx?.alojamentosRefPorSup?.[s] ||
+    ctx?.alojamentosPorSup?.[s] ||
+    [];
+  return uniq_(splitSmart_(cand));
+}
+
 async function carregar(){
   const dStr = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dStr)){
@@ -725,6 +805,10 @@ async function carregar(){
 
   ctx = res;
 
+  // mostra botão admin se backend confirmar admin também
+  if(res.isAdmin) show("adminPreloadWrap");
+  else if(loginMode !== "ADMIN") hide("adminPreloadWrap");
+
   const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
   const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
   document.getElementById("topInfo").innerText =
@@ -743,12 +827,15 @@ async function carregar(){
       coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
       disponibilidade_status: prev.disponibilidade_status ?? "OK",
       disponibilidade_obs: prev.disponibilidade_obs ?? "",
-      logistica_default_obs: "",
-      logistica_obs_editada: false,
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
       wknd_hosp: false,
+
+      // ✅ novo: suporte ao "select" de alojamento quando não achar D-1
+      aloj_pick_visible: false,
+      aloj_pick_list: [],
+      aloj_pick_value: "",
 
       cafe_valor: (prev.cafe_valor ?? "NÃO"),
       almoco_valor: (prev.almoco_valor ?? "NÃO"),
@@ -765,7 +852,7 @@ async function carregar(){
     };
   });
 
-  window.form = form; // ✅ CRÍTICO: habilita onchange inline do checkbox sábado/domingo
+  window.form = form;
 
   renderA();
   setStep("A");
@@ -829,20 +916,14 @@ async function salvarEtapaAtual_(){
 
   setBusy(true);
 
-  // ✅ salva etapa “principal”
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  // ✅ Pós-processo assíncrono (RH/Hospedagem/Conferência/Alojamento)
   api("posProcessar", {
-    payload: {
-      dataReferencia: dataRef,
-      etapa: step,
-      registros: registros
-    }
+    payload: { dataReferencia: dataRef, etapa: step, registros: registros }
   }).catch(()=>{});
 
-  // ✅ regra sexta (hospedagem sab/dom) + dispara posProcessar para sab/dom
+  // ✅ regra sexta (mantida, mas agora só marca para Hotel/Fazenda/Alojamento)
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -879,21 +960,15 @@ async function avancar(){
   const namesAll = Object.keys(form);
   if(step==="A"){
     const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK/Logística)."); return; }
+    if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK)."); return; }
     renderB(); setStep("B"); return;
   }
   if(step==="B"){ renderC(); setStep("C"); return; }
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
   if(step==="E"){
-    // ✅ gera e baixa o PDF ANTES do logout
     const okPdf = await baixarPDFProgramacao_();
-
-    alert(okPdf
-      ? "✅ Programação salva e PDF baixado!"
-      : "✅ Programação salva! (PDF não foi gerado)"
-    );
-
+    alert(okPdf ? "✅ Programação salva e PDF baixado!" : "✅ Programação salva! (PDF não foi gerado)");
     setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 1200);
   }
 }
@@ -907,45 +982,10 @@ function voltar(){
 }
 
 /** ===== Painel A ===== */
-async function onDispChange(ne, val){
+function onDispChange(ne, val){
   const nome = decName(ne);
   if(!form[nome]) return;
   form[nome].disponibilidade_status = val;
-
-  if(val === "Logística"){
-    const atual = String(form[nome].deslocamento_tipo || "").trim();
-    if(!atual || form[nome].deslocamento_editado === false){
-      form[nome].deslocamento_tipo = "Frota (motorista)";
-    }
-
-    const el = document.getElementById("dobs_"+idSafe(nome));
-    if(el) el.value = "Buscando veículo...";
-
-    const res = await api("getPrimeiroVeiculoPorFuncionario", { nome });
-    if(!res || !res.ok){
-      if(el) el.value="";
-      alert(res?.error || "Erro ao buscar veículo");
-      renderA();
-      return;
-    }
-
-    const ident = res.found ? res.identificacao : "";
-    const sugestao = ident ? `Veículo: ${ident}` : "";
-    form[nome].logistica_default_obs = sugestao;
-
-    if(res && res.ok && res.leituraAtrasada){
-      alert("⚠️ Solicite que o colaborador do veículo realize leitura do patrimônio e atualize o Checklist.");
-    }
-
-    const obsAtual = String(form[nome].disponibilidade_obs||"").trim();
-    if(!obsAtual || !form[nome].logistica_obs_editada){
-      form[nome].disponibilidade_obs = sugestao;
-      form[nome].logistica_obs_editada = false;
-    }
-    renderA();
-    return;
-  }
-
   renderA();
 }
 
@@ -953,30 +993,24 @@ function onDispObsInput(ne, val){
   const nome = decName(ne);
   if(!form[nome]) return;
   form[nome].disponibilidade_obs = val;
-
-  if(form[nome].disponibilidade_status === "Logística"){
-    form[nome].logistica_obs_editada = true;
-    const def = String(form[nome].logistica_default_obs||"").trim();
-    const cur = String(val||"").trim();
-    if(def && cur && cur !== def){
-      alert("⚠️ Obs alterada em Logística.\nSolicite a leitura do patrimônio do veículo associado.");
-    }
-  }
 }
 
 function renderA(){
   const names = Object.keys(form);
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
+    const extraLine = getOSLocaisLine_(n);
+
     return `
       <div class="nomeRow">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : ``}
         </div>
 
         <select onchange="onDispChange('${ne}', this.value)">
-          ${["OK","Logística","Tem atestado","Férias","Folga","Falta"].map(op=>`
+          ${["OK","Tem atestado","Férias","Folga","Falta"].map(op=>`
             <option ${form[n].disponibilidade_status===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
@@ -996,6 +1030,11 @@ async function onEstadiaChange(ne, val){
   if(!form[nome]) return;
   form[nome].estadia_tipo = val;
 
+  // limpa pick alojamento quando troca tipo
+  form[nome].aloj_pick_visible = false;
+  form[nome].aloj_pick_list = [];
+  form[nome].aloj_pick_value = "";
+
   if(!["Hotel","Fazenda","Alojamento"].includes(String(val||"").trim())){
     form[nome].wknd_hosp = false;
   }
@@ -1011,7 +1050,6 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
-  // ✅ NOVO: Alojamento com consulta D-1
   if(val === "Alojamento"){
     const dataRef = document.getElementById("dataRef").value.trim();
     if(el){ el.value = "Verificando D-1..."; form[nome].estadia_obs = el.value; }
@@ -1026,7 +1064,26 @@ async function onEstadiaChange(ne, val){
     }
 
     if(!res.found){
-      const aloj = (prompt(`Alojamento marcado.\nNão encontrei no D-1 (${res.d1}).\nInforme o NOME do alojamento:`) || "").trim();
+      // ✅ NOVO: tenta carregar opções por Supervisão
+      const sup = getSupOf_(nome);
+      const opts = getAlojOpcoesPorSup_(sup);
+
+      if(opts.length){
+        form[nome].aloj_pick_visible = true;
+        form[nome].aloj_pick_list = opts;
+        form[nome].aloj_pick_value = "";
+
+        const msg = `Alojamento: (selecionar) | D-1: ${res.d1}`;
+        form[nome].estadia_obs = msg;
+        if(el) el.value = msg;
+
+        alert(`Alojamento marcado para ${nome}.\nNão encontrei no D-1 (${res.d1}).\nSelecione o alojamento na lista (por Supervisão).`);
+        renderB();
+        return;
+      }
+
+      // fallback manual
+      const aloj = (prompt(`Alojamento marcado para ${nome}.\nNão encontrei no D-1 (${res.d1}).\nInforme o NOME do alojamento:`) || "").trim();
       const txt = aloj ? `Alojamento: ${aloj}` : "";
       form[nome].estadia_obs = txt;
       if(el) el.value = txt;
@@ -1035,11 +1092,11 @@ async function onEstadiaChange(ne, val){
     }
 
     const sugestao = `Alojamento: ${res.alojamento} | D-1: ${res.d1}`;
-    const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestao}\n\nContinuará no mesmo alojamento?`);
+    const same = confirm(`Encontrei D-1 (${res.d1}) para ${nome}:\n${sugestao}\n\nContinuará no mesmo alojamento?`);
 
     let txt = sugestao;
     if(!same){
-      const aloj = (prompt("Informe o NOME do alojamento:", res.alojamento || "") || "").trim();
+      const aloj = (prompt(`Informe o NOME do alojamento para ${nome}:`, res.alojamento || "") || "").trim();
       txt = aloj ? `Alojamento: ${aloj}` : "";
     }
 
@@ -1067,7 +1124,8 @@ async function onEstadiaChange(ne, val){
   }
 
   if(!res.found){
-    const cidadeUF = (prompt(`Hotel marcado.\nNão encontrei no D-1 (${res.d1}).\nInforme CIDADE e UF (ex: Cascavel, PR):`) || "").trim();
+    // ✅ POPUP com nome do colaborador
+    const cidadeUF = (prompt(`Hotel marcado para ${nome}.\nNão encontrei no D-1 (${res.d1}).\nInforme CIDADE e UF (ex: Cascavel, PR):`) || "").trim();
     const txt = normalizeHotelObs_("Hotel", cidadeUF);
     form[nome].estadia_obs = txt;
     if(el) el.value = txt;
@@ -1083,11 +1141,12 @@ async function onEstadiaChange(ne, val){
     `D-1: ${res.d1}`
   ].filter(Boolean).join(" | ");
 
-  const same = confirm(`Encontrei D-1 (${res.d1}):\n${sugestao}\n\nContinuará na mesma cidade?`);
+  // ✅ POPUP com nome do colaborador
+  const same = confirm(`Encontrei D-1 (${res.d1}) para ${nome}:\n${sugestao}\n\nContinuará na mesma cidade?`);
 
   let txt = sugestao;
   if(!same){
-    const cidadeUF = (prompt(`Informe CIDADE e UF (ex: Cascavel, PR):`, res.cidade || "") || "").trim();
+    const cidadeUF = (prompt(`Informe CIDADE e UF para ${nome} (ex: Cascavel, PR):`, res.cidade || "") || "").trim();
     txt = normalizeHotelObs_("Hotel", cidadeUF) + (res.embarque ? ` | Embarque: ${res.embarque}` : "");
   } else {
     txt = normalizeHotelObs_("Hotel", txt);
@@ -1096,6 +1155,18 @@ async function onEstadiaChange(ne, val){
   form[nome].estadia_obs = txt;
   if(el) el.value = txt;
   renderB();
+}
+
+function onPickAloj_(ne, val){
+  const nome = decName(ne);
+  if(!form[nome]) return;
+  form[nome].aloj_pick_value = val;
+
+  const txt = val ? `Alojamento: ${val}` : form[nome].estadia_obs;
+  form[nome].estadia_obs = txt;
+
+  const el = document.getElementById("eobs_"+idSafe(nome));
+  if(el && val) el.value = txt;
 }
 
 function renderB(){
@@ -1119,11 +1190,17 @@ function renderB(){
         ? "Ex.: Alojamento: Nome do alojamento"
         : "Ex.: Cascavel, PR | Embarque: ...";
 
+    const extraLine = getOSLocaisLine_(n);
+
+    const pickVisible = (tipo === "Alojamento" && !!form[n].aloj_pick_visible && (form[n].aloj_pick_list||[]).length);
+    const opts = (form[n].aloj_pick_list||[]);
+
     return `
       <div class="nomeRow">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : ``}
         </div>
 
         <select onchange="onEstadiaChange('${ne}', this.value)">
@@ -1138,6 +1215,15 @@ function renderB(){
             value="${esc(form[n].estadia_obs)}"
             oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].estadia_obs=this.value) : null)"
             onblur="(window.form && form[decodeURIComponent('${ne}')] ? (this.value=(form[decodeURIComponent('${ne}')].estadia_obs=normalizeHotelObs_(form[decodeURIComponent('${ne}')].estadia_tipo,this.value))) : null)">
+
+          ${pickVisible ? `
+            <div class="miniLine">
+              <select onchange="onPickAloj_('${ne}', this.value)">
+                <option value="">Selecione o alojamento (Supervisão: ${esc(sup)})</option>
+                ${opts.map(o=>`<option value="${esc(o)}" ${String(form[n].aloj_pick_value||"")===String(o)?"selected":""}>${esc(o)}</option>`).join("")}
+              </select>
+            </div>
+          ` : ``}
 
           ${showWknd ? `
             <div class="chkRow" style="margin-top:8px;">
@@ -1172,11 +1258,14 @@ function renderC(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
+    const extraLine = getOSLocaisLine_(n);
+
     return `
       <div class="nomeRow">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : ``}
         </div>
 
         <div class="chkRow">
@@ -1215,11 +1304,14 @@ function renderD(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   const html = renderGrouped_(names, (n, coord, sup)=>{
     const ne = encName(n);
+    const extraLine = getOSLocaisLine_(n);
+
     return `
       <div class="nomeRow">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : ``}
         </div>
 
         <select onchange="onDeslocamentoChange('${ne}', this.value)">
@@ -1266,12 +1358,14 @@ function renderE(){
     const recOn = isExtraOn_(n,"extras_recarga_valor");
     const pasOn = isExtraOn_(n,"extras_passagem_valor");
     const lavOn = isExtraOn_(n,"extras_lavagem_valor");
+    const extraLine = getOSLocaisLine_(n);
 
     return `
       <div class="nomeRow">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           <div class="sub">Coordenação: ${esc(coord)} | Supervisão: ${esc(sup)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : ``}
         </div>
 
         <div class="inlineVal">
@@ -1335,6 +1429,9 @@ window.onload = async () => {
   hide("app");
   hide("bottomBar");
 
+  // botao admin só aparece após login admin (ou backend confirmar isAdmin)
+  hide("adminPreloadWrap");
+
   if(token){
     document.getElementById("loginStatus").innerText = "Verificando sessão...";
     const res = await api("ping", {});
@@ -1342,6 +1439,7 @@ window.onload = async () => {
       hide("loginCard");
       show("app");
       hide("bottomBar");
+      if(loginMode === "ADMIN") show("adminPreloadWrap");
       await carregarDataPadrao();
       document.getElementById("loginStatus").innerText = "";
     } else {
@@ -1352,6 +1450,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
-
-
