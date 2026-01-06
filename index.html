@@ -290,7 +290,7 @@
         <h4>✅ 2) Disponibilidade</h4>
         <ul>
           <li><b>OK:</b> disponível.</li>
-          <li><b>Tem atestado / Férias / Folga / Falta:</b> informar observação e avisar RH quando necessário.</li>
+          <li><b>Atestado / Férias / Folga / Falta:</b> informar observação e avisar RH quando necessário.</li>
         </ul>
       </div>
 
@@ -899,7 +899,7 @@ function renderA(){
         </div>
 
         <select onchange="onDispChange('${ne}', this.value)">
-          ${["OK","Tem atestado","Férias","Folga","Falta"].map(op=>`
+          ${["OK","Atestado","Férias","Folga","Falta"].map(op=>`
             <option ${form[n].disponibilidade_status===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
@@ -1241,4 +1241,5 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
 
