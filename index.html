@@ -331,9 +331,10 @@
 /** ✅ Worker */
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
 
-/** ✅ BLINDAGEM */
+/** ✅ BLINDAGEM (mantido) */
 var reg = null;
 
+/** ✅ estado */
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
 let step = "A";
@@ -573,21 +574,38 @@ async function carregarDataPadrao(){
 
 /** =========================================
  * ✅ Linha abaixo do nome: LOCAL DE EMBARQUE
- *  - CORRIGIDO: usa ctx.osPorNome[nome]
+ *  - ✅ CORRIGIDO: suporta array de strings OU objetos {os, local, cliente}
  * ========================================= */
 function getOSLocaisLine_(nome){
   if(!ctx) return "";
 
   const arr = ctx.osPorNome?.[nome] || [];
-  if(Array.isArray(arr) && arr.length){
-    const show = arr.slice(0, 2).join(" | ");
+  if(!Array.isArray(arr) || !arr.length) return "";
+
+  // caso 1: já vem como strings prontas
+  if(typeof arr[0] === "string"){
+    const show = arr.slice(0,2).map(s=>String(s||"").trim()).filter(Boolean).join(" | ");
     const more = arr.length > 2 ? ` (+${arr.length - 2})` : "";
-    return `Embarque: ${show}${more}`;
+    return show ? `Embarque: ${show}${more}` : "";
   }
-  return "";
+
+  // caso 2: vem como objetos
+  const show = arr.slice(0,2).map(it=>{
+    const os = String(it?.os || "").trim();
+    const local = String(it?.local || "").trim();
+    const cli = String(it?.cliente || "").trim();
+    const parts = [];
+    if(os) parts.push(`OS ${os}`);
+    if(local) parts.push(local);
+    if(cli) parts.push(cli);
+    return parts.join(" - ");
+  }).filter(Boolean).join(" | ");
+
+  const more = arr.length > 2 ? ` (+${arr.length - 2})` : "";
+  return show ? `Embarque: ${show}${more}` : "";
 }
 
-/** ✅ Agrupar por Coordenação e Supervisão (corrigido) */
+/** ✅ Agrupar por Coordenação e Supervisão */
 function groupByCoordSup_(names){
   const tree = {};
   names.forEach(n=>{
@@ -811,11 +829,7 @@ async function salvarEtapaAtual_(){
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
   api("posProcessar", {
-    payload: {
-      dataReferencia: dataRef,
-      etapa: step,
-      registros: registros
-    }
+    payload: { dataReferencia: dataRef, etapa: step, registros }
   }).catch(()=>{});
 
   // regra sexta (mantida)
