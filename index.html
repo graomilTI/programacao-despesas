@@ -321,7 +321,7 @@
       <div class="helpCard">
         <h4>➕ 6) Extras</h4>
         <p>Inserir despesas extras do dia.</p>
-        <p class="muted">Ao marcar, informe um valor &gt; 0.</p>
+        <p class="muted">Ao marcar, informe um valor &gt; 0 (Recarga, Passagem, Lavagem, Manutenção Veiculo).</p>
       </div>
     </div>
   </div>
@@ -736,6 +736,8 @@ async function carregar(){
       extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
       extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
       extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
+      extras_manutencao_valor: Number(prev.extras_manutencao_valor ?? 0),
+
       extras_obs: prev.extras_obs ?? ""
     };
   });
@@ -798,6 +800,7 @@ async function salvarEtapaAtual_(){
       extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
       extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
       extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
+      extras_manutencao_valor: Number(form[n].extras_manutencao_valor||0),
       extras_obs: form[n].extras_obs || ""
     }));
   }
@@ -913,16 +916,13 @@ function renderA(){
   document.getElementById("listaA").innerHTML = html;
 }
 
-/** ===== Painel B ===== */
 /** ===== Painel B (Hotel/Alojamento D-1) ===== */
-
 async function onEstadiaChange(ne, val){
   const nome = decName(ne);
   if(!form[nome]) return;
 
   form[nome].estadia_tipo = val;
 
-  // Se escolheu Hotel/Alojamento, tenta D-1
   const tipo = String(val||"").trim();
 
   // Supervisão do colaborador (pra REF do alojamento)
@@ -940,7 +940,6 @@ async function onEstadiaChange(ne, val){
     setBusy(false);
 
     if(r && r.ok && r.found){
-      // monta obs padrão (você pode ajustar o texto)
       const parts = [];
       if(r.cidade) parts.push(`Cidade: ${r.cidade}`);
       if(r.hotel)  parts.push(`Hotel: ${r.hotel}`);
@@ -951,7 +950,6 @@ async function onEstadiaChange(ne, val){
       return;
     }
 
-    // não achou -> pede cidade/UF (mostrar nome do colaborador)
     const ask = prompt(`Hotel não encontrado no D-1 para:\n${nome}\n\nInforme Cidade/UF (ex: Londrina/PR):`, "");
     form[nome].estadia_obs = ask ? `Cidade: ${ask}` : "";
     renderB();
@@ -970,12 +968,10 @@ async function onEstadiaChange(ne, val){
       return;
     }
 
-    // não achou -> usa REF por Supervisão (ctx.alojRefPorSupervisao)
-    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30); // limita pra não ficar enorme
+    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30);
     let escolha = "";
 
     if(opcoes.length){
-      // prompt com lista enumerada
       const lista = opcoes.map((x,i)=> `${i+1} - ${x}`).join("\n");
       const resp = prompt(
         `Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nEscolha pelo número ou digite o nome:\n\n${lista}`,
@@ -988,7 +984,6 @@ async function onEstadiaChange(ne, val){
         else escolha = resp.trim();
       }
     } else {
-      // sem REF -> digitar livre
       const resp = prompt(`Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nDigite o nome do alojamento:`, "");
       if(resp) escolha = resp.trim();
     }
@@ -998,7 +993,6 @@ async function onEstadiaChange(ne, val){
     return;
   }
 
-  // Casa / Fazenda -> não consulta
   renderB();
 }
 
@@ -1007,7 +1001,7 @@ function renderB(){
   const dataRef = document.getElementById("dataRef").value.trim();
   const sexta = isFriday_(dataRef);
 
-  const html = renderGrouped_(names, (n, coord, sup)=>{
+  const html = renderGrouped_(names, (n)=>{
     const ne = encName(n);
     const tipo = String(form[n].estadia_tipo||"Casa").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
@@ -1155,6 +1149,7 @@ function renderE(){
     const recOn = isExtraOn_(n,"extras_recarga_valor");
     const pasOn = isExtraOn_(n,"extras_passagem_valor");
     const lavOn = isExtraOn_(n,"extras_lavagem_valor");
+    const manOn = isExtraOn_(n,"extras_manutencao_valor");
 
     return `
       <div class="nomeRow">
@@ -1192,6 +1187,15 @@ function renderE(){
           ${lavOn ? `<input type="number" step="0.01" placeholder="Valor"
             value="${esc(form[n].extras_lavagem_valor)}"
             oninput="setExtraValor_('${ne}','extras_lavagem_valor',this.value)">` : ``}
+
+          <div class="chkRow" style="margin-left:10px;">
+            <input type="checkbox" ${manOn?"checked":""}
+              onchange="setExtraChecked_('${ne}','extras_manutencao_valor',this.checked)">
+            <span>Manutenção Veiculo</span>
+          </div>
+          ${manOn ? `<input type="number" step="0.01" placeholder="Valor"
+            value="${esc(form[n].extras_manutencao_valor)}"
+            oninput="setExtraValor_('${ne}','extras_manutencao_valor',this.value)">` : ``}
         </div>
       </div>
 
@@ -1241,5 +1245,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
-
