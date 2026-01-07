@@ -754,7 +754,7 @@ async function carregar(){
       extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
       extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
       extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
-      extras_manutencao_valor: Number(prev.extras_manutencao_valor ?? 0),
+      manut_veic_valor: Number(prev.manut_veic ?? prev.manut_veic_valor ?? 0),
 
       extras_obs: prev.extras_obs ?? ""
     };
@@ -818,7 +818,7 @@ async function salvarEtapaAtual_(){
       extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
       extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
       extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
-      extras_manutencao_valor: Number(form[n].extras_manutencao_valor||0),
+      manut_veic_valor: Number(form[n].manut_veic_valor||0),
       extras_obs: form[n].extras_obs || ""
     }));
   }
@@ -1163,7 +1163,7 @@ function renderE(){
     const recOn = isExtraOn_(n,"extras_recarga_valor");
     const pasOn = isExtraOn_(n,"extras_passagem_valor");
     const lavOn = isExtraOn_(n,"extras_lavagem_valor");
-    const manOn = isExtraOn_(n,"extras_manutencao_valor");
+    const manOn = isExtraOn_(n,"manut_veic_valor");
 
     return `
       <div class="nomeRow">
@@ -1259,3 +1259,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
