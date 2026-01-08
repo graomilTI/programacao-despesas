@@ -358,6 +358,24 @@ function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || 
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
 
+/** ✅ PATCH: setters centralizados (corrige “index” do form) */
+function setField_(ne, field, value){
+  const nome = decName(ne);
+  if(!form || !form[nome]) return;
+  form[nome][field] = value;
+}
+function setFieldNumber_(ne, field, value){
+  const nome = decName(ne);
+  if(!form || !form[nome]) return;
+  const num = Number(String(value ?? "").replace(",", "."));
+  form[nome][field] = isNaN(num) ? 0 : num;
+}
+function setFieldBool_(ne, field, checked){
+  const nome = decName(ne);
+  if(!form || !form[nome]) return;
+  form[nome][field] = !!checked;
+}
+
 function openHelpModal(){
   const m = document.getElementById("helpModal");
   if(!m) return;
@@ -1056,12 +1074,12 @@ function renderB(){
           <input id="eobs_${idSafe(n)}"
             placeholder="Obs..."
             value="${esc(form[n].estadia_obs)}"
-            oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].estadia_obs=this.value) : null)">
+            oninput="setField_('${ne}','estadia_obs',this.value)">
 
           ${showWknd ? `
             <div class="chkRow" style="margin-top:8px;">
               <input type="checkbox" ${form[n].wknd_hosp ? "checked" : ""}
-                onchange="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].wknd_hosp=this.checked) : null)">
+                onchange="setFieldBool_('${ne}','wknd_hosp',this.checked)">
               <span>Hospedar sábado/domingo</span>
             </div>
           ` : ``}
@@ -1150,7 +1168,7 @@ function renderD(){
 
         <input placeholder="Obs..."
           value="${esc(form[n].deslocamento_obs)}"
-          oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].deslocamento_obs=this.value) : null)">
+          oninput="setField_('${ne}','deslocamento_obs',this.value)">
       </div>
     `;
   });
@@ -1233,7 +1251,7 @@ function renderE(){
 
       <div style="margin:8px 0 14px;">
         <input placeholder="Extras_Obs..." value="${esc(form[n].extras_obs||"")}"
-          oninput="(window.form && form[decodeURIComponent('${ne}')] ? (form[decodeURIComponent('${ne}')].extras_obs=this.value) : null)">
+          oninput="setField_('${ne}','extras_obs',this.value)">
       </div>
     `;
   });
