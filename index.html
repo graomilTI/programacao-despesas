@@ -501,6 +501,22 @@ function base64ToBlob_(b64, mime){
   return new Blob([new Uint8Array(byteNumbers)], { type: mime || "application/pdf" });
 }
 
+/** ✅ NOVO: download direto (usado no auto-download do posProcessar) */
+function downloadPdfFromB64_(b64, fileName){
+  const blob = base64ToBlob_(b64, "application/pdf");
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "programacao.pdf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(()=> URL.revokeObjectURL(url), 6000);
+}
+
+/** ✅ Manual: chama gerarPDFProgramacao (continua existindo) */
 async function baixarPDFProgramacao_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
@@ -522,17 +538,7 @@ async function baixarPDFProgramacao_(){
     return false;
   }
 
-  const blob = base64ToBlob_(r.b64, "application/pdf");
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = r.fileName || "programacao.pdf";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  setTimeout(()=> URL.revokeObjectURL(url), 6000);
+  downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf");
   setDebug("PDF baixado ✅");
   return true;
 }
@@ -574,7 +580,6 @@ async function carregarDataPadrao(){
 
 /** =========================================
  * ✅ Linha abaixo do nome: LOCAL DE EMBARQUE
- *  - ✅ CORRIGIDO: suporta array de strings OU objetos {os, local, cliente}
  * ========================================= */
 function getOSLocaisLine_(nome){
   if(!ctx) return "";
@@ -582,14 +587,12 @@ function getOSLocaisLine_(nome){
   const arr = ctx.osPorNome?.[nome] || [];
   if(!Array.isArray(arr) || !arr.length) return "";
 
-  // caso 1: já vem como strings prontas
   if(typeof arr[0] === "string"){
     const show = arr.slice(0,2).map(s=>String(s||"").trim()).filter(Boolean).join(" | ");
     const more = arr.length > 2 ? ` (+${arr.length - 2})` : "";
     return show ? `Embarque: ${show}${more}` : "";
   }
 
-  // caso 2: vem como objetos
   const show = arr.slice(0,2).map(it=>{
     const os = String(it?.os || "").trim();
     const local = String(it?.local || "").trim();
@@ -754,6 +757,8 @@ async function carregar(){
       extras_recarga_valor: Number(prev.extras_recarga_valor ?? 0),
       extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
       extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
+
+      /** ✅ PADRÃO ÚNICO: manut_veic_valor */
       manut_veic_valor: Number(prev.manut_veic ?? prev.manut_veic_valor ?? 0),
 
       extras_obs: prev.extras_obs ?? ""
@@ -768,6 +773,7 @@ async function carregar(){
   show("bottomBar");
 }
 
+/** ✅ Salva etapa e roda posProcessar (AGORA: espera retorno p/ auto PDF na etapa E) */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -828,9 +834,22 @@ async function salvarEtapaAtual_(){
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  api("posProcessar", {
+  /** ✅ AGORA: espera o retorno do posProcessar */
+  const pp = await api("posProcessar", {
     payload: { dataReferencia: dataRef, etapa: step, registros }
-  }).catch(()=>{});
+  });
+
+  if(!pp || !pp.ok){
+    const err = pp?.error || "Erro no pós-processamento";
+    if(isAuthError_(err)) { setBusy(false); logoutForcado(err); return { ok:false }; }
+    setDebug(err);
+  }
+
+  /** ✅ AUTO DOWNLOAD PDF (apenas na etapa E) */
+  if(step === "E" && pp && pp.ok && pp.pdf_b64){
+    downloadPdfFromB64_(pp.pdf_b64, pp.pdf_fileName || "programacao.pdf");
+    setDebug("PDF baixado automaticamente ✅");
+  }
 
   // regra sexta (mantida)
   if(step === "B" && isFriday_(dataRef)){
@@ -876,8 +895,7 @@ async function avancar(){
   if(step==="C"){ renderD(); setStep("D"); return; }
   if(step==="D"){ renderE(); setStep("E"); return; }
   if(step==="E"){
-    const okPdf = await baixarPDFProgramacao_();
-    alert(okPdf ? "✅ Programação salva e PDF baixado!" : "✅ Programação salva! (PDF não foi gerado)");
+    alert("✅ Programação salva! (PDF será baixado automaticamente se disponível)");
     setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 1200);
   }
 }
@@ -1204,12 +1222,12 @@ function renderE(){
 
           <div class="chkRow" style="margin-left:10px;">
             <input type="checkbox" ${manOn?"checked":""}
-              onchange="setExtraChecked_('${ne}','extras_manutencao_valor',this.checked)">
+              onchange="setExtraChecked_('${ne}','manut_veic_valor',this.checked)">
             <span>Manutenção Veiculo</span>
           </div>
           ${manOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${esc(form[n].extras_manutencao_valor)}"
-            oninput="setExtraValor_('${ne}','extras_manutencao_valor',this.value)">` : ``}
+            value="${esc(form[n].manut_veic_valor)}"
+            oninput="setExtraValor_('${ne}','manut_veic_valor',this.value)">` : ``}
         </div>
       </div>
 
@@ -1259,4 +1277,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
