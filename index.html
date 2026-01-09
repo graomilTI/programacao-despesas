@@ -50,11 +50,22 @@
     .chkRow{ display:flex; gap:8px; align-items:center; }
     .chkRow input{ width:auto; transform:scale(1.1); }
 
-    .inlineVal{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .inlineVal input[type="number"]{ width:170px; }
+    .inlineVal{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .inlineVal input[type="number"]{ width:160px; }
 
+    /* === PAINÉIS: transição leve (sem rebuild) === */
     .step{ display:none; }
     .step.active{ display:block; }
+    .step.fadeIn{ animation: fadeIn .12s ease; }
+    @keyframes fadeIn{ from{opacity:.7} to{opacity:1} }
+
+    /* “bloqueado” nos painéis B/C/D/E quando não OK */
+    .rowBlocked{
+      opacity:.45 !important;
+      pointer-events:none;
+      filter:grayscale(.10);
+    }
+    .rowHidden{ display:none !important; }
 
     .loginTopRow{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
 
@@ -111,7 +122,6 @@
       cursor:pointer;
     }
 
-    /* ===== AJUDA (GRID + CARDS) ===== */
     .helpGrid{
       padding:14px;
       display:grid;
@@ -152,18 +162,14 @@
       color:#111827;
     }
 
-    .helpCard ul{
-      margin:0;
-      padding-left:18px;
-    }
-
+    .helpCard ul{ margin:0; padding-left:18px; }
     .helpCard .muted{ color:#6b7280; font-size:12px; white-space:normal; }
 
-    .helpCard.warn{
-      background:#fff7e6;
-      border-color: rgba(244,180,0,.40);
-    }
+    .helpCard.warn{ background:#fff7e6; border-color: rgba(244,180,0,.40); }
     .helpCard.warn h4{ color:#7a4b00; }
+
+    /* E: inputs extras escondidos */
+    .extraInputHidden{ display:none !important; }
   </style>
 </head>
 
@@ -339,9 +345,6 @@
 /** ✅ Worker */
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
 
-/** ✅ BLINDAGEM (mantido) */
-var reg = null;
-
 /** ✅ estado */
 let token = localStorage.getItem("DESP_TOKEN") || "";
 let ctx = null;
@@ -351,20 +354,28 @@ let busy = false;
 
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 
-/** ✅ FAST MAPS (evita find dentro de loops) */
-let supPorNomeFast = {};      // nome -> supervisão
-let coordPorNomeFast = {};    // nome -> coordenação (p/ fallback)
+/** ✅ FAST MAPS */
+let supPorNomeFast = {};
+let coordPorNomeFast = {};
 
-/** ✅ Cache D-1 no front (ganho rápido quando gestor troca ida/volta) */
+/** ✅ Ordem fixa (evita sort/rebuild em cada painel) */
+let orderedNames = []; // nomes já na ordem final (coord/sup/nome)
+
+/** ✅ Cache D-1 no front */
 const cacheD1 = {
-  hotel: new Map(), // key: `${dataRef}|${nome}`
+  hotel: new Map(),
   aloj: new Map()
 };
 
-/** ✅ PROSSEGUIR */
-const PROSSEGUIR = (st) => {
-  const s = String(st||"").trim().toUpperCase();
-  return (s === "OK");
+const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
+
+/** ✅ “index” de elementos DOM por nome (para updates rápidos) */
+const domIndex = {
+  A: new Map(),
+  B: new Map(),
+  C: new Map(),
+  D: new Map(),
+  E: new Map()
 };
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
@@ -376,7 +387,6 @@ function cssEsc_(s){
   }catch(e){}
   return String(s).replace(/["\\]/g, "\\$&");
 }
-
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
@@ -469,7 +479,8 @@ function logoutForcado(msg){
   form = {};
   supPorNomeFast = {};
   coordPorNomeFast = {};
-  window.form = form;
+  orderedNames = [];
+  ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
 }
@@ -502,7 +513,7 @@ function setLoginMode(mode){
   document.getElementById("loginStatus").innerText = "";
 }
 
-/** ✅ API (Content-Type JSON) */
+/** ✅ API */
 async function api(action, args){
   const payload = { action, ...(args||{}) };
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
@@ -526,7 +537,7 @@ async function api(action, args){
 }
 
 /** =========================
- * ✅ PDF (BASE64 -> download)
+ * ✅ PDF
  * ========================= */
 function base64ToBlob_(b64, mime){
   const byteChars = atob(b64);
@@ -613,7 +624,6 @@ async function carregarDataPadrao(){
  * ========================================= */
 function getOSLocaisLine_(nome){
   if(!ctx) return "";
-
   const arr = ctx.osPorNome?.[nome] || [];
   if(!Array.isArray(arr) || !arr.length) return "";
 
@@ -638,55 +648,74 @@ function getOSLocaisLine_(nome){
   return show ? `Embarque: ${show}${more}` : "";
 }
 
-/** ✅ Agrupar por Coordenação e Supervisão (SEM find dentro do loop) */
-function groupByCoordSup_(names){
-  const tree = {};
-  names.forEach(n=>{
+/** ✅ agrupamento 1x (ordem fixa) */
+function computeOrderedNames_(){
+  const names = Object.keys(form);
+  const keyFn = (n)=>{
     const coord = String(form[n]?.coordenacao || coordPorNomeFast[n] || "SEM COORDENAÇÃO").trim();
+    const sup =
+      String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
+    return `${coord}|||${sup}|||${n}`;
+  };
 
+  // ordena por coord, sup, nome
+  return names.slice().sort((a,b)=>{
+    const aa = keyFn(a).toUpperCase();
+    const bb = keyFn(b).toUpperCase();
+    return aa.localeCompare(bb,'pt-BR');
+  });
+}
+
+/** ✅ render agrupado (1x) usando a ordem já pronta */
+function renderGroupedOnce_(namesInOrder, rowBuilder){
+  if(!namesInOrder.length) return `<div class="muted">Nenhum colaborador.</div>`;
+
+  let html = "";
+  let curCoord = null;
+  let curSup = null;
+  let openCoord = false;
+  let openSup = false;
+
+  const closeSup = ()=>{ if(openSup){ html += `</div>`; openSup=false; } };
+  const closeCoord = ()=>{ if(openCoord){ closeSup(); html += `</div>`; openCoord=false; } };
+
+  namesInOrder.forEach((n, idx)=>{
+    const coord = String(form[n]?.coordenacao || coordPorNomeFast[n] || "SEM COORDENAÇÃO").trim();
     const sup =
       String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
 
-    if(!tree[coord]) tree[coord] = {};
-    if(!tree[coord][sup]) tree[coord][sup] = [];
-    tree[coord][sup].push(n);
+    if(coord !== curCoord){
+      closeCoord();
+      curCoord = coord;
+      curSup = null;
+      html += `<div class="groupCoord"><div class="groupCoordTitle">Coordenação: ${esc(coord)}</div>`;
+      openCoord = true;
+    }
+
+    if(sup !== curSup){
+      closeSup();
+      curSup = sup;
+      html += `<div class="groupSup"><div class="groupSupTitle">Supervisão: ${esc(sup)}</div>`;
+      openSup = true;
+    }
+
+    html += rowBuilder(n, coord, sup);
   });
-  const coords = Object.keys(tree).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  return { tree, coords };
+
+  closeCoord();
+  return html;
 }
 
-function renderGrouped_(names, rowHtmlFn){
-  const { tree, coords } = groupByCoordSup_(names);
-  if(!coords.length) return `<div class="muted">Nenhum colaborador.</div>`;
-
-  return coords.map(coord=>{
-    const sups = tree[coord];
-    const supKeys = Object.keys(sups).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-    const totalCoord = supKeys.reduce((acc,k)=>acc + (sups[k]?.length||0), 0);
-
-    const supHtml = supKeys.map(sup=>{
-      const listaNomes = (sups[sup]||[]).slice().sort((a,b)=>a.localeCompare(b,'pt-BR'));
-      return `
-        <div class="groupSup">
-          <div class="groupSupTitle">Supervisão: ${esc(sup)} <span class="muted">(${listaNomes.length})</span></div>
-          ${listaNomes.map(n => rowHtmlFn(n, coord, sup)).join("")}
-        </div>
-      `;
-    }).join("");
-
-    return `
-      <div class="groupCoord">
-        <div class="groupCoordTitle">Coordenação: ${esc(coord)} <span class="muted">(${totalCoord})</span></div>
-        ${supHtml}
-      </div>
-    `;
-  }).join("");
-}
-
+/** ✅ step switch leve (sem rebuild) */
 function setStep(s){
   step = s;
-  ["A","B","C","D","E"].forEach(x => document.getElementById("step"+x).classList.remove("active"));
-  document.getElementById("step"+s).classList.add("active");
+  ["A","B","C","D","E"].forEach(x => {
+    const el = document.getElementById("step"+x);
+    el.classList.remove("active","fadeIn");
+  });
+  const cur = document.getElementById("step"+s);
+  cur.classList.add("active","fadeIn");
+  setTimeout(()=>cur.classList.remove("fadeIn"), 140);
 }
 
 function normalizeHotelObs_(tipo, obs){
@@ -727,6 +756,521 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   return { ok:true };
 }
 
+/** ✅ Atualiza quem não é OK nos painéis B/C/D/E sem re-render */
+function syncBlockedRowsAllSteps_(){
+  const names = orderedNames;
+  names.forEach(nome=>{
+    const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
+
+    ["B","C","D","E"].forEach(k=>{
+      const row = domIndex[k].get(nome);
+      if(!row) return;
+      // aqui você pode escolher: ocultar ou só bloquear
+      // ocultar deixa mais leve visualmente:
+      row.classList.toggle("rowHidden", !ok);
+      row.classList.toggle("rowBlocked", !ok);
+    });
+
+    // A só muda opacidade
+    const rowA = domIndex["A"].get(nome);
+    if(rowA) rowA.style.opacity = ok ? "1" : "0.55";
+  });
+}
+
+/** ✅ Cache D-1 (front) */
+async function getHotelD1Cached_(nome, dataRef){
+  const k = `${dataRef}|${nome}`;
+  if(cacheD1.hotel.has(k)) return cacheD1.hotel.get(k);
+  const r = await api("verificarHotelD1", { nome, dataRef });
+  cacheD1.hotel.set(k, r);
+  return r;
+}
+async function getAlojD1Cached_(nome, dataRef){
+  const k = `${dataRef}|${nome}`;
+  if(cacheD1.aloj.has(k)) return cacheD1.aloj.get(k);
+  const r = await api("verificarAlojamentoD1", { nome, dataRef });
+  cacheD1.aloj.set(k, r);
+  return r;
+}
+
+/** ✅ Atualiza só o input da estadia */
+function setEstadiaObsUI_(nome){
+  const el = document.getElementById("eobs_" + idSafe(nome));
+  if(el) el.value = form[nome]?.estadia_obs || "";
+}
+
+/** ===== BUILD DOM 1x POR CARGA ===== */
+function buildAllStepsDom_(){
+  ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
+
+  // A
+  document.getElementById("listaA").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
+    const extraLine = getOSLocaisLine_(n);
+    const status = String(form[n].disponibilidade_status||"OK");
+    const opacity = status === "OK" ? "1" : "0.55";
+    const rowId = `rowA_${idSafe(n)}`;
+
+    // (vamos indexar depois do innerHTML)
+    return `
+      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}" style="opacity:${opacity}">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+        </div>
+
+        <select data-action="disp" data-nome="${escAttr(n)}">
+          ${["OK","Atestado","Férias","Folga","Falta"].map(op=>`
+            <option ${status===op?"selected":""}>${op}</option>
+          `).join("")}
+        </select>
+
+        <input
+          data-action="dispObs" data-nome="${escAttr(n)}"
+          id="dobs_${idSafe(n)}"
+          placeholder="Obs..."
+          value="${escAttr(form[n].disponibilidade_obs)}">
+      </div>
+    `;
+  });
+
+  // B
+  const dataRef = document.getElementById("dataRef").value.trim();
+  const sexta = isFriday_(dataRef);
+
+  document.getElementById("listaB").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
+    const tipo = String(form[n].estadia_tipo||"Casa").trim();
+    const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
+    const extraLine = getOSLocaisLine_(n);
+    const rowId = `rowB_${idSafe(n)}`;
+
+    return `
+      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+        </div>
+
+        <select data-action="estadiaTipo" data-nome="${escAttr(n)}">
+          ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
+            <option ${tipo===op?"selected":""}>${op}</option>
+          `).join("")}
+        </select>
+
+        <div>
+          <input
+            data-action="estadiaObs" data-nome="${escAttr(n)}"
+            id="eobs_${idSafe(n)}"
+            placeholder="Obs..."
+            value="${escAttr(form[n].estadia_obs)}">
+
+          <div data-wkndwrap="${escAttr(n)}" style="margin-top:8px; ${showWknd ? "" : "display:none;"}">
+            <div class="chkRow">
+              <input type="checkbox"
+                data-action="wknd" data-nome="${escAttr(n)}"
+                ${form[n].wknd_hosp ? "checked" : ""}>
+              <span>Hospedar sábado/domingo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  // C
+  document.getElementById("listaC").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
+    const extraLine = getOSLocaisLine_(n);
+    const rowId = `rowC_${idSafe(n)}`;
+    const cafe = String(form[n].cafe_valor||"NÃO").toUpperCase()==="SIM";
+    const alm  = String(form[n].almoco_valor||"NÃO").toUpperCase()==="SIM";
+    const jan  = String(form[n].janta_valor||"NÃO").toUpperCase()==="SIM";
+
+    return `
+      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+        </div>
+
+        <div class="chkRow">
+          <input type="checkbox" data-action="cafe" data-nome="${escAttr(n)}" ${cafe?"checked":""}>
+          <span>Café (SIM)</span>
+        </div>
+
+        <div class="chkRow" style="justify-content:space-between;">
+          <label class="chkRow" style="margin:0;">
+            <input type="checkbox" data-action="almoco" data-nome="${escAttr(n)}" ${alm?"checked":""}>
+            <span>Almoço (SIM)</span>
+          </label>
+
+          <label class="chkRow" style="margin:0;">
+            <input type="checkbox" data-action="janta" data-nome="${escAttr(n)}" ${jan?"checked":""}>
+            <span>Janta (SIM)</span>
+          </label>
+        </div>
+      </div>
+    `;
+  });
+
+  // D
+  document.getElementById("listaD").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
+    const extraLine = getOSLocaisLine_(n);
+    const rowId = `rowD_${idSafe(n)}`;
+    const tipo = String(form[n].deslocamento_tipo||"");
+
+    return `
+      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+        </div>
+
+        <select data-action="deslocTipo" data-nome="${escAttr(n)}">
+          ${["","Frota (motorista)","Carona","Uber","Km"].map(op=>`
+            <option ${tipo===op?"selected":""}>${op}</option>
+          `).join("")}
+        </select>
+
+        <input data-action="deslocObs" data-nome="${escAttr(n)}" placeholder="Obs..."
+          value="${escAttr(form[n].deslocamento_obs)}">
+      </div>
+    `;
+  });
+
+  // E
+  document.getElementById("listaE").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
+    const extraLine = getOSLocaisLine_(n);
+    const rowId = `rowE_${idSafe(n)}`;
+
+    const rec = Number(form[n].extras_recarga_valor||0) > 0;
+    const pas = Number(form[n].extras_passagem_valor||0) > 0;
+    const lav = Number(form[n].extras_lavagem_valor||0) > 0;
+    const man = Number(form[n].manut_veic_valor||0) > 0;
+
+    return `
+      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+        <div class="nomeMain">
+          <div class="nome">${esc(n)}</div>
+          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+        </div>
+
+        <div class="inlineVal" style="flex-direction:column; align-items:flex-start;">
+          <div class="inlineVal">
+            <div class="chkRow">
+              <input type="checkbox" data-action="extraToggle" data-field="extras_recarga_valor" data-nome="${escAttr(n)}" ${rec?"checked":""}>
+              <span>Recarga</span>
+            </div>
+            <input type="number" step="0.01" class="${rec?"":"extraInputHidden"}"
+              data-action="extraVal" data-field="extras_recarga_valor" data-nome="${escAttr(n)}"
+              placeholder="Valor" value="${escAttr(form[n].extras_recarga_valor)}">
+          </div>
+
+          <div class="inlineVal">
+            <div class="chkRow">
+              <input type="checkbox" data-action="extraToggle" data-field="extras_passagem_valor" data-nome="${escAttr(n)}" ${pas?"checked":""}>
+              <span>Passagem</span>
+            </div>
+            <input type="number" step="0.01" class="${pas?"":"extraInputHidden"}"
+              data-action="extraVal" data-field="extras_passagem_valor" data-nome="${escAttr(n)}"
+              placeholder="Valor" value="${escAttr(form[n].extras_passagem_valor)}">
+          </div>
+
+          <div class="inlineVal">
+            <div class="chkRow">
+              <input type="checkbox" data-action="extraToggle" data-field="extras_lavagem_valor" data-nome="${escAttr(n)}" ${lav?"checked":""}>
+              <span>Lavagem</span>
+            </div>
+            <input type="number" step="0.01" class="${lav?"":"extraInputHidden"}"
+              data-action="extraVal" data-field="extras_lavagem_valor" data-nome="${escAttr(n)}"
+              placeholder="Valor" value="${escAttr(form[n].extras_lavagem_valor)}">
+          </div>
+
+          <div class="inlineVal">
+            <div class="chkRow">
+              <input type="checkbox" data-action="extraToggle" data-field="manut_veic_valor" data-nome="${escAttr(n)}" ${man?"checked":""}>
+              <span>Manutenção Veiculo</span>
+            </div>
+            <input type="number" step="0.01" class="${man?"":"extraInputHidden"}"
+              data-action="extraVal" data-field="manut_veic_valor" data-nome="${escAttr(n)}"
+              placeholder="Valor" value="${escAttr(form[n].manut_veic_valor)}">
+          </div>
+        </div>
+
+        <div>
+          <input data-action="extrasObs" data-nome="${escAttr(n)}"
+            placeholder="Extras_Obs..." value="${escAttr(form[n].extras_obs||"")}">
+        </div>
+      </div>
+    `;
+  });
+
+  // indexar elementos DOM após inserir HTML
+  orderedNames.forEach(n=>{
+    domIndex.A.set(n, document.getElementById(`rowA_${idSafe(n)}`));
+    domIndex.B.set(n, document.getElementById(`rowB_${idSafe(n)}`));
+    domIndex.C.set(n, document.getElementById(`rowC_${idSafe(n)}`));
+    domIndex.D.set(n, document.getElementById(`rowD_${idSafe(n)}`));
+    domIndex.E.set(n, document.getElementById(`rowE_${idSafe(n)}`));
+  });
+
+  syncBlockedRowsAllSteps_();
+}
+
+/** ===== Delegation A ===== */
+function bindDelegationA_(){
+  const box = document.getElementById("listaA");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "disp") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    form[nome].disponibilidade_status = el.value;
+
+    // atualiza bloqueio nos outros painéis sem rebuild
+    syncBlockedRowsAllSteps_();
+  });
+
+  box.addEventListener("input", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "dispObs") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].disponibilidade_obs = el.value;
+  });
+}
+
+/** ===== Delegation B ===== */
+function bindDelegationB_(){
+  const box = document.getElementById("listaB");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", async (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    if(act === "estadiaTipo"){
+      await onEstadiaChangeByNome_(nome, el.value);
+
+      // sexta: mostra/esconde wknd sem rebuild
+      const dataRef = document.getElementById("dataRef").value.trim();
+      const sexta = isFriday_(dataRef);
+      const tipo = String(el.value||"").trim();
+      const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
+
+      const wk = box.querySelector(`[data-wkndwrap="${cssEsc_(nome)}"]`);
+      if(wk) wk.style.display = showWknd ? "" : "none";
+      return;
+    }
+
+    if(act === "wknd"){
+      form[nome].wknd_hosp = !!el.checked;
+      return;
+    }
+  });
+
+  box.addEventListener("input", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "estadiaObs") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].estadia_obs = el.value;
+  });
+}
+
+/** ===== Delegation C ===== */
+function bindDelegationC_(){
+  const box = document.getElementById("listaC");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(!act) return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    if(act === "cafe")   form[nome].cafe_valor = el.checked ? "SIM" : "NÃO";
+    if(act === "almoco") form[nome].almoco_valor = el.checked ? "SIM" : "NÃO";
+    if(act === "janta")  form[nome].janta_valor = el.checked ? "SIM" : "NÃO";
+  });
+}
+
+/** ===== Delegation D ===== */
+function bindDelegationD_(){
+  const box = document.getElementById("listaD");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "deslocTipo") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].deslocamento_tipo = el.value;
+  });
+
+  box.addEventListener("input", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "deslocObs") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].deslocamento_obs = el.value;
+  });
+}
+
+/** ===== Delegation E ===== */
+function bindDelegationE_(){
+  const box = document.getElementById("listaE");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    if(act === "extraToggle"){
+      const field = el.getAttribute("data-field");
+      if(!field) return;
+
+      if(!el.checked){
+        form[nome][field] = 0;
+      } else {
+        if(Number(form[nome][field]||0) <= 0) form[nome][field] = 1.00;
+      }
+
+      // mostra/esconde input sem rebuild
+      const input = box.querySelector(`input[data-action="extraVal"][data-nome="${cssEsc_(nome)}"][data-field="${cssEsc_(field)}"]`);
+      if(input){
+        input.classList.toggle("extraInputHidden", !el.checked);
+        if(el.checked) input.value = String(form[nome][field] || 0);
+      }
+      return;
+    }
+  });
+
+  box.addEventListener("input", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    if(act === "extraVal"){
+      const field = el.getAttribute("data-field");
+      if(!field) return;
+      const num = Number(String(el.value||"").replace(",", "."));
+      form[nome][field] = isNaN(num) ? 0 : num;
+      return;
+    }
+
+    if(act === "extrasObs"){
+      form[nome].extras_obs = el.value;
+      return;
+    }
+  });
+}
+
+/** ===== Painel B (Hotel/Alojamento D-1) ===== */
+async function onEstadiaChangeByNome_(nome, val){
+  if(!form[nome]) return;
+
+  form[nome].estadia_tipo = val;
+
+  const tipo = String(val||"").trim();
+  const sup =
+    String(supPorNomeFast[nome] || ctx?.mapSupPorNome?.[nome] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
+
+  const dataRef = document.getElementById("dataRef").value.trim();
+
+  if(tipo === "Hotel"){
+    setRowLoading_(nome, true);
+    const r = await getHotelD1Cached_(nome, dataRef);
+    setRowLoading_(nome, false);
+
+    if(r && r.ok && r.found){
+      const parts = [];
+      if(r.cidade) parts.push(`Cidade: ${r.cidade}`);
+      if(r.hotel)  parts.push(`Hotel: ${r.hotel}`);
+      if(r.localizacaoHotel) parts.push(`Localização: ${r.localizacaoHotel}`);
+      if(r.embarque) parts.push(`Embarque: ${r.embarque}`);
+      form[nome].estadia_obs = parts.join(" | ");
+      setEstadiaObsUI_(nome);
+      return;
+    }
+
+    const ask = prompt(`Hotel não encontrado no D-1 para:\n${nome}\n\nInforme Cidade/UF (ex: Londrina/PR):`, "");
+    form[nome].estadia_obs = ask ? `Cidade: ${ask}` : "";
+    setEstadiaObsUI_(nome);
+    return;
+  }
+
+  if(tipo === "Alojamento"){
+    setRowLoading_(nome, true);
+    const r = await getAlojD1Cached_(nome, dataRef);
+    setRowLoading_(nome, false);
+
+    if(r && r.ok && r.found && r.alojamento){
+      form[nome].estadia_obs = `Alojamento: ${r.alojamento}`;
+      setEstadiaObsUI_(nome);
+      return;
+    }
+
+    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30);
+    let escolha = "";
+
+    if(opcoes.length){
+      const lista = opcoes.map((x,i)=> `${i+1} - ${x}`).join("\n");
+      const resp = prompt(
+        `Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nEscolha pelo número ou digite o nome:\n\n${lista}`,
+        ""
+      );
+
+      if(resp){
+        const n = Number(resp);
+        if(!isNaN(n) && n >= 1 && n <= opcoes.length) escolha = opcoes[n-1];
+        else escolha = resp.trim();
+      }
+    } else {
+      const resp = prompt(`Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nDigite o nome do alojamento:`, "");
+      if(resp) escolha = resp.trim();
+    }
+
+    form[nome].estadia_obs = escolha ? `Alojamento: ${escolha}` : "";
+    setEstadiaObsUI_(nome);
+    return;
+  }
+
+  return;
+}
+
+/** ===== Toggle almoço sem re-render ===== */
+function toggleAllAlmoco(on){
+  orderedNames.forEach(n=>{
+    if(!PROSSEGUIR(form[n].disponibilidade_status)) return;
+    form[n].almoco_valor = on ? "SIM" : "NÃO";
+    const row = domIndex.C.get(n);
+    if(!row) return;
+    const chk = row.querySelector(`input[data-action="almoco"][data-nome="${cssEsc_(n)}"]`);
+    if(chk) chk.checked = on;
+  });
+}
+
+/** ======================
+ * ✅ CARREGAR CONTEXTO
+ * ====================== */
 async function carregar(){
   const dStr = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dStr)){
@@ -752,7 +1296,6 @@ async function carregar(){
 
   ctx = res;
 
-  // FAST MAPS (sem find em loops)
   supPorNomeFast = {};
   coordPorNomeFast = {};
   (res.liberados || []).forEach(p=>{
@@ -794,22 +1337,30 @@ async function carregar(){
       extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
       extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
 
-      /** ✅ PADRÃO ÚNICO: manut_veic_valor */
       manut_veic_valor: Number(prev.manut_veic ?? prev.manut_veic_valor ?? 0),
 
       extras_obs: prev.extras_obs ?? ""
     };
   });
 
-  window.form = form;
+  orderedNames = computeOrderedNames_();
 
-  renderA();
+  // Renderiza tudo 1x
+  buildAllStepsDom_();
+
+  // bind 1x
+  bindDelegationA_();
+  bindDelegationB_();
+  bindDelegationC_();
+  bindDelegationD_();
+  bindDelegationE_();
+
   setStep("A");
   setDebug("OK");
   show("bottomBar");
 }
 
-/** ✅ Salva etapa e roda posProcessar (AGORA: espera retorno p/ auto PDF na etapa E) */
+/** ✅ Salva etapa e ENFILEIRA pós-processo (não trava UI) */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -821,6 +1372,7 @@ async function salvarEtapaAtual_(){
     registros = namesAll.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
+      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       disponibilidade_status: form[n].disponibilidade_status,
       disponibilidade_obs: form[n].disponibilidade_obs
     }));
@@ -829,34 +1381,35 @@ async function salvarEtapaAtual_(){
     registros = namesAll.map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
+      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       estadia_tipo: form[n].estadia_tipo,
       estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
     }));
   }
   if(step === "C"){
-    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    registros = names.map(n => ({
+    registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
+      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       cafe_valor: form[n].cafe_valor,
       almoco_valor: form[n].almoco_valor,
       janta_valor: form[n].janta_valor
     }));
   }
   if(step === "D"){
-    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    registros = names.map(n => ({
+    registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
+      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       deslocamento_tipo: form[n].deslocamento_tipo,
       deslocamento_obs: form[n].deslocamento_obs
     }));
   }
   if(step === "E"){
-    const names = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-    registros = names.map(n => ({
+    registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
+      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
       extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
       extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
@@ -870,22 +1423,8 @@ async function salvarEtapaAtual_(){
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  /** ✅ AGORA: espera o retorno do posProcessar */
-  const pp = await api("posProcessar", {
-    payload: { dataReferencia: dataRef, etapa: step, registros }
-  });
-
-  if(!pp || !pp.ok){
-    const err = pp?.error || "Erro no pós-processamento";
-    if(isAuthError_(err)) { setBusy(false); logoutForcado(err); return { ok:false }; }
-    setDebug(err);
-  }
-
-  /** ✅ AUTO DOWNLOAD PDF (apenas na etapa E) */
-  if(step === "E" && pp && pp.ok && pp.pdf_b64){
-    downloadPdfFromB64_(pp.pdf_b64, pp.pdf_fileName || "programacao.pdf");
-    setDebug("PDF baixado automaticamente ✅");
-  }
+  // ✅ enfileira (não espera)
+  api("posProcessar", { payload: { dataReferencia: dataRef, etapa: step, registros } }).catch(()=>{});
 
   // regra sexta (mantida)
   if(step === "B" && isFriday_(dataRef)){
@@ -898,6 +1437,7 @@ async function salvarEtapaAtual_(){
       .map(n => ({
         colaborador: n,
         coordenacao: form[n].coordenacao,
+        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
         estadia_tipo: form[n].estadia_tipo,
         estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
       }));
@@ -925,439 +1465,23 @@ async function avancar(){
   if(step==="A"){
     const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK)."); return; }
-    renderB(); setStep("B"); return;
+    setStep("B"); return;
   }
-  if(step==="B"){ renderC(); setStep("C"); return; }
-  if(step==="C"){ renderD(); setStep("D"); return; }
-  if(step==="D"){ renderE(); setStep("E"); return; }
+  if(step==="B"){ setStep("C"); return; }
+  if(step==="C"){ setStep("D"); return; }
+  if(step==="D"){ setStep("E"); return; }
   if(step==="E"){
-    alert("✅ Programação salva! (PDF será baixado automaticamente se disponível)");
+    alert("✅ Programação salva! (Pós-processo roda em background)");
     setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 1200);
   }
 }
 
 function voltar(){
   if(busy) return;
-  if(step==="B"){ renderA(); setStep("A"); return; }
-  if(step==="C"){ renderB(); setStep("B"); return; }
-  if(step==="D"){ renderC(); setStep("C"); return; }
-  if(step==="E"){ renderD(); setStep("D"); return; }
-}
-
-/** ===========================
- * ✅ Delegation (A e B)
- * =========================== */
-function bindDelegationA_(){
-  const box = document.getElementById("listaA");
-  if(!box || box._bound) return;
-  box._bound = true;
-
-  box.addEventListener("change", (e)=>{
-    const el = e.target;
-    const act = el.getAttribute("data-action");
-    if(act !== "disp") return;
-    const nome = el.getAttribute("data-nome") || "";
-    if(!nome || !form[nome]) return;
-
-    form[nome].disponibilidade_status = el.value;
-
-    // ✅ sem re-render do painel: só feedback visual
-    const row = el.closest(".nomeRow");
-    if(row) row.style.opacity = (el.value === "OK") ? "1" : "0.55";
-  });
-
-  box.addEventListener("input", (e)=>{
-    const el = e.target;
-    const act = el.getAttribute("data-action");
-    if(act !== "dispObs") return;
-    const nome = el.getAttribute("data-nome") || "";
-    if(!nome || !form[nome]) return;
-    form[nome].disponibilidade_obs = el.value;
-  });
-}
-
-function bindDelegationB_(){
-  const box = document.getElementById("listaB");
-  if(!box || box._bound) return;
-  box._bound = true;
-
-  box.addEventListener("change", async (e)=>{
-    const el = e.target;
-    const act = el.getAttribute("data-action");
-    if(act !== "estadiaTipo") return;
-    const nome = el.getAttribute("data-nome") || "";
-    if(!nome || !form[nome]) return;
-
-    await onEstadiaChangeByNome_(nome, el.value);
-  });
-
-  box.addEventListener("input", (e)=>{
-    const el = e.target;
-    const act = el.getAttribute("data-action");
-    if(act !== "estadiaObs") return;
-    const nome = el.getAttribute("data-nome") || "";
-    if(!nome || !form[nome]) return;
-    form[nome].estadia_obs = el.value;
-  });
-
-  box.addEventListener("change", (e)=>{
-    const el = e.target;
-    const act = el.getAttribute("data-action");
-    if(act !== "wknd") return;
-    const nome = el.getAttribute("data-nome") || "";
-    if(!nome || !form[nome]) return;
-    form[nome].wknd_hosp = !!el.checked;
-  });
-}
-
-/** ✅ Cache D-1 (front) */
-async function getHotelD1Cached_(nome, dataRef){
-  const k = `${dataRef}|${nome}`;
-  if(cacheD1.hotel.has(k)) return cacheD1.hotel.get(k);
-  const r = await api("verificarHotelD1", { nome, dataRef });
-  cacheD1.hotel.set(k, r);
-  return r;
-}
-async function getAlojD1Cached_(nome, dataRef){
-  const k = `${dataRef}|${nome}`;
-  if(cacheD1.aloj.has(k)) return cacheD1.aloj.get(k);
-  const r = await api("verificarAlojamentoD1", { nome, dataRef });
-  cacheD1.aloj.set(k, r);
-  return r;
-}
-
-/** ✅ Atualiza só o input da estadia (sem renderB inteiro) */
-function setEstadiaObsUI_(nome){
-  const el = document.getElementById("eobs_" + idSafe(nome));
-  if(el) el.value = form[nome]?.estadia_obs || "";
-}
-
-/** ===== Painel A ===== */
-function renderA(){
-  const names = Object.keys(form);
-  const html = renderGrouped_(names, (n)=>{
-    const extraLine = getOSLocaisLine_(n);
-    const status = String(form[n].disponibilidade_status||"OK");
-    const opacity = status === "OK" ? "1" : "0.55";
-
-    return `
-      <div class="nomeRow" data-nome="${escAttr(n)}" style="opacity:${opacity}">
-        <div class="nomeMain">
-          <div class="nome">${esc(n)}</div>
-          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
-        </div>
-
-        <select data-action="disp" data-nome="${escAttr(n)}">
-          ${["OK","Atestado","Férias","Folga","Falta"].map(op=>`
-            <option ${status===op?"selected":""}>${op}</option>
-          `).join("")}
-        </select>
-
-        <input
-          data-action="dispObs" data-nome="${escAttr(n)}"
-          id="dobs_${idSafe(n)}"
-          placeholder="Obs..."
-          value="${escAttr(form[n].disponibilidade_obs)}">
-      </div>
-    `;
-  });
-
-  document.getElementById("listaA").innerHTML = html;
-  bindDelegationA_();
-}
-
-/** ===== Painel B (Hotel/Alojamento D-1) ===== */
-async function onEstadiaChangeByNome_(nome, val){
-  if(!form[nome]) return;
-
-  form[nome].estadia_tipo = val;
-
-  const tipo = String(val||"").trim();
-  const sup =
-    String(supPorNomeFast[nome] || ctx?.mapSupPorNome?.[nome] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
-
-  const dataRef = document.getElementById("dataRef").value.trim();
-
-  // HOTEL: tenta D-1 na PRODUÇÃO
-  if(tipo === "Hotel"){
-    setRowLoading_(nome, true);
-    const r = await getHotelD1Cached_(nome, dataRef);
-    setRowLoading_(nome, false);
-
-    if(r && r.ok && r.found){
-      const parts = [];
-      if(r.cidade) parts.push(`Cidade: ${r.cidade}`);
-      if(r.hotel)  parts.push(`Hotel: ${r.hotel}`);
-      if(r.localizacaoHotel) parts.push(`Localização: ${r.localizacaoHotel}`);
-      if(r.embarque) parts.push(`Embarque: ${r.embarque}`);
-      form[nome].estadia_obs = parts.join(" | ");
-
-      // ✅ sem renderB inteiro
-      setEstadiaObsUI_(nome);
-      return;
-    }
-
-    const ask = prompt(`Hotel não encontrado no D-1 para:\n${nome}\n\nInforme Cidade/UF (ex: Londrina/PR):`, "");
-    form[nome].estadia_obs = ask ? `Cidade: ${ask}` : "";
-    setEstadiaObsUI_(nome);
-    return;
-  }
-
-  // ALOJAMENTO: tenta D-1 na aba Relatórios
-  if(tipo === "Alojamento"){
-    setRowLoading_(nome, true);
-    const r = await getAlojD1Cached_(nome, dataRef);
-    setRowLoading_(nome, false);
-
-    if(r && r.ok && r.found && r.alojamento){
-      form[nome].estadia_obs = `Alojamento: ${r.alojamento}`;
-      setEstadiaObsUI_(nome);
-      return;
-    }
-
-    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30);
-    let escolha = "";
-
-    if(opcoes.length){
-      const lista = opcoes.map((x,i)=> `${i+1} - ${x}`).join("\n");
-      const resp = prompt(
-        `Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nEscolha pelo número ou digite o nome:\n\n${lista}`,
-        ""
-      );
-
-      if(resp){
-        const n = Number(resp);
-        if(!isNaN(n) && n >= 1 && n <= opcoes.length) escolha = opcoes[n-1];
-        else escolha = resp.trim();
-      }
-    } else {
-      const resp = prompt(`Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nDigite o nome do alojamento:`, "");
-      if(resp) escolha = resp.trim();
-    }
-
-    form[nome].estadia_obs = escolha ? `Alojamento: ${escolha}` : "";
-    setEstadiaObsUI_(nome);
-    return;
-  }
-
-  // Casa / Fazenda: nada
-  return;
-}
-
-function renderB(){
-  const names = Object.keys(form);
-  const dataRef = document.getElementById("dataRef").value.trim();
-  const sexta = isFriday_(dataRef);
-
-  const html = renderGrouped_(names, (n)=>{
-    const tipo = String(form[n].estadia_tipo||"Casa").trim();
-    const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
-    const extraLine = getOSLocaisLine_(n);
-
-    return `
-      <div class="nomeRow" data-nome="${escAttr(n)}" style="opacity:${PROSSEGUIR(form[n].disponibilidade_status) ? "1" : "0.55"}">
-        <div class="nomeMain">
-          <div class="nome">${esc(n)}</div>
-          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
-        </div>
-
-        <select data-action="estadiaTipo" data-nome="${escAttr(n)}">
-          ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
-            <option ${tipo===op?"selected":""}>${op}</option>
-          `).join("")}
-        </select>
-
-        <div>
-          <input
-            data-action="estadiaObs" data-nome="${escAttr(n)}"
-            id="eobs_${idSafe(n)}"
-            placeholder="Obs..."
-            value="${escAttr(form[n].estadia_obs)}">
-
-          ${showWknd ? `
-            <div class="chkRow" style="margin-top:8px;">
-              <input type="checkbox"
-                data-action="wknd" data-nome="${escAttr(n)}"
-                ${form[n].wknd_hosp ? "checked" : ""}>
-              <span>Hospedar sábado/domingo</span>
-            </div>
-          ` : ``}
-        </div>
-      </div>
-    `;
-  });
-
-  document.getElementById("listaB").innerHTML = html;
-  bindDelegationB_();
-}
-
-/** ===== Painel C ===== */
-function setSimNao_(nome, campo, checked){
-  if(!form[nome]) return;
-  form[nome][campo] = checked ? "SIM" : "NÃO";
-}
-function isSim_(nome, campo){
-  return String(form[nome][campo]||"").trim().toUpperCase() === "SIM";
-}
-function toggleAllAlmoco(on){
-  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-  names.forEach(n => form[n].almoco_valor = on ? "SIM" : "NÃO");
-  renderC();
-}
-function renderC(){
-  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-  const html = renderGrouped_(names, (n)=>{
-    const extraLine = getOSLocaisLine_(n);
-    return `
-      <div class="nomeRow" data-nome="${escAttr(n)}">
-        <div class="nomeMain">
-          <div class="nome">${esc(n)}</div>
-          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
-        </div>
-
-        <div class="chkRow">
-          <input type="checkbox" ${isSim_(n,"cafe_valor")?"checked":""}
-            onchange="setSimNao_('${escAttr(n)}','cafe_valor',this.checked)">
-          <span>Café (SIM)</span>
-        </div>
-
-        <div class="chkRow" style="justify-content:space-between;">
-          <label class="chkRow" style="margin:0;">
-            <input type="checkbox" ${isSim_(n,"almoco_valor")?"checked":""}
-              onchange="setSimNao_('${escAttr(n)}','almoco_valor',this.checked)">
-            <span>Almoço (SIM)</span>
-          </label>
-
-          <label class="chkRow" style="margin:0;">
-            <input type="checkbox" ${isSim_(n,"janta_valor")?"checked":""}
-              onchange="setSimNao_('${escAttr(n)}','janta_valor',this.checked)">
-            <span>Janta (SIM)</span>
-          </label>
-        </div>
-      </div>
-    `;
-  });
-  document.getElementById("listaC").innerHTML = html;
-}
-
-/** ===== Painel D ===== */
-function onDeslocamentoChange(nome, val){
-  if(!form[nome]) return;
-  form[nome].deslocamento_tipo = val;
-}
-function setDeslocObs(nome, val){
-  if(!form[nome]) return;
-  form[nome].deslocamento_obs = val;
-}
-function renderD(){
-  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-  const html = renderGrouped_(names, (n)=>{
-    const extraLine = getOSLocaisLine_(n);
-    return `
-      <div class="nomeRow" data-nome="${escAttr(n)}">
-        <div class="nomeMain">
-          <div class="nome">${esc(n)}</div>
-          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
-        </div>
-
-        <select onchange="onDeslocamentoChange('${escAttr(n)}', this.value)">
-          ${["","Frota (motorista)","Carona","Uber","Km"].map(op=>`
-            <option ${form[n].deslocamento_tipo===op?"selected":""}>${op}</option>
-          `).join("")}
-        </select>
-
-        <input placeholder="Obs..."
-          value="${escAttr(form[n].deslocamento_obs)}"
-          oninput="setDeslocObs('${escAttr(n)}', this.value)">
-      </div>
-    `;
-  });
-  document.getElementById("listaD").innerHTML = html;
-}
-
-/** ===== Painel E ===== */
-function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
-function setExtraChecked_(nome, campo, checked){
-  if(!form[nome]) return;
-  if(!checked) form[nome][campo] = 0;
-  else if(Number(form[nome][campo] || 0) <= 0) form[nome][campo] = 1.00;
-  renderE();
-}
-function setExtraValor_(nome, campo, val){
-  if(!form[nome]) return;
-  const num = Number(String(val||"").replace(",", "."));
-  form[nome][campo] = isNaN(num) ? 0 : num;
-}
-function setExtrasObs(nome, val){
-  if(!form[nome]) return;
-  form[nome].extras_obs = val;
-}
-function renderE(){
-  const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-  const html = renderGrouped_(names, (n)=>{
-    const extraLine = getOSLocaisLine_(n);
-
-    const recOn = isExtraOn_(n,"extras_recarga_valor");
-    const pasOn = isExtraOn_(n,"extras_passagem_valor");
-    const lavOn = isExtraOn_(n,"extras_lavagem_valor");
-    const manOn = isExtraOn_(n,"manut_veic_valor");
-
-    return `
-      <div class="nomeRow" data-nome="${escAttr(n)}">
-        <div class="nomeMain">
-          <div class="nome">${esc(n)}</div>
-          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
-        </div>
-
-        <div class="inlineVal">
-          <div class="chkRow">
-            <input type="checkbox" ${recOn?"checked":""}
-              onchange="setExtraChecked_('${escAttr(n)}','extras_recarga_valor',this.checked)">
-            <span>Recarga</span>
-          </div>
-          ${recOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${escAttr(form[n].extras_recarga_valor)}"
-            oninput="setExtraValor_('${escAttr(n)}','extras_recarga_valor',this.value)">` : ``}
-        </div>
-
-        <div class="inlineVal">
-          <div class="chkRow">
-            <input type="checkbox" ${pasOn?"checked":""}
-              onchange="setExtraChecked_('${escAttr(n)}','extras_passagem_valor',this.checked)">
-            <span>Passagem</span>
-          </div>
-          ${pasOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${escAttr(form[n].extras_passagem_valor)}"
-            oninput="setExtraValor_('${escAttr(n)}','extras_passagem_valor',this.value)">` : ``}
-
-          <div class="chkRow" style="margin-left:10px;">
-            <input type="checkbox" ${lavOn?"checked":""}
-              onchange="setExtraChecked_('${escAttr(n)}','extras_lavagem_valor',this.checked)">
-            <span>Lavagem</span>
-          </div>
-          ${lavOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${escAttr(form[n].extras_lavagem_valor)}"
-            oninput="setExtraValor_('${escAttr(n)}','extras_lavagem_valor',this.value)">` : ``}
-
-          <div class="chkRow" style="margin-left:10px;">
-            <input type="checkbox" ${manOn?"checked":""}
-              onchange="setExtraChecked_('${escAttr(n)}','manut_veic_valor',this.checked)">
-            <span>Manutenção Veiculo</span>
-          </div>
-          ${manOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${escAttr(form[n].manut_veic_valor)}"
-            oninput="setExtraValor_('${escAttr(n)}','manut_veic_valor',this.value)">` : ``}
-        </div>
-      </div>
-
-      <div style="margin:8px 0 14px;">
-        <input placeholder="Extras_Obs..." value="${escAttr(form[n].extras_obs||"")}"
-          oninput="setExtrasObs('${escAttr(n)}', this.value)">
-      </div>
-    `;
-  });
-
-  document.getElementById("listaE").innerHTML = html;
+  if(step==="B"){ setStep("A"); return; }
+  if(step==="C"){ setStep("B"); return; }
+  if(step==="D"){ setStep("C"); return; }
+  if(step==="E"){ setStep("D"); return; }
 }
 
 /** ===== START ===== */
