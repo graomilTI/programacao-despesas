@@ -31,7 +31,15 @@
     .groupSup:first-child{ border-top:none; padding-top:0; margin-top:0; }
     .groupSupTitle{ font-weight:700; font-size:13px; margin:0 0 8px; color:#374151; }
 
-    .nomeRow{ display:grid; grid-template-columns: 1fr 220px 1fr; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #f3f4f6; }
+    .nomeRow{
+      display:grid;
+      grid-template-columns: 1fr 220px 1fr;
+      gap:10px;
+      align-items:center;
+      padding:8px 0;
+      border-bottom:1px solid #f3f4f6;
+      transition: opacity .12s ease;
+    }
     .nomeRow:last-child{ border-bottom:none; }
 
     .nomeMain{ display:flex; flex-direction:column; gap:2px; }
@@ -343,6 +351,16 @@ let busy = false;
 
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 
+/** ✅ FAST MAPS (evita find dentro de loops) */
+let supPorNomeFast = {};      // nome -> supervisão
+let coordPorNomeFast = {};    // nome -> coordenação (p/ fallback)
+
+/** ✅ Cache D-1 no front (ganho rápido quando gestor troca ida/volta) */
+const cacheD1 = {
+  hotel: new Map(), // key: `${dataRef}|${nome}`
+  aloj: new Map()
+};
+
 /** ✅ PROSSEGUIR */
 const PROSSEGUIR = (st) => {
   const s = String(st||"").trim().toUpperCase();
@@ -350,31 +368,18 @@ const PROSSEGUIR = (st) => {
 };
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
-function encName(n){ return encodeURIComponent(String(n||"")); }
-function decName(n){ return decodeURIComponent(String(n||"")); }
+function escAttr(s){ return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
+function cssEsc_(s){
+  try{
+    if(window.CSS && typeof CSS.escape === "function") return CSS.escape(String(s));
+  }catch(e){}
+  return String(s).replace(/["\\]/g, "\\$&");
+}
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
-
-/** ✅ PATCH: setters centralizados (corrige “index” do form) */
-function setField_(ne, field, value){
-  const nome = decName(ne);
-  if(!form || !form[nome]) return;
-  form[nome][field] = value;
-}
-function setFieldNumber_(ne, field, value){
-  const nome = decName(ne);
-  if(!form || !form[nome]) return;
-  const num = Number(String(value ?? "").replace(",", "."));
-  form[nome][field] = isNaN(num) ? 0 : num;
-}
-function setFieldBool_(ne, field, checked){
-  const nome = decName(ne);
-  if(!form || !form[nome]) return;
-  form[nome][field] = !!checked;
-}
 
 function openHelpModal(){
   const m = document.getElementById("helpModal");
@@ -401,6 +406,14 @@ function setBusy(v){
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
+}
+
+/** ✅ trava só a linha (p/ Hotel/Alojamento), não a UI inteira */
+function setRowLoading_(nome, on){
+  const row = document.querySelector(`.nomeRow[data-nome="${cssEsc_(nome)}"]`);
+  if(!row) return;
+  row.style.opacity = on ? "0.6" : (PROSSEGUIR(form[nome]?.disponibilidade_status) ? "1" : "0.55");
+  row.style.pointerEvents = on ? "none" : "auto";
 }
 
 function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
@@ -454,6 +467,8 @@ function logoutForcado(msg){
   token = "";
   ctx = null;
   form = {};
+  supPorNomeFast = {};
+  coordPorNomeFast = {};
   window.form = form;
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
@@ -487,6 +502,7 @@ function setLoginMode(mode){
   document.getElementById("loginStatus").innerText = "";
 }
 
+/** ✅ API (Content-Type JSON) */
 async function api(action, args){
   const payload = { action, ...(args||{}) };
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
@@ -497,7 +513,7 @@ async function api(action, args){
   try{
     const res = await fetch(API_BASE, {
       method:"POST",
-      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      headers:{ "Content-Type":"application/json;charset=utf-8" },
       body: JSON.stringify(payload)
     });
     txt = await res.text();
@@ -518,8 +534,6 @@ function base64ToBlob_(b64, mime){
   for(let i=0;i<byteChars.length;i++) byteNumbers[i] = byteChars.charCodeAt(i);
   return new Blob([new Uint8Array(byteNumbers)], { type: mime || "application/pdf" });
 }
-
-/** ✅ NOVO: download direto (usado no auto-download do posProcessar) */
 function downloadPdfFromB64_(b64, fileName){
   const blob = base64ToBlob_(b64, "application/pdf");
   const url = URL.createObjectURL(blob);
@@ -533,8 +547,6 @@ function downloadPdfFromB64_(b64, fileName){
 
   setTimeout(()=> URL.revokeObjectURL(url), 6000);
 }
-
-/** ✅ Manual: chama gerarPDFProgramacao (continua existindo) */
 async function baixarPDFProgramacao_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
@@ -626,16 +638,14 @@ function getOSLocaisLine_(nome){
   return show ? `Embarque: ${show}${more}` : "";
 }
 
-/** ✅ Agrupar por Coordenação e Supervisão */
+/** ✅ Agrupar por Coordenação e Supervisão (SEM find dentro do loop) */
 function groupByCoordSup_(names){
   const tree = {};
   names.forEach(n=>{
-    const coord = String(form[n]?.coordenacao || "SEM COORDENAÇÃO").trim();
+    const coord = String(form[n]?.coordenacao || coordPorNomeFast[n] || "SEM COORDENAÇÃO").trim();
 
     const sup =
-      String(ctx?.mapSupPorNome?.[n] || "").trim() ||
-      String(ctx?.liberados?.find(x => x.colaborador === n)?.supervisao || "").trim() ||
-      "SEM SUPERVISÃO";
+      String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
 
     if(!tree[coord]) tree[coord] = {};
     if(!tree[coord][sup]) tree[coord][sup] = [];
@@ -741,6 +751,14 @@ async function carregar(){
   }
 
   ctx = res;
+
+  // FAST MAPS (sem find em loops)
+  supPorNomeFast = {};
+  coordPorNomeFast = {};
+  (res.liberados || []).forEach(p=>{
+    supPorNomeFast[p.colaborador] = p.supervisao || "";
+    coordPorNomeFast[p.colaborador] = p.coordenacao || "";
+  });
 
   const perfil = res.isAdmin ? "ADMIN" : "GESTOR";
   const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
@@ -926,68 +944,145 @@ function voltar(){
   if(step==="E"){ renderD(); setStep("D"); return; }
 }
 
-/** ===== Painel A ===== */
-function onDispObsInput(ne, val){
-  const nome = decName(ne);
-  if(!form[nome]) return;
-  form[nome].disponibilidade_obs = val;
-}
-function onDispChange(ne, val){
-  const nome = decName(ne);
-  if(!form[nome]) return;
-  form[nome].disponibilidade_status = val;
-  renderA();
+/** ===========================
+ * ✅ Delegation (A e B)
+ * =========================== */
+function bindDelegationA_(){
+  const box = document.getElementById("listaA");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "disp") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    form[nome].disponibilidade_status = el.value;
+
+    // ✅ sem re-render do painel: só feedback visual
+    const row = el.closest(".nomeRow");
+    if(row) row.style.opacity = (el.value === "OK") ? "1" : "0.55";
+  });
+
+  box.addEventListener("input", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "dispObs") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].disponibilidade_obs = el.value;
+  });
 }
 
+function bindDelegationB_(){
+  const box = document.getElementById("listaB");
+  if(!box || box._bound) return;
+  box._bound = true;
+
+  box.addEventListener("change", async (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "estadiaTipo") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+
+    await onEstadiaChangeByNome_(nome, el.value);
+  });
+
+  box.addEventListener("input", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "estadiaObs") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].estadia_obs = el.value;
+  });
+
+  box.addEventListener("change", (e)=>{
+    const el = e.target;
+    const act = el.getAttribute("data-action");
+    if(act !== "wknd") return;
+    const nome = el.getAttribute("data-nome") || "";
+    if(!nome || !form[nome]) return;
+    form[nome].wknd_hosp = !!el.checked;
+  });
+}
+
+/** ✅ Cache D-1 (front) */
+async function getHotelD1Cached_(nome, dataRef){
+  const k = `${dataRef}|${nome}`;
+  if(cacheD1.hotel.has(k)) return cacheD1.hotel.get(k);
+  const r = await api("verificarHotelD1", { nome, dataRef });
+  cacheD1.hotel.set(k, r);
+  return r;
+}
+async function getAlojD1Cached_(nome, dataRef){
+  const k = `${dataRef}|${nome}`;
+  if(cacheD1.aloj.has(k)) return cacheD1.aloj.get(k);
+  const r = await api("verificarAlojamentoD1", { nome, dataRef });
+  cacheD1.aloj.set(k, r);
+  return r;
+}
+
+/** ✅ Atualiza só o input da estadia (sem renderB inteiro) */
+function setEstadiaObsUI_(nome){
+  const el = document.getElementById("eobs_" + idSafe(nome));
+  if(el) el.value = form[nome]?.estadia_obs || "";
+}
+
+/** ===== Painel A ===== */
 function renderA(){
   const names = Object.keys(form);
   const html = renderGrouped_(names, (n)=>{
-    const ne = encName(n);
     const extraLine = getOSLocaisLine_(n);
+    const status = String(form[n].disponibilidade_status||"OK");
+    const opacity = status === "OK" ? "1" : "0.55";
+
     return `
-      <div class="nomeRow">
+      <div class="nomeRow" data-nome="${escAttr(n)}" style="opacity:${opacity}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
         </div>
 
-        <select onchange="onDispChange('${ne}', this.value)">
+        <select data-action="disp" data-nome="${escAttr(n)}">
           ${["OK","Atestado","Férias","Folga","Falta"].map(op=>`
-            <option ${form[n].disponibilidade_status===op?"selected":""}>${op}</option>
+            <option ${status===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
 
-        <input id="dobs_${idSafe(n)}" placeholder="Obs..."
-          value="${esc(form[n].disponibilidade_obs)}"
-          oninput="onDispObsInput('${ne}', this.value)">
+        <input
+          data-action="dispObs" data-nome="${escAttr(n)}"
+          id="dobs_${idSafe(n)}"
+          placeholder="Obs..."
+          value="${escAttr(form[n].disponibilidade_obs)}">
       </div>
     `;
   });
+
   document.getElementById("listaA").innerHTML = html;
+  bindDelegationA_();
 }
 
 /** ===== Painel B (Hotel/Alojamento D-1) ===== */
-async function onEstadiaChange(ne, val){
-  const nome = decName(ne);
+async function onEstadiaChangeByNome_(nome, val){
   if(!form[nome]) return;
 
   form[nome].estadia_tipo = val;
 
   const tipo = String(val||"").trim();
-
-  // Supervisão do colaborador (pra REF do alojamento)
   const sup =
-    String(ctx?.mapSupPorNome?.[nome] || "").trim() ||
-    String(ctx?.liberados?.find(x => x.colaborador === nome)?.supervisao || "").trim() ||
-    "SEM SUPERVISÃO";
+    String(supPorNomeFast[nome] || ctx?.mapSupPorNome?.[nome] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
 
   const dataRef = document.getElementById("dataRef").value.trim();
 
   // HOTEL: tenta D-1 na PRODUÇÃO
   if(tipo === "Hotel"){
-    setBusy(true);
-    const r = await api("verificarHotelD1", { nome, dataRef });
-    setBusy(false);
+    setRowLoading_(nome, true);
+    const r = await getHotelD1Cached_(nome, dataRef);
+    setRowLoading_(nome, false);
 
     if(r && r.ok && r.found){
       const parts = [];
@@ -996,25 +1091,27 @@ async function onEstadiaChange(ne, val){
       if(r.localizacaoHotel) parts.push(`Localização: ${r.localizacaoHotel}`);
       if(r.embarque) parts.push(`Embarque: ${r.embarque}`);
       form[nome].estadia_obs = parts.join(" | ");
-      renderB();
+
+      // ✅ sem renderB inteiro
+      setEstadiaObsUI_(nome);
       return;
     }
 
     const ask = prompt(`Hotel não encontrado no D-1 para:\n${nome}\n\nInforme Cidade/UF (ex: Londrina/PR):`, "");
     form[nome].estadia_obs = ask ? `Cidade: ${ask}` : "";
-    renderB();
+    setEstadiaObsUI_(nome);
     return;
   }
 
   // ALOJAMENTO: tenta D-1 na aba Relatórios
   if(tipo === "Alojamento"){
-    setBusy(true);
-    const r = await api("verificarAlojamentoD1", { nome, dataRef });
-    setBusy(false);
+    setRowLoading_(nome, true);
+    const r = await getAlojD1Cached_(nome, dataRef);
+    setRowLoading_(nome, false);
 
     if(r && r.ok && r.found && r.alojamento){
       form[nome].estadia_obs = `Alojamento: ${r.alojamento}`;
-      renderB();
+      setEstadiaObsUI_(nome);
       return;
     }
 
@@ -1039,11 +1136,12 @@ async function onEstadiaChange(ne, val){
     }
 
     form[nome].estadia_obs = escolha ? `Alojamento: ${escolha}` : "";
-    renderB();
+    setEstadiaObsUI_(nome);
     return;
   }
 
-  renderB();
+  // Casa / Fazenda: nada
+  return;
 }
 
 function renderB(){
@@ -1052,34 +1150,35 @@ function renderB(){
   const sexta = isFriday_(dataRef);
 
   const html = renderGrouped_(names, (n)=>{
-    const ne = encName(n);
     const tipo = String(form[n].estadia_tipo||"Casa").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
     const extraLine = getOSLocaisLine_(n);
 
     return `
-      <div class="nomeRow">
+      <div class="nomeRow" data-nome="${escAttr(n)}" style="opacity:${PROSSEGUIR(form[n].disponibilidade_status) ? "1" : "0.55"}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
         </div>
 
-        <select onchange="onEstadiaChange('${ne}', this.value)">
+        <select data-action="estadiaTipo" data-nome="${escAttr(n)}">
           ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
             <option ${tipo===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
 
         <div>
-          <input id="eobs_${idSafe(n)}"
+          <input
+            data-action="estadiaObs" data-nome="${escAttr(n)}"
+            id="eobs_${idSafe(n)}"
             placeholder="Obs..."
-            value="${esc(form[n].estadia_obs)}"
-            oninput="setField_('${ne}','estadia_obs',this.value)">
+            value="${escAttr(form[n].estadia_obs)}">
 
           ${showWknd ? `
             <div class="chkRow" style="margin-top:8px;">
-              <input type="checkbox" ${form[n].wknd_hosp ? "checked" : ""}
-                onchange="setFieldBool_('${ne}','wknd_hosp',this.checked)">
+              <input type="checkbox"
+                data-action="wknd" data-nome="${escAttr(n)}"
+                ${form[n].wknd_hosp ? "checked" : ""}>
               <span>Hospedar sábado/domingo</span>
             </div>
           ` : ``}
@@ -1089,11 +1188,11 @@ function renderB(){
   });
 
   document.getElementById("listaB").innerHTML = html;
+  bindDelegationB_();
 }
 
 /** ===== Painel C ===== */
-function setSimNao_(ne, campo, checked){
-  const nome = decName(ne);
+function setSimNao_(nome, campo, checked){
   if(!form[nome]) return;
   form[nome][campo] = checked ? "SIM" : "NÃO";
 }
@@ -1108,10 +1207,9 @@ function toggleAllAlmoco(on){
 function renderC(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   const html = renderGrouped_(names, (n)=>{
-    const ne = encName(n);
     const extraLine = getOSLocaisLine_(n);
     return `
-      <div class="nomeRow">
+      <div class="nomeRow" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -1119,20 +1217,20 @@ function renderC(){
 
         <div class="chkRow">
           <input type="checkbox" ${isSim_(n,"cafe_valor")?"checked":""}
-            onchange="setSimNao_('${ne}','cafe_valor',this.checked)">
+            onchange="setSimNao_('${escAttr(n)}','cafe_valor',this.checked)">
           <span>Café (SIM)</span>
         </div>
 
         <div class="chkRow" style="justify-content:space-between;">
           <label class="chkRow" style="margin:0;">
             <input type="checkbox" ${isSim_(n,"almoco_valor")?"checked":""}
-              onchange="setSimNao_('${ne}','almoco_valor',this.checked)">
+              onchange="setSimNao_('${escAttr(n)}','almoco_valor',this.checked)">
             <span>Almoço (SIM)</span>
           </label>
 
           <label class="chkRow" style="margin:0;">
             <input type="checkbox" ${isSim_(n,"janta_valor")?"checked":""}
-              onchange="setSimNao_('${ne}','janta_valor',this.checked)">
+              onchange="setSimNao_('${escAttr(n)}','janta_valor',this.checked)">
             <span>Janta (SIM)</span>
           </label>
         </div>
@@ -1143,32 +1241,34 @@ function renderC(){
 }
 
 /** ===== Painel D ===== */
-function onDeslocamentoChange(ne, val){
-  const nome = decName(ne);
+function onDeslocamentoChange(nome, val){
   if(!form[nome]) return;
   form[nome].deslocamento_tipo = val;
+}
+function setDeslocObs(nome, val){
+  if(!form[nome]) return;
+  form[nome].deslocamento_obs = val;
 }
 function renderD(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   const html = renderGrouped_(names, (n)=>{
-    const ne = encName(n);
     const extraLine = getOSLocaisLine_(n);
     return `
-      <div class="nomeRow">
+      <div class="nomeRow" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
         </div>
 
-        <select onchange="onDeslocamentoChange('${ne}', this.value)">
+        <select onchange="onDeslocamentoChange('${escAttr(n)}', this.value)">
           ${["","Frota (motorista)","Carona","Uber","Km"].map(op=>`
             <option ${form[n].deslocamento_tipo===op?"selected":""}>${op}</option>
           `).join("")}
         </select>
 
         <input placeholder="Obs..."
-          value="${esc(form[n].deslocamento_obs)}"
-          oninput="setField_('${ne}','deslocamento_obs',this.value)">
+          value="${escAttr(form[n].deslocamento_obs)}"
+          oninput="setDeslocObs('${escAttr(n)}', this.value)">
       </div>
     `;
   });
@@ -1177,23 +1277,24 @@ function renderD(){
 
 /** ===== Painel E ===== */
 function isExtraOn_(n, campo){ return Number(form[n][campo]||0) > 0; }
-function setExtraChecked_(ne, campo, checked){
-  const n = decName(ne);
-  if(!form[n]) return;
-  if(!checked) form[n][campo] = 0;
-  else if(Number(form[n][campo] || 0) <= 0) form[n][campo] = 1.00;
+function setExtraChecked_(nome, campo, checked){
+  if(!form[nome]) return;
+  if(!checked) form[nome][campo] = 0;
+  else if(Number(form[nome][campo] || 0) <= 0) form[nome][campo] = 1.00;
   renderE();
 }
-function setExtraValor_(ne, campo, val){
-  const n = decName(ne);
-  if(!form[n]) return;
+function setExtraValor_(nome, campo, val){
+  if(!form[nome]) return;
   const num = Number(String(val||"").replace(",", "."));
-  form[n][campo] = isNaN(num) ? 0 : num;
+  form[nome][campo] = isNaN(num) ? 0 : num;
+}
+function setExtrasObs(nome, val){
+  if(!form[nome]) return;
+  form[nome].extras_obs = val;
 }
 function renderE(){
   const names = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
   const html = renderGrouped_(names, (n)=>{
-    const ne = encName(n);
     const extraLine = getOSLocaisLine_(n);
 
     const recOn = isExtraOn_(n,"extras_recarga_valor");
@@ -1202,7 +1303,7 @@ function renderE(){
     const manOn = isExtraOn_(n,"manut_veic_valor");
 
     return `
-      <div class="nomeRow">
+      <div class="nomeRow" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -1211,47 +1312,47 @@ function renderE(){
         <div class="inlineVal">
           <div class="chkRow">
             <input type="checkbox" ${recOn?"checked":""}
-              onchange="setExtraChecked_('${ne}','extras_recarga_valor',this.checked)">
+              onchange="setExtraChecked_('${escAttr(n)}','extras_recarga_valor',this.checked)">
             <span>Recarga</span>
           </div>
           ${recOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${esc(form[n].extras_recarga_valor)}"
-            oninput="setExtraValor_('${ne}','extras_recarga_valor',this.value)">` : ``}
+            value="${escAttr(form[n].extras_recarga_valor)}"
+            oninput="setExtraValor_('${escAttr(n)}','extras_recarga_valor',this.value)">` : ``}
         </div>
 
         <div class="inlineVal">
           <div class="chkRow">
             <input type="checkbox" ${pasOn?"checked":""}
-              onchange="setExtraChecked_('${ne}','extras_passagem_valor',this.checked)">
+              onchange="setExtraChecked_('${escAttr(n)}','extras_passagem_valor',this.checked)">
             <span>Passagem</span>
           </div>
           ${pasOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${esc(form[n].extras_passagem_valor)}"
-            oninput="setExtraValor_('${ne}','extras_passagem_valor',this.value)">` : ``}
+            value="${escAttr(form[n].extras_passagem_valor)}"
+            oninput="setExtraValor_('${escAttr(n)}','extras_passagem_valor',this.value)">` : ``}
 
           <div class="chkRow" style="margin-left:10px;">
             <input type="checkbox" ${lavOn?"checked":""}
-              onchange="setExtraChecked_('${ne}','extras_lavagem_valor',this.checked)">
+              onchange="setExtraChecked_('${escAttr(n)}','extras_lavagem_valor',this.checked)">
             <span>Lavagem</span>
           </div>
           ${lavOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${esc(form[n].extras_lavagem_valor)}"
-            oninput="setExtraValor_('${ne}','extras_lavagem_valor',this.value)">` : ``}
+            value="${escAttr(form[n].extras_lavagem_valor)}"
+            oninput="setExtraValor_('${escAttr(n)}','extras_lavagem_valor',this.value)">` : ``}
 
           <div class="chkRow" style="margin-left:10px;">
             <input type="checkbox" ${manOn?"checked":""}
-              onchange="setExtraChecked_('${ne}','manut_veic_valor',this.checked)">
+              onchange="setExtraChecked_('${escAttr(n)}','manut_veic_valor',this.checked)">
             <span>Manutenção Veiculo</span>
           </div>
           ${manOn ? `<input type="number" step="0.01" placeholder="Valor"
-            value="${esc(form[n].manut_veic_valor)}"
-            oninput="setExtraValor_('${ne}','manut_veic_valor',this.value)">` : ``}
+            value="${escAttr(form[n].manut_veic_valor)}"
+            oninput="setExtraValor_('${escAttr(n)}','manut_veic_valor',this.value)">` : ``}
         </div>
       </div>
 
       <div style="margin:8px 0 14px;">
-        <input placeholder="Extras_Obs..." value="${esc(form[n].extras_obs||"")}"
-          oninput="setField_('${ne}','extras_obs',this.value)">
+        <input placeholder="Extras_Obs..." value="${escAttr(form[n].extras_obs||"")}"
+          oninput="setExtrasObs('${escAttr(n)}', this.value)">
       </div>
     `;
   });
