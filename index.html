@@ -264,6 +264,7 @@
     <div id="stepE" class="card step">
       <div class="topbar" style="margin-bottom:6px;">
         <h3 style="margin:0;">Painel E – Extras</h3>
+        <!-- ✅ Mantive o botão manual, MAS o download principal agora fica no "Próximo" -->
         <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
       </div>
       <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
@@ -584,6 +585,59 @@ async function baixarPDFProgramacao_(){
   return true;
 }
 
+/** ✅ FINALIZAR E + PDF no botão Próximo (Solução 1) */
+async function finalizarEtapaEComPdf_(){
+  if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
+
+  const dataRef = document.getElementById("dataRef").value.trim();
+  if(!parseDMY_(dataRef)){
+    alert("❌ Data inválida.");
+    return { ok:false };
+  }
+
+  const namesAll = Object.keys(form);
+  const registros = namesAll
+    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+    .map(n => ({
+      colaborador: n,
+      coordenacao: form[n].coordenacao,
+      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+      extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
+      extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
+      extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
+      manut_veic_valor: Number(form[n].manut_veic_valor||0),
+      extras_obs: form[n].extras_obs || ""
+    }));
+
+  setBusy(true);
+  setDebug("Salvando + gerando PDF...");
+
+  // ✅ usa sua action nova do GAS (finalizarEtapaE)
+  const r = await api("finalizarEtapaE", {
+    payload: { dataReferencia: dataRef, etapa:"E", registros }
+  });
+
+  setBusy(false);
+
+  if(!r || !r.ok){
+    const err = r?.error || "Erro ao finalizar Etapa E.";
+    if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+    alert(err);
+    setDebug(err);
+    return { ok:false };
+  }
+
+  // ✅ baixa PDF aqui, antes do logout
+  if(r.pdf?.b64){
+    downloadPdfFromB64_(r.pdf.b64, r.pdf.fileName || "programacao.pdf");
+    setDebug("PDF baixado ✅");
+  } else {
+    setDebug("Salvo ✅ (sem PDF retornado)");
+  }
+
+  return { ok:true };
+}
+
 async function login(){
   const raw = document.getElementById("loginInput").value;
 
@@ -765,13 +819,10 @@ function syncBlockedRowsAllSteps_(){
     ["B","C","D","E"].forEach(k=>{
       const row = domIndex[k].get(nome);
       if(!row) return;
-      // aqui você pode escolher: ocultar ou só bloquear
-      // ocultar deixa mais leve visualmente:
       row.classList.toggle("rowHidden", !ok);
       row.classList.toggle("rowBlocked", !ok);
     });
 
-    // A só muda opacidade
     const rowA = domIndex["A"].get(nome);
     if(rowA) rowA.style.opacity = ok ? "1" : "0.55";
   });
@@ -810,7 +861,6 @@ function buildAllStepsDom_(){
     const opacity = status === "OK" ? "1" : "0.55";
     const rowId = `rowA_${idSafe(n)}`;
 
-    // (vamos indexar depois do innerHTML)
     return `
       <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}" style="opacity:${opacity}">
         <div class="nomeMain">
@@ -1030,7 +1080,6 @@ function bindDelegationA_(){
 
     form[nome].disponibilidade_status = el.value;
 
-    // atualiza bloqueio nos outros painéis sem rebuild
     syncBlockedRowsAllSteps_();
   });
 
@@ -1059,7 +1108,6 @@ function bindDelegationB_(){
     if(act === "estadiaTipo"){
       await onEstadiaChangeByNome_(nome, el.value);
 
-      // sexta: mostra/esconde wknd sem rebuild
       const dataRef = document.getElementById("dataRef").value.trim();
       const sexta = isFriday_(dataRef);
       const tipo = String(el.value||"").trim();
@@ -1152,7 +1200,6 @@ function bindDelegationE_(){
         if(Number(form[nome][field]||0) <= 0) form[nome][field] = 1.00;
       }
 
-      // mostra/esconde input sem rebuild
       const input = box.querySelector(`input[data-action="extraVal"][data-nome="${cssEsc_(nome)}"][data-field="${cssEsc_(field)}"]`);
       if(input){
         input.classList.toggle("extraInputHidden", !el.checked);
@@ -1345,10 +1392,8 @@ async function carregar(){
 
   orderedNames = computeOrderedNames_();
 
-  // Renderiza tudo 1x
   buildAllStepsDom_();
 
-  // bind 1x
   bindDelegationA_();
   bindDelegationB_();
   bindDelegationC_();
@@ -1406,6 +1451,7 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "E"){
+    // ⚠️ Etapa E "normal" (sem PDF) ainda existe, mas o fluxo do botão Próximo usa finalizarEtapaEComPdf_()
     registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
@@ -1423,10 +1469,8 @@ async function salvarEtapaAtual_(){
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  // ✅ enfileira (não espera)
   api("posProcessar", { payload: { dataReferencia: dataRef, etapa: step, registros } }).catch(()=>{});
 
-  // regra sexta (mantida)
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -1458,6 +1502,17 @@ async function salvarEtapaAtual_(){
 }
 
 async function avancar(){
+  // ✅ Etapa E: 1 clique = salvar + PDF + logout (Solução 1)
+  if(step === "E"){
+    const ok = await finalizarEtapaEComPdf_();
+    if(!ok || !ok.ok) return;
+
+    alert("✅ Programação finalizada! PDF baixado e pós-processo rodando em background.");
+    setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 700);
+    return;
+  }
+
+  // Demais etapas: segue normal
   const res = await salvarEtapaAtual_();
   if(!res || !res.ok) return;
 
@@ -1470,10 +1525,6 @@ async function avancar(){
   if(step==="B"){ setStep("C"); return; }
   if(step==="C"){ setStep("D"); return; }
   if(step==="D"){ setStep("E"); return; }
-  if(step==="E"){
-    alert("✅ Programação salva! (Pós-processo roda em background)");
-    setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 1200);
-  }
 }
 
 function voltar(){
