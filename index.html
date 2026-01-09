@@ -170,6 +170,28 @@
 
     /* E: inputs extras escondidos */
     .extraInputHidden{ display:none !important; }
+
+    /* B: campos extras de HOTEL */
+    .hotelFields{
+      margin-top:8px;
+      border:1px dashed #e5e7eb;
+      border-radius:12px;
+      padding:10px;
+      background:#fafafa;
+    }
+    .hotelFields .miniLabel{
+      font-size:11px;
+      color:#6b7280;
+      margin:0 0 4px;
+    }
+    .hotelFields .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 720px){
+      .hotelFields .grid2{ grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 
@@ -264,7 +286,6 @@
     <div id="stepE" class="card step">
       <div class="topbar" style="margin-bottom:6px;">
         <h3 style="margin:0;">Painel E – Extras</h3>
-        <!-- ✅ Mantive o botão manual, MAS o download principal agora fica no "Próximo" -->
         <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
       </div>
       <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
@@ -546,25 +567,56 @@ function base64ToBlob_(b64, mime){
   for(let i=0;i<byteChars.length;i++) byteNumbers[i] = byteChars.charCodeAt(i);
   return new Blob([new Uint8Array(byteNumbers)], { type: mime || "application/pdf" });
 }
-function downloadPdfFromB64_(b64, fileName){
+
+function openReservedPdfTab_(){
+  let w = null;
+  try{
+    w = window.open("about:blank", "_blank");
+    if(w){
+      w.document.write("<title>Gerando PDF...</title><p style='font-family:Arial'>Gerando PDF, aguarde…</p>");
+      w.document.close();
+    }
+  }catch(e){
+    w = null;
+  }
+  return w;
+}
+
+function downloadPdfFromB64_(b64, fileName, reservedWin){
   const blob = base64ToBlob_(b64, "application/pdf");
   const url = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName || "programacao.pdf";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  if(reservedWin && !reservedWin.closed){
+    try{
+      reservedWin.location.href = url;
+    }catch(e){
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName || "programacao.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  } else {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName || "programacao.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 
-  setTimeout(()=> URL.revokeObjectURL(url), 6000);
+  setTimeout(()=> URL.revokeObjectURL(url), 120000);
 }
+
 async function baixarPDFProgramacao_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
     alert("❌ Data inválida para gerar PDF.");
     return false;
   }
+
+  const reservedWin = openReservedPdfTab_();
 
   setBusy(true);
   setDebug("Gerando PDF...");
@@ -577,25 +629,27 @@ async function baixarPDFProgramacao_(){
     const err = r?.error || "Erro ao gerar PDF";
     setDebug(err);
     alert(err);
+    if(reservedWin && !reservedWin.closed) reservedWin.close();
     return false;
   }
 
-  downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf");
-  setDebug("PDF baixado ✅");
+  downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf", reservedWin);
+  setDebug("PDF aberto/baixado ✅");
   return true;
 }
 
-/** ✅ FINALIZAR E + PDF no botão Próximo (Solução 1) */
-async function finalizarEtapaEComPdf_(){
+async function finalizarEtapaEComPdf_(reservedWin){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
     alert("❌ Data inválida.");
+    if(reservedWin && !reservedWin.closed) reservedWin.close();
     return { ok:false };
   }
 
   const namesAll = Object.keys(form);
+
   const registros = namesAll
     .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
     .map(n => ({
@@ -612,10 +666,16 @@ async function finalizarEtapaEComPdf_(){
   setBusy(true);
   setDebug("Salvando + gerando PDF...");
 
-  // ✅ usa sua action nova do GAS (finalizarEtapaE)
-  const r = await api("finalizarEtapaE", {
+  let r = await api("finalizarEtapaE", {
     payload: { dataReferencia: dataRef, etapa:"E", registros }
   });
+
+  if(r && r.ok && !(r.pdf && r.pdf.b64)){
+    const g = await api("gerarPDFProgramacao", { dataRef });
+    if(g && g.ok && g.b64){
+      r.pdf = { b64: g.b64, fileName: g.fileName || "programacao.pdf" };
+    }
+  }
 
   setBusy(false);
 
@@ -624,18 +684,21 @@ async function finalizarEtapaEComPdf_(){
     if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
     alert(err);
     setDebug(err);
+    if(reservedWin && !reservedWin.closed) reservedWin.close();
     return { ok:false };
   }
 
-  // ✅ baixa PDF aqui, antes do logout
   if(r.pdf?.b64){
-    downloadPdfFromB64_(r.pdf.b64, r.pdf.fileName || "programacao.pdf");
-    setDebug("PDF baixado ✅");
-  } else {
-    setDebug("Salvo ✅ (sem PDF retornado)");
+    downloadPdfFromB64_(r.pdf.b64, r.pdf.fileName || "programacao.pdf", reservedWin);
+    setDebug("PDF aberto/baixado ✅");
+    return { ok:true, pdf:true };
   }
 
-  return { ok:true };
+  setDebug("Salvo ✅ (não retornou PDF)");
+  if(reservedWin && !reservedWin.closed){
+    reservedWin.document.body.innerHTML = "<p style='font-family:Arial'>Programação salva, mas o PDF não foi retornado pelo servidor.</p>";
+  }
+  return { ok:true, pdf:false };
 }
 
 async function login(){
@@ -702,7 +765,6 @@ function getOSLocaisLine_(nome){
   return show ? `Embarque: ${show}${more}` : "";
 }
 
-/** ✅ agrupamento 1x (ordem fixa) */
 function computeOrderedNames_(){
   const names = Object.keys(form);
   const keyFn = (n)=>{
@@ -712,7 +774,6 @@ function computeOrderedNames_(){
     return `${coord}|||${sup}|||${n}`;
   };
 
-  // ordena por coord, sup, nome
   return names.slice().sort((a,b)=>{
     const aa = keyFn(a).toUpperCase();
     const bb = keyFn(b).toUpperCase();
@@ -720,7 +781,6 @@ function computeOrderedNames_(){
   });
 }
 
-/** ✅ render agrupado (1x) usando a ordem já pronta */
 function renderGroupedOnce_(namesInOrder, rowBuilder){
   if(!namesInOrder.length) return `<div class="muted">Nenhum colaborador.</div>`;
 
@@ -733,7 +793,7 @@ function renderGroupedOnce_(namesInOrder, rowBuilder){
   const closeSup = ()=>{ if(openSup){ html += `</div>`; openSup=false; } };
   const closeCoord = ()=>{ if(openCoord){ closeSup(); html += `</div>`; openCoord=false; } };
 
-  namesInOrder.forEach((n, idx)=>{
+  namesInOrder.forEach((n)=>{
     const coord = String(form[n]?.coordenacao || coordPorNomeFast[n] || "SEM COORDENAÇÃO").trim();
     const sup =
       String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
@@ -760,7 +820,6 @@ function renderGroupedOnce_(namesInOrder, rowBuilder){
   return html;
 }
 
-/** ✅ step switch leve (sem rebuild) */
 function setStep(s){
   step = s;
   ["A","B","C","D","E"].forEach(x => {
@@ -772,13 +831,26 @@ function setStep(s){
   setTimeout(()=>cur.classList.remove("fadeIn"), 140);
 }
 
-function normalizeHotelObs_(tipo, obs){
+/** ✅ Normaliza obs do hotel e (opcional) anexa diárias/chegada */
+function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
   const t = String(tipo||"").trim();
   let s = String(obs||"").trim();
+
   if(t === "Hotel"){
     if(s && !/cidade\s*:/i.test(s)) s = "Cidade: " + s;
+
+    const dias = Number(hotelDias || 0);
+    const hora = String(hotelChegada || "").trim();
+
+    // remove duplicados se o usuário alternar e salvar várias vezes
+    s = s.replace(/\|\s*Diárias\s*:\s*\d+\s*/gi, "").replace(/\|\s*Chegada\s*:\s*\d{2}:\d{2}\s*/gi, "").trim();
+    s = s.replace(/\s*\|\s*\|\s*/g, " | ");
+
+    if(dias > 0) s += ` | Diárias: ${dias}`;
+    if(hora)     s += ` | Chegada: ${hora}`;
   }
-  return s;
+
+  return s.trim();
 }
 
 function chunkArray(arr, size){
@@ -787,7 +859,6 @@ function chunkArray(arr, size){
   return out;
 }
 
-/** ✅ chunk 500 */
 async function salvarEtapaPayload_(dataRef, etapa, registros){
   const parts = chunkArray(registros || [], 500);
 
@@ -810,7 +881,6 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   return { ok:true };
 }
 
-/** ✅ Atualiza quem não é OK nos painéis B/C/D/E sem re-render */
 function syncBlockedRowsAllSteps_(){
   const names = orderedNames;
   names.forEach(nome=>{
@@ -828,7 +898,6 @@ function syncBlockedRowsAllSteps_(){
   });
 }
 
-/** ✅ Cache D-1 (front) */
 async function getHotelD1Cached_(nome, dataRef){
   const k = `${dataRef}|${nome}`;
   if(cacheD1.hotel.has(k)) return cacheD1.hotel.get(k);
@@ -844,17 +913,21 @@ async function getAlojD1Cached_(nome, dataRef){
   return r;
 }
 
-/** ✅ Atualiza só o input da estadia */
 function setEstadiaObsUI_(nome){
   const el = document.getElementById("eobs_" + idSafe(nome));
   if(el) el.value = form[nome]?.estadia_obs || "";
+}
+
+/** ✅ mostra/esconde bloco de campos hotel sem rebuild */
+function setHotelFieldsVisible_(nome, show){
+  const wrap = document.querySelector(`[data-hotelwrap="${cssEsc_(nome)}"]`);
+  if(wrap) wrap.style.display = show ? "" : "none";
 }
 
 /** ===== BUILD DOM 1x POR CARGA ===== */
 function buildAllStepsDom_(){
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
 
-  // A
   document.getElementById("listaA").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
     const status = String(form[n].disponibilidade_status||"OK");
@@ -874,8 +947,7 @@ function buildAllStepsDom_(){
           `).join("")}
         </select>
 
-        <input
-          data-action="dispObs" data-nome="${escAttr(n)}"
+        <input data-action="dispObs" data-nome="${escAttr(n)}"
           id="dobs_${idSafe(n)}"
           placeholder="Obs..."
           value="${escAttr(form[n].disponibilidade_obs)}">
@@ -883,7 +955,6 @@ function buildAllStepsDom_(){
     `;
   });
 
-  // B
   const dataRef = document.getElementById("dataRef").value.trim();
   const sexta = isFriday_(dataRef);
 
@@ -892,6 +963,11 @@ function buildAllStepsDom_(){
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
     const extraLine = getOSLocaisLine_(n);
     const rowId = `rowB_${idSafe(n)}`;
+
+    const showHotelFields = (tipo === "Hotel");
+
+    const hotelDias = Number(form[n].hotel_dias || 0) > 0 ? Number(form[n].hotel_dias) : 1;
+    const hotelChegada = String(form[n].hotel_chegada || "18:00");
 
     return `
       <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
@@ -913,11 +989,28 @@ function buildAllStepsDom_(){
             placeholder="Obs..."
             value="${escAttr(form[n].estadia_obs)}">
 
+          <!-- ✅ CAMPOS EXTRAS HOTEL -->
+          <div class="hotelFields" data-hotelwrap="${escAttr(n)}" style="${showHotelFields ? "" : "display:none;"}">
+            <div class="grid2">
+              <div>
+                <div class="miniLabel">Quantos dias? (Diárias)</div>
+                <input type="number" min="1" step="1"
+                  data-action="hotelDias" data-nome="${escAttr(n)}"
+                  value="${escAttr(hotelDias)}"
+                  placeholder="Ex: 2">
+              </div>
+              <div>
+                <div class="miniLabel">Chegada (horário)</div>
+                <input type="time"
+                  data-action="hotelChegada" data-nome="${escAttr(n)}"
+                  value="${escAttr(hotelChegada)}">
+              </div>
+            </div>
+          </div>
+
           <div data-wkndwrap="${escAttr(n)}" style="margin-top:8px; ${showWknd ? "" : "display:none;"}">
             <div class="chkRow">
-              <input type="checkbox"
-                data-action="wknd" data-nome="${escAttr(n)}"
-                ${form[n].wknd_hosp ? "checked" : ""}>
+              <input type="checkbox" data-action="wknd" data-nome="${escAttr(n)}" ${form[n].wknd_hosp ? "checked" : ""}>
               <span>Hospedar sábado/domingo</span>
             </div>
           </div>
@@ -926,7 +1019,6 @@ function buildAllStepsDom_(){
     `;
   });
 
-  // C
   document.getElementById("listaC").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
     const rowId = `rowC_${idSafe(n)}`;
@@ -961,7 +1053,6 @@ function buildAllStepsDom_(){
     `;
   });
 
-  // D
   document.getElementById("listaD").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
     const rowId = `rowD_${idSafe(n)}`;
@@ -986,7 +1077,6 @@ function buildAllStepsDom_(){
     `;
   });
 
-  // E
   document.getElementById("listaE").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
     const rowId = `rowE_${idSafe(n)}`;
@@ -1053,7 +1143,6 @@ function buildAllStepsDom_(){
     `;
   });
 
-  // indexar elementos DOM após inserir HTML
   orderedNames.forEach(n=>{
     domIndex.A.set(n, document.getElementById(`rowA_${idSafe(n)}`));
     domIndex.B.set(n, document.getElementById(`rowB_${idSafe(n)}`));
@@ -1079,7 +1168,6 @@ function bindDelegationA_(){
     if(!nome || !form[nome]) return;
 
     form[nome].disponibilidade_status = el.value;
-
     syncBlockedRowsAllSteps_();
   });
 
@@ -1115,6 +1203,15 @@ function bindDelegationB_(){
 
       const wk = box.querySelector(`[data-wkndwrap="${cssEsc_(nome)}"]`);
       if(wk) wk.style.display = showWknd ? "" : "none";
+
+      // ✅ mostra/esconde campos extras do hotel
+      setHotelFieldsVisible_(nome, tipo === "Hotel");
+      if(tipo === "Hotel"){
+        // defaults
+        if(!Number(form[nome].hotel_dias || 0)) form[nome].hotel_dias = 1;
+        if(!String(form[nome].hotel_chegada || "").trim()) form[nome].hotel_chegada = "18:00";
+      }
+
       return;
     }
 
@@ -1127,10 +1224,25 @@ function bindDelegationB_(){
   box.addEventListener("input", (e)=>{
     const el = e.target;
     const act = el.getAttribute("data-action");
-    if(act !== "estadiaObs") return;
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
-    form[nome].estadia_obs = el.value;
+
+    if(act === "estadiaObs"){
+      form[nome].estadia_obs = el.value;
+      return;
+    }
+
+    if(act === "hotelDias"){
+      const v = Number(el.value || 0);
+      form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : 1;
+      el.value = String(form[nome].hotel_dias);
+      return;
+    }
+
+    if(act === "hotelChegada"){
+      form[nome].hotel_chegada = String(el.value || "").trim();
+      return;
+    }
   });
 }
 
@@ -1303,7 +1415,6 @@ async function onEstadiaChangeByNome_(nome, val){
   return;
 }
 
-/** ===== Toggle almoço sem re-render ===== */
 function toggleAllAlmoco(on){
   orderedNames.forEach(n=>{
     if(!PROSSEGUIR(form[n].disponibilidade_status)) return;
@@ -1373,6 +1484,10 @@ async function carregar(){
       estadia_obs: prev.estadia_obs ?? "",
       wknd_hosp: false,
 
+      // ✅ novos campos (hotel)
+      hotel_dias: Number(prev.hotel_dias ?? 1),
+      hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
+
       cafe_valor: (prev.cafe_valor ?? "NÃO"),
       almoco_valor: (prev.almoco_valor ?? "NÃO"),
       janta_valor: (prev.janta_valor ?? "NÃO"),
@@ -1423,13 +1538,25 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "B"){
-    registros = namesAll.map(n => ({
-      colaborador: n,
-      coordenacao: form[n].coordenacao,
-      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-      estadia_tipo: form[n].estadia_tipo,
-      estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
-    }));
+    registros = namesAll.map(n => {
+      const tipo = form[n].estadia_tipo;
+      const dias = Number(form[n].hotel_dias || 0);
+      const hora = String(form[n].hotel_chegada || "").trim();
+
+      const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
+
+      return {
+        colaborador: n,
+        coordenacao: form[n].coordenacao,
+        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+        estadia_tipo: tipo,
+        estadia_obs: obsNorm,
+
+        // ✅ manda separado também (se o back quiser usar direto)
+        hotel_dias: (String(tipo).trim()==="Hotel" ? (dias>0?dias:1) : ""),
+        hotel_chegada: (String(tipo).trim()==="Hotel" ? hora : "")
+      };
+    });
   }
   if(step === "C"){
     registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
@@ -1451,7 +1578,6 @@ async function salvarEtapaAtual_(){
     }));
   }
   if(step === "E"){
-    // ⚠️ Etapa E "normal" (sem PDF) ainda existe, mas o fluxo do botão Próximo usa finalizarEtapaEComPdf_()
     registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
@@ -1478,13 +1604,22 @@ async function salvarEtapaAtual_(){
     const regsW = namesAll
       .filter(n => !!form[n].wknd_hosp)
       .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
-      .map(n => ({
-        colaborador: n,
-        coordenacao: form[n].coordenacao,
-        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-        estadia_tipo: form[n].estadia_tipo,
-        estadia_obs: normalizeHotelObs_(form[n].estadia_tipo, form[n].estadia_obs)
-      }));
+      .map(n => {
+        const tipo = form[n].estadia_tipo;
+        const dias = Number(form[n].hotel_dias || 0);
+        const hora = String(form[n].hotel_chegada || "").trim();
+        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
+
+        return {
+          colaborador: n,
+          coordenacao: form[n].coordenacao,
+          supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+          estadia_tipo: tipo,
+          estadia_obs: obsNorm,
+          hotel_dias: (String(tipo).trim()==="Hotel" ? (dias>0?dias:1) : ""),
+          hotel_chegada: (String(tipo).trim()==="Hotel" ? hora : "")
+        };
+      });
 
     if(regsW.length){
       const rSab = await salvarEtapaPayload_(sab, "B", regsW);
@@ -1502,17 +1637,21 @@ async function salvarEtapaAtual_(){
 }
 
 async function avancar(){
-  // ✅ Etapa E: 1 clique = salvar + PDF + logout (Solução 1)
   if(step === "E"){
-    const ok = await finalizarEtapaEComPdf_();
+    const reservedWin = openReservedPdfTab_();
+
+    if(!reservedWin){
+      alert("⚠️ Seu navegador bloqueou a aba do PDF.\n\nPermita pop-ups para este site para o PDF abrir automaticamente.");
+    }
+
+    const ok = await finalizarEtapaEComPdf_(reservedWin);
     if(!ok || !ok.ok) return;
 
-    alert("✅ Programação finalizada! PDF baixado e pós-processo rodando em background.");
+    alert("✅ Programação finalizada! PDF gerado.");
     setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 700);
     return;
   }
 
-  // Demais etapas: segue normal
   const res = await salvarEtapaAtual_();
   if(!res || !res.ok) return;
 
@@ -1535,7 +1674,6 @@ function voltar(){
   if(step==="E"){ setStep("D"); return; }
 }
 
-/** ===== START ===== */
 window.onload = async () => {
   setLoginMode(loginMode);
 
