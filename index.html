@@ -192,6 +192,9 @@
     @media (max-width: 720px){
       .hotelFields .grid2{ grid-template-columns: 1fr; }
     }
+
+    /* ✅ TRANSFERIR: esconder campos sem rebuild */
+    .transferHidden{ display:none !important; }
   </style>
 </head>
 
@@ -327,6 +330,8 @@
         <ul>
           <li><b>OK:</b> disponível.</li>
           <li><b>Atestado / Férias / Folga / Falta:</b> informar observação e avisar RH quando necessário.</li>
+          <li><b>INATIVO:</b> colaborador inativo (não segue).</li>
+          <li><b>TRANSFERIR:</b> informar supervisão destino (não segue).</li>
         </ul>
       </div>
 
@@ -388,6 +393,9 @@ const cacheD1 = {
   hotel: new Map(),
   aloj: new Map()
 };
+
+/** ✅ Supervisões (aba Gestores → coluna Supervisão) p/ sugestão no TRANSFERIR */
+let supervisoesGestores = [];
 
 const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
 
@@ -502,6 +510,7 @@ function logoutForcado(msg){
   supPorNomeFast = {};
   coordPorNomeFast = {};
   orderedNames = [];
+  supervisoesGestores = [];
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
@@ -928,32 +937,64 @@ function setHotelFieldsVisible_(nome, show){
 function buildAllStepsDom_(){
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
 
-  document.getElementById("listaA").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
-    const extraLine = getOSLocaisLine_(n);
-    const status = String(form[n].disponibilidade_status||"OK");
-    const opacity = status === "OK" ? "1" : "0.55";
-    const rowId = `rowA_${idSafe(n)}`;
+  // ✅ datalist de supervisões (para TRANSFERIR)
+  const datalistSup = `
+    <datalist id="dlSupGestores">
+      ${(supervisoesGestores || [])
+        .map(s => String(s||"").trim())
+        .filter(Boolean)
+        .sort((a,b)=>a.localeCompare(b,'pt-BR'))
+        .map(s => `<option value="${escAttr(s)}"></option>`)
+        .join("")}
+    </datalist>
+  `;
 
-    return `
-      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}" style="opacity:${opacity}">
-        <div class="nomeMain">
-          <div class="nome">${esc(n)}</div>
-          ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+  document.getElementById("listaA").innerHTML =
+    datalistSup +
+    renderGroupedOnce_(orderedNames, (n)=>{
+      const extraLine = getOSLocaisLine_(n);
+      const status = String(form[n].disponibilidade_status||"OK").trim();
+      const isTransf = status.toUpperCase() === "TRANSFERIR";
+      const opacity = status.toUpperCase() === "OK" ? "1" : "0.55";
+      const rowId = `rowA_${idSafe(n)}`;
+
+      const transfVal = form[n].disponibilidade_transferir_para || "";
+      const obsVal = form[n].disponibilidade_obs || "";
+
+      return `
+        <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}" style="opacity:${opacity}">
+          <div class="nomeMain">
+            <div class="nome">${esc(n)}</div>
+            ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
+          </div>
+
+          <select data-action="disp" data-nome="${escAttr(n)}">
+            ${["OK","Atestado","Férias","Folga","Falta","INATIVO","TRANSFERIR"].map(op=>`
+              <option ${status===op?"selected":""}>${op}</option>
+            `).join("")}
+          </select>
+
+          <!-- ✅ OBS normal -->
+          <input
+            data-action="dispObs" data-nome="${escAttr(n)}"
+            id="dobs_${idSafe(n)}"
+            class="${isTransf ? "transferHidden" : ""}"
+            placeholder="Obs..."
+            value="${escAttr(obsVal)}">
+
+          <!-- ✅ TRANSFERIR: destino (com sugestão) -->
+          <div class="${isTransf ? "" : "transferHidden"}" data-transferwrap="${escAttr(n)}" style="grid-column: 3;">
+            <input
+              data-action="transferTo"
+              data-nome="${escAttr(n)}"
+              id="dtr_${idSafe(n)}"
+              list="dlSupGestores"
+              placeholder="Digite a Supervisão destino..."
+              value="${escAttr(transfVal)}">
+          </div>
         </div>
-
-        <select data-action="disp" data-nome="${escAttr(n)}">
-          ${["OK","Atestado","Férias","Folga","Falta"].map(op=>`
-            <option ${status===op?"selected":""}>${op}</option>
-          `).join("")}
-        </select>
-
-        <input data-action="dispObs" data-nome="${escAttr(n)}"
-          id="dobs_${idSafe(n)}"
-          placeholder="Obs..."
-          value="${escAttr(form[n].disponibilidade_obs)}">
-      </div>
-    `;
-  });
+      `;
+    });
 
   const dataRef = document.getElementById("dataRef").value.trim();
   const sexta = isFriday_(dataRef);
@@ -1164,20 +1205,49 @@ function bindDelegationA_(){
     const el = e.target;
     const act = el.getAttribute("data-action");
     if(act !== "disp") return;
+
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
 
-    form[nome].disponibilidade_status = el.value;
+    const novo = String(el.value || "").trim();
+    form[nome].disponibilidade_status = novo;
+
+    // ✅ TRANSFERIR: alterna campos sem rebuild
+    const isTransf = novo.toUpperCase() === "TRANSFERIR";
+    const row = domIndex["A"].get(nome);
+
+    if(row){
+      const obs = row.querySelector(`input[data-action="dispObs"][data-nome="${cssEsc_(nome)}"]`);
+      const tw  = row.querySelector(`[data-transferwrap="${cssEsc_(nome)}"]`);
+      if(obs) obs.classList.toggle("transferHidden", isTransf);
+      if(tw)  tw.classList.toggle("transferHidden", !isTransf);
+
+      if(isTransf){
+        const inp = row.querySelector(`input[data-action="transferTo"][data-nome="${cssEsc_(nome)}"]`);
+        if(inp) setTimeout(()=> inp.focus(), 0);
+      }
+    }
+
     syncBlockedRowsAllSteps_();
   });
 
   box.addEventListener("input", (e)=>{
     const el = e.target;
     const act = el.getAttribute("data-action");
-    if(act !== "dispObs") return;
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
-    form[nome].disponibilidade_obs = el.value;
+
+    if(act === "dispObs"){
+      form[nome].disponibilidade_obs = el.value;
+      return;
+    }
+
+    if(act === "transferTo"){
+      form[nome].disponibilidade_transferir_para = el.value;
+      // ✅ garante que no Sheets vá o destino (coluna disponibilidade_obs)
+      form[nome].disponibilidade_obs = el.value;
+      return;
+    }
   });
 }
 
@@ -1454,6 +1524,9 @@ async function carregar(){
 
   ctx = res;
 
+  // ✅ lista de supervisões (vinda do backend / carregarContexto)
+  supervisoesGestores = Array.isArray(res.supervisoesGestores) ? res.supervisoesGestores : [];
+
   supPorNomeFast = {};
   coordPorNomeFast = {};
   (res.liberados || []).forEach(p=>{
@@ -1479,6 +1552,12 @@ async function carregar(){
       coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
       disponibilidade_status: prev.disponibilidade_status ?? "OK",
       disponibilidade_obs: prev.disponibilidade_obs ?? "",
+
+      // ✅ TRANSFERIR: destino separado (mas vamos salvar no obs ao enviar)
+      disponibilidade_transferir_para:
+        (String(prev.disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
+          ? String(prev.disponibilidade_obs || "")
+          : String(prev.disponibilidade_transferir_para || "")),
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
@@ -1534,7 +1613,11 @@ async function salvarEtapaAtual_(){
       coordenacao: form[n].coordenacao,
       supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       disponibilidade_status: form[n].disponibilidade_status,
-      disponibilidade_obs: form[n].disponibilidade_obs
+      // ✅ se TRANSFERIR, o que vai pra planilha (obs) é o destino escolhido
+      disponibilidade_obs:
+        (String(form[n].disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
+          ? String(form[n].disponibilidade_transferir_para || form[n].disponibilidade_obs || "").trim()
+          : String(form[n].disponibilidade_obs || "").trim())
     }));
   }
   if(step === "B"){
