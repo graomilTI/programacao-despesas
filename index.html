@@ -193,7 +193,7 @@
       .hotelFields .grid2{ grid-template-columns: 1fr; }
     }
 
-    /* ✅ TRANSFERIR: esconder campos sem rebuild */
+    /* ✅ Transferir: esconder campos sem rebuild */
     .transferHidden{ display:none !important; }
   </style>
 </head>
@@ -330,8 +330,8 @@
         <ul>
           <li><b>OK:</b> disponível.</li>
           <li><b>Atestado / Férias / Folga / Falta:</b> informar observação e avisar RH quando necessário.</li>
-          <li><b>INATIVO:</b> colaborador inativo (não segue).</li>
-          <li><b>TRANSFERIR:</b> informar supervisão destino (não segue).</li>
+          <li><b>Inativo:</b> colaborador Inativo (não segue).</li>
+          <li><b>Transferir:</b> informar supervisão destino (não segue).</li>
         </ul>
       </div>
 
@@ -394,7 +394,7 @@ const cacheD1 = {
   aloj: new Map()
 };
 
-/** ✅ Supervisões (aba Gestores → coluna Supervisão) p/ sugestão no TRANSFERIR */
+/** ✅ Supervisões (aba Gestores → coluna Supervisão) p/ sugestão no Transferir */
 let supervisoesGestores = [];
 
 const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
@@ -937,7 +937,7 @@ function setHotelFieldsVisible_(nome, show){
 function buildAllStepsDom_(){
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
 
-  // ✅ datalist de supervisões (para TRANSFERIR)
+  // ✅ datalist de supervisões (para Transferir)
   const datalistSup = `
     <datalist id="dlSupGestores">
       ${(supervisoesGestores || [])
@@ -954,11 +954,11 @@ function buildAllStepsDom_(){
     renderGroupedOnce_(orderedNames, (n)=>{
       const extraLine = getOSLocaisLine_(n);
       const status = String(form[n].disponibilidade_status||"OK").trim();
-      const isTransf = status.toUpperCase() === "TRANSFERIR";
+      const isTransf = status.toUpperCase() === "Transferir";
       const opacity = status.toUpperCase() === "OK" ? "1" : "0.55";
       const rowId = `rowA_${idSafe(n)}`;
 
-      const transfVal = form[n].disponibilidade_transferir_para || "";
+      const transfVal = form[n].disponibilidade_Transferir_para || "";
       const obsVal = form[n].disponibilidade_obs || "";
 
       return `
@@ -969,7 +969,7 @@ function buildAllStepsDom_(){
           </div>
 
           <select data-action="disp" data-nome="${escAttr(n)}">
-            ${["OK","Atestado","Férias","Folga","Falta","INATIVO","TRANSFERIR"].map(op=>`
+            ${["OK","Atestado","Férias","Folga","Falta","Inativo","Transferir"].map(op=>`
               <option ${status===op?"selected":""}>${op}</option>
             `).join("")}
           </select>
@@ -982,7 +982,7 @@ function buildAllStepsDom_(){
             placeholder="Obs..."
             value="${escAttr(obsVal)}">
 
-          <!-- ✅ TRANSFERIR: destino (com sugestão) -->
+          <!-- ✅ Transferir: destino (com sugestão) -->
           <div class="${isTransf ? "" : "transferHidden"}" data-transferwrap="${escAttr(n)}" style="grid-column: 3;">
             <input
               data-action="transferTo"
@@ -1212,8 +1212,8 @@ function bindDelegationA_(){
     const novo = String(el.value || "").trim();
     form[nome].disponibilidade_status = novo;
 
-    // ✅ TRANSFERIR: alterna campos sem rebuild
-    const isTransf = novo.toUpperCase() === "TRANSFERIR";
+    // ✅ Transferir: alterna campos sem rebuild
+    const isTransf = novo.toUpperCase() === "Transferir";
     const row = domIndex["A"].get(nome);
 
     if(row){
@@ -1243,7 +1243,7 @@ function bindDelegationA_(){
     }
 
     if(act === "transferTo"){
-      form[nome].disponibilidade_transferir_para = el.value;
+      form[nome].disponibilidade_Transferir_para = el.value;
       // ✅ garante que no Sheets vá o destino (coluna disponibilidade_obs)
       form[nome].disponibilidade_obs = el.value;
       return;
@@ -1553,11 +1553,11 @@ async function carregar(){
       disponibilidade_status: prev.disponibilidade_status ?? "OK",
       disponibilidade_obs: prev.disponibilidade_obs ?? "",
 
-      // ✅ TRANSFERIR: destino separado (mas vamos salvar no obs ao enviar)
-      disponibilidade_transferir_para:
-        (String(prev.disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
+      // ✅ Transferir: destino separado (mas vamos salvar no obs ao enviar)
+      disponibilidade_Transferir_para:
+        (String(prev.disponibilidade_status||"").toUpperCase() === "Transferir"
           ? String(prev.disponibilidade_obs || "")
-          : String(prev.disponibilidade_transferir_para || "")),
+          : String(prev.disponibilidade_Transferir_para || "")),
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
@@ -1613,10 +1613,10 @@ async function salvarEtapaAtual_(){
       coordenacao: form[n].coordenacao,
       supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
       disponibilidade_status: form[n].disponibilidade_status,
-      // ✅ se TRANSFERIR, o que vai pra planilha (obs) é o destino escolhido
+      // ✅ se Transferir, o que vai pra planilha (obs) é o destino escolhido
       disponibilidade_obs:
-        (String(form[n].disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
-          ? String(form[n].disponibilidade_transferir_para || form[n].disponibilidade_obs || "").trim()
+        (String(form[n].disponibilidade_status||"").toUpperCase() === "Transferir"
+          ? String(form[n].disponibilidade_Transferir_para || form[n].disponibilidade_obs || "").trim()
           : String(form[n].disponibilidade_obs || "").trim())
     }));
   }
@@ -1792,3 +1792,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
