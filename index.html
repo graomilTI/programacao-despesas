@@ -574,7 +574,7 @@ async function api(action, args){
 }
 
 /** =========================
- * ✅ PDF
+ * ✅ PDF (FORÇAR DOWNLOAD)
  * ========================= */
 function base64ToBlob_(b64, mime){
   const byteChars = atob(b64);
@@ -583,43 +583,22 @@ function base64ToBlob_(b64, mime){
   return new Blob([new Uint8Array(byteNumbers)], { type: mime || "application/pdf" });
 }
 
+// ✅ não abrir aba (evita "abrir PDF" em vez de baixar)
 function openReservedPdfTab_(){
-  let w = null;
-  try{
-    w = window.open("about:blank", "_blank");
-    if(w){
-      w.document.write("<title>Gerando PDF...</title><p style='font-family:Arial'>Gerando PDF, aguarde…</p>");
-      w.document.close();
-    }
-  }catch(e){
-    w = null;
-  }
-  return w;
+  return null;
 }
 
-function downloadPdfFromB64_(b64, fileName, reservedWin){
+// ✅ sempre baixa (download)
+function downloadPdfFromB64_(b64, fileName){
   const blob = base64ToBlob_(b64, "application/pdf");
   const url = URL.createObjectURL(blob);
 
-  if(reservedWin && !reservedWin.closed){
-    try{
-      reservedWin.location.href = url;
-    }catch(e){
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName || "programacao.pdf";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-  } else {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName || "programacao.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "programacao.pdf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 
   setTimeout(()=> URL.revokeObjectURL(url), 120000);
 }
@@ -630,8 +609,6 @@ async function baixarPDFProgramacao_(){
     alert("❌ Data inválida para gerar PDF.");
     return false;
   }
-
-  const reservedWin = openReservedPdfTab_();
 
   setBusy(true);
   setDebug("Gerando PDF...");
@@ -644,22 +621,20 @@ async function baixarPDFProgramacao_(){
     const err = r?.error || "Erro ao gerar PDF";
     setDebug(err);
     alert(err);
-    if(reservedWin && !reservedWin.closed) reservedWin.close();
     return false;
   }
 
-  downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf", reservedWin);
-  setDebug("PDF aberto/baixado ✅");
+  downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf");
+  setDebug("PDF baixado ✅");
   return true;
 }
 
-async function finalizarEtapaEComPdf_(reservedWin){
+async function finalizarEtapaEComPdf_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
     alert("❌ Data inválida.");
-    if(reservedWin && !reservedWin.closed) reservedWin.close();
     return { ok:false };
   }
 
@@ -685,6 +660,7 @@ async function finalizarEtapaEComPdf_(reservedWin){
     payload: { dataReferencia: dataRef, etapa:"E", registros }
   });
 
+  // fallback: se o backend não retornou pdf, tenta gerar
   if(r && r.ok && !(r.pdf && r.pdf.b64)){
     const g = await api("gerarPDFProgramacao", { dataRef });
     if(g && g.ok && g.b64){
@@ -699,20 +675,16 @@ async function finalizarEtapaEComPdf_(reservedWin){
     if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
     alert(err);
     setDebug(err);
-    if(reservedWin && !reservedWin.closed) reservedWin.close();
     return { ok:false };
   }
 
   if(r.pdf?.b64){
-    downloadPdfFromB64_(r.pdf.b64, r.pdf.fileName || "programacao.pdf", reservedWin);
-    setDebug("PDF aberto/baixado ✅");
+    downloadPdfFromB64_(r.pdf.b64, r.pdf.fileName || "programacao.pdf");
+    setDebug("PDF baixado ✅");
     return { ok:true, pdf:true };
   }
 
   setDebug("Salvo ✅ (não retornou PDF)");
-  if(reservedWin && !reservedWin.closed){
-    reservedWin.document.body.innerHTML = "<p style='font-family:Arial'>Programação salva, mas o PDF não foi retornado pelo servidor.</p>";
-  }
   return { ok:true, pdf:false };
 }
 
@@ -896,6 +868,23 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   return { ok:true };
 }
 
+/** ✅ ENFILEIRAR PÓS-PROCESSO COM DEBUG (para não “sumir” erro) */
+async function enfileirarPosProcesso_(dataRef, etapa, registros){
+  try{
+    const r = await api("posProcessar", { payload: { dataReferencia: dataRef, etapa, registros } });
+    if(!r || !r.ok){
+      const err = r?.error || "Falha ao enfileirar pós-processo";
+      setDebug("⚠️ Pós-processo NÃO enfileirado: " + err);
+      return { ok:false, error: err };
+    }
+    setDebug("✅ Pós-processo enfileirado.");
+    return { ok:true };
+  }catch(e){
+    setDebug("⚠️ Pós-processo ERRO (rede): " + String(e));
+    return { ok:false, error:String(e) };
+  }
+}
+
 function syncBlockedRowsAllSteps_(){
   const names = orderedNames;
   names.forEach(nome=>{
@@ -980,21 +969,25 @@ function buildAllStepsDom_(){
             `).join("")}
           </select>
 
-          <input
-            data-action="dispObs" data-nome="${escAttr(n)}"
-            id="dobs_${idSafe(n)}"
-            class="${isTransf ? "transferHidden" : ""}"
-            placeholder="Obs..."
-            value="${escAttr(obsVal)}">
-
-          <div class="${isTransf ? "" : "transferHidden"}" data-transferwrap="${escAttr(n)}" style="grid-column: 3;">
+          <!-- ✅ Coluna 3: OBS ou TRANSFERIR PARA -->
+          <div style="grid-column:3; display:flex; flex-direction:column; gap:6px;">
             <input
-              data-action="transferTo"
-              data-nome="${escAttr(n)}"
-              id="dtr_${idSafe(n)}"
-              list="dlSupGestores"
-              placeholder="Digite a Supervisão destino..."
-              value="${escAttr(transfVal)}">
+              data-action="dispObs" data-nome="${escAttr(n)}"
+              id="dobs_${idSafe(n)}"
+              class="${isTransf ? "transferHidden" : ""}"
+              placeholder="Obs..."
+              value="${escAttr(obsVal)}">
+
+            <div class="${isTransf ? "" : "transferHidden"}" data-transferwrap="${escAttr(n)}">
+              <div class="muted" style="margin-bottom:4px;">Transferir para (Supervisão destino)</div>
+              <input
+                data-action="transferTo"
+                data-nome="${escAttr(n)}"
+                id="dtr_${idSafe(n)}"
+                list="dlSupGestores"
+                placeholder="Digite a Supervisão destino..."
+                value="${escAttr(transfVal)}">
+            </div>
           </div>
         </div>
       `;
@@ -1245,8 +1238,8 @@ function bindDelegationA_(){
     }
 
     if(act === "transferTo"){
-      form[nome].disponibilidade_Transferir_para = el.value;
-      form[nome].disponibilidade_obs = el.value; // mantém compatível
+      form[nome].disponibilidade_Transferir_para = el.value; // ✅ destino
+      form[nome].disponibilidade_obs = el.value; // mantém compatível (e aparece na conferência como destino)
       return;
     }
   });
@@ -1595,7 +1588,7 @@ async function carregar(){
   show("bottomBar");
 }
 
-/** ✅ Salva etapa e ENFILEIRA pós-processo (não trava UI) */
+/** ✅ Salva etapa e ENFILEIRA pós-processo (com debug) */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -1605,8 +1598,9 @@ async function salvarEtapaAtual_(){
   let registros = [];
   if(step === "A"){
     registros = namesAll.map(n => {
-      const status = String(form[n].disponibilidade_status || "").trim();
-      const isTransf = status.toUpperCase() === "TRANSFERIR";
+      const statusRaw = String(form[n].disponibilidade_status || "").trim();
+      const status = statusRaw.toUpperCase(); // ✅ garante INATIVO/TRANSFERIR em caixa alta
+      const isTransf = status === "TRANSFERIR";
 
       const supAtual = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "").trim();
       const supDestino = String(
@@ -1625,7 +1619,7 @@ async function salvarEtapaAtual_(){
   }
 
   if(step === "B"){
-    // ✅ FIX PRINCIPAL: só salva B para quem está OK
+    // ✅ só salva B para quem está OK
     registros = namesAll
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => {
@@ -1686,13 +1680,13 @@ async function salvarEtapaAtual_(){
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  api("posProcessar", { payload: { dataReferencia: dataRef, etapa: step, registros } }).catch(()=>{});
+  // ✅ agora ENFILEIRA e mostra erro se falhar (p/ descobrir pq não notifica)
+  await enfileirarPosProcesso_(dataRef, step, registros);
 
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
 
-    // ✅ FIX: também garante OK aqui
     const regsW = namesAll
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .filter(n => !!form[n].wknd_hosp)
@@ -1717,11 +1711,11 @@ async function salvarEtapaAtual_(){
     if(regsW.length){
       const rSab = await salvarEtapaPayload_(sab, "B", regsW);
       if(!rSab || !rSab.ok){ setBusy(false); return { ok:false }; }
-      api("posProcessar", { payload:{ dataReferencia: sab, etapa:"B", registros: regsW } }).catch(()=>{});
+      await enfileirarPosProcesso_(sab, "B", regsW);
 
       const rDom = await salvarEtapaPayload_(dom, "B", regsW);
       if(!rDom || !rDom.ok){ setBusy(false); return { ok:false }; }
-      api("posProcessar", { payload:{ dataReferencia: dom, etapa:"B", registros: regsW } }).catch(()=>{});
+      await enfileirarPosProcesso_(dom, "B", regsW);
     }
   }
 
@@ -1731,13 +1725,7 @@ async function salvarEtapaAtual_(){
 
 async function avancar(){
   if(step === "E"){
-    const reservedWin = openReservedPdfTab_();
-
-    if(!reservedWin){
-      alert("⚠️ Seu navegador bloqueou a aba do PDF.\n\nPermita pop-ups para este site para o PDF abrir automaticamente.");
-    }
-
-    const ok = await finalizarEtapaEComPdf_(reservedWin);
+    const ok = await finalizarEtapaEComPdf_();
     if(!ok || !ok.ok) return;
 
     alert("✅ Programação finalizada! PDF gerado.");
