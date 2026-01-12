@@ -954,7 +954,8 @@ function buildAllStepsDom_(){
     renderGroupedOnce_(orderedNames, (n)=>{
       const extraLine = getOSLocaisLine_(n);
       const status = String(form[n].disponibilidade_status||"OK").trim();
-      const isTransf = status.toUpperCase() === "Transferir";
+      // ✅ FIX: comparar com uppercase correto
+      const isTransf = status.toUpperCase() === "TRANSFERIR";
       const opacity = status.toUpperCase() === "OK" ? "1" : "0.55";
       const rowId = `rowA_${idSafe(n)}`;
 
@@ -1212,8 +1213,8 @@ function bindDelegationA_(){
     const novo = String(el.value || "").trim();
     form[nome].disponibilidade_status = novo;
 
-    // ✅ Transferir: alterna campos sem rebuild
-    const isTransf = novo.toUpperCase() === "Transferir";
+    // ✅ FIX: Transferir: alterna campos sem rebuild
+    const isTransf = novo.toUpperCase() === "TRANSFERIR";
     const row = domIndex["A"].get(nome);
 
     if(row){
@@ -1244,7 +1245,7 @@ function bindDelegationA_(){
 
     if(act === "transferTo"){
       form[nome].disponibilidade_Transferir_para = el.value;
-      // ✅ garante que no Sheets vá o destino (coluna disponibilidade_obs)
+      // ✅ garante que no Sheets vá o destino (seu backend salva obs e/ou sobrescreve supervisão)
       form[nome].disponibilidade_obs = el.value;
       return;
     }
@@ -1553,9 +1554,9 @@ async function carregar(){
       disponibilidade_status: prev.disponibilidade_status ?? "OK",
       disponibilidade_obs: prev.disponibilidade_obs ?? "",
 
-      // ✅ Transferir: destino separado (mas vamos salvar no obs ao enviar)
+      // ✅ Transferir: destino separado (mas vamos salvar no obs e também sobrescrever supervisão no payload)
       disponibilidade_Transferir_para:
-        (String(prev.disponibilidade_status||"").toUpperCase() === "Transferir"
+        (String(prev.disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
           ? String(prev.disponibilidade_obs || "")
           : String(prev.disponibilidade_Transferir_para || "")),
 
@@ -1608,17 +1609,34 @@ async function salvarEtapaAtual_(){
 
   let registros = [];
   if(step === "A"){
-    registros = namesAll.map(n => ({
-      colaborador: n,
-      coordenacao: form[n].coordenacao,
-      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-      disponibilidade_status: form[n].disponibilidade_status,
-      // ✅ se Transferir, o que vai pra planilha (obs) é o destino escolhido
-      disponibilidade_obs:
-        (String(form[n].disponibilidade_status||"").toUpperCase() === "Transferir"
-          ? String(form[n].disponibilidade_Transferir_para || form[n].disponibilidade_obs || "").trim()
-          : String(form[n].disponibilidade_obs || "").trim())
-    }));
+    // ✅ FIX: TRANSFERIR sobrescreve a coluna Supervisão com o destino
+    registros = namesAll.map(n => {
+      const status = String(form[n].disponibilidade_status || "").trim();
+      const isTransf = status.toUpperCase() === "TRANSFERIR";
+
+      const supAtual = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "").trim();
+      const supDestino = String(
+        form[n].disponibilidade_Transferir_para || form[n].disponibilidade_obs || ""
+      ).trim();
+
+      return {
+        colaborador: n,
+        coordenacao: form[n].coordenacao,
+
+        // ✅ AQUI: se Transferir, salva supervisão destino na coluna Supervisão
+        supervisao: isTransf ? supDestino : supAtual,
+
+        disponibilidade_status: status,
+
+        // ✅ se Transferir, obs também recebe destino (você pode trocar por outra descrição se quiser)
+        disponibilidade_obs: isTransf
+          ? supDestino
+          : String(form[n].disponibilidade_obs || "").trim(),
+
+        // ✅ opcional p/ backend (se quiser tratar separado)
+        transferir_para: isTransf ? supDestino : ""
+      };
+    });
   }
   if(step === "B"){
     registros = namesAll.map(n => {
@@ -1792,4 +1810,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
