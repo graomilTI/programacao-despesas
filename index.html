@@ -448,9 +448,15 @@ function setBusy(v){
   });
 }
 
+/** ✅ helper robusto para achar linha por data-nome */
+function qByNomeRow_(nome){
+  const v = (window.CSS && CSS.escape) ? CSS.escape(String(nome)) : String(nome).replace(/["\\]/g, "\\$&");
+  return document.querySelector(`.nomeRow[data-nome="${v}"]`);
+}
+
 /** ✅ trava só a linha (p/ Hotel/Alojamento), não a UI inteira */
 function setRowLoading_(nome, on){
-  const row = document.querySelector(`.nomeRow[data-nome="${cssEsc_(nome)}"]`);
+  const row = qByNomeRow_(nome);
   if(!row) return;
   row.style.opacity = on ? "0.6" : (PROSSEGUIR(form[nome]?.disponibilidade_status) ? "1" : "0.55");
   row.style.pointerEvents = on ? "none" : "auto";
@@ -954,7 +960,6 @@ function buildAllStepsDom_(){
     renderGroupedOnce_(orderedNames, (n)=>{
       const extraLine = getOSLocaisLine_(n);
       const status = String(form[n].disponibilidade_status||"OK").trim();
-      // ✅ FIX: comparar com uppercase correto
       const isTransf = status.toUpperCase() === "TRANSFERIR";
       const opacity = status.toUpperCase() === "OK" ? "1" : "0.55";
       const rowId = `rowA_${idSafe(n)}`;
@@ -975,7 +980,6 @@ function buildAllStepsDom_(){
             `).join("")}
           </select>
 
-          <!-- ✅ OBS normal -->
           <input
             data-action="dispObs" data-nome="${escAttr(n)}"
             id="dobs_${idSafe(n)}"
@@ -983,7 +987,6 @@ function buildAllStepsDom_(){
             placeholder="Obs..."
             value="${escAttr(obsVal)}">
 
-          <!-- ✅ Transferir: destino (com sugestão) -->
           <div class="${isTransf ? "" : "transferHidden"}" data-transferwrap="${escAttr(n)}" style="grid-column: 3;">
             <input
               data-action="transferTo"
@@ -1031,7 +1034,6 @@ function buildAllStepsDom_(){
             placeholder="Obs..."
             value="${escAttr(form[n].estadia_obs)}">
 
-          <!-- ✅ CAMPOS EXTRAS HOTEL -->
           <div class="hotelFields" data-hotelwrap="${escAttr(n)}" style="${showHotelFields ? "" : "display:none;"}">
             <div class="grid2">
               <div>
@@ -1213,7 +1215,6 @@ function bindDelegationA_(){
     const novo = String(el.value || "").trim();
     form[nome].disponibilidade_status = novo;
 
-    // ✅ FIX: Transferir: alterna campos sem rebuild
     const isTransf = novo.toUpperCase() === "TRANSFERIR";
     const row = domIndex["A"].get(nome);
 
@@ -1245,8 +1246,7 @@ function bindDelegationA_(){
 
     if(act === "transferTo"){
       form[nome].disponibilidade_Transferir_para = el.value;
-      // ✅ garante que no Sheets vá o destino (seu backend salva obs e/ou sobrescreve supervisão)
-      form[nome].disponibilidade_obs = el.value;
+      form[nome].disponibilidade_obs = el.value; // mantém compatível
       return;
     }
   });
@@ -1275,10 +1275,8 @@ function bindDelegationB_(){
       const wk = box.querySelector(`[data-wkndwrap="${cssEsc_(nome)}"]`);
       if(wk) wk.style.display = showWknd ? "" : "none";
 
-      // ✅ mostra/esconde campos extras do hotel
       setHotelFieldsVisible_(nome, tipo === "Hotel");
       if(tipo === "Hotel"){
-        // defaults
         if(!Number(form[nome].hotel_dias || 0)) form[nome].hotel_dias = 1;
         if(!String(form[nome].hotel_chegada || "").trim()) form[nome].hotel_chegada = "18:00";
       }
@@ -1525,7 +1523,6 @@ async function carregar(){
 
   ctx = res;
 
-  // ✅ lista de supervisões (vinda do backend / carregarContexto)
   supervisoesGestores = Array.isArray(res.supervisoesGestores) ? res.supervisoesGestores : [];
 
   supPorNomeFast = {};
@@ -1554,7 +1551,6 @@ async function carregar(){
       disponibilidade_status: prev.disponibilidade_status ?? "OK",
       disponibilidade_obs: prev.disponibilidade_obs ?? "",
 
-      // ✅ Transferir: destino separado (mas vamos salvar no obs e também sobrescrever supervisão no payload)
       disponibilidade_Transferir_para:
         (String(prev.disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
           ? String(prev.disponibilidade_obs || "")
@@ -1564,7 +1560,6 @@ async function carregar(){
       estadia_obs: prev.estadia_obs ?? "",
       wknd_hosp: false,
 
-      // ✅ novos campos (hotel)
       hotel_dias: Number(prev.hotel_dias ?? 1),
       hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
 
@@ -1609,7 +1604,6 @@ async function salvarEtapaAtual_(){
 
   let registros = [];
   if(step === "A"){
-    // ✅ FIX: TRANSFERIR sobrescreve a coluna Supervisão com o destino
     registros = namesAll.map(n => {
       const status = String(form[n].disponibilidade_status || "").trim();
       const isTransf = status.toUpperCase() === "TRANSFERIR";
@@ -1622,43 +1616,37 @@ async function salvarEtapaAtual_(){
       return {
         colaborador: n,
         coordenacao: form[n].coordenacao,
-
-        // ✅ AQUI: se Transferir, salva supervisão destino na coluna Supervisão
         supervisao: isTransf ? supDestino : supAtual,
-
         disponibilidade_status: status,
-
-        // ✅ se Transferir, obs também recebe destino (você pode trocar por outra descrição se quiser)
-        disponibilidade_obs: isTransf
-          ? supDestino
-          : String(form[n].disponibilidade_obs || "").trim(),
-
-        // ✅ opcional p/ backend (se quiser tratar separado)
+        disponibilidade_obs: isTransf ? supDestino : String(form[n].disponibilidade_obs || "").trim(),
         transferir_para: isTransf ? supDestino : ""
       };
     });
   }
+
   if(step === "B"){
-    registros = namesAll.map(n => {
-      const tipo = form[n].estadia_tipo;
-      const dias = Number(form[n].hotel_dias || 0);
-      const hora = String(form[n].hotel_chegada || "").trim();
+    // ✅ FIX PRINCIPAL: só salva B para quem está OK
+    registros = namesAll
+      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+      .map(n => {
+        const tipo = form[n].estadia_tipo;
+        const dias = Number(form[n].hotel_dias || 0);
+        const hora = String(form[n].hotel_chegada || "").trim();
 
-      const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
+        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
 
-      return {
-        colaborador: n,
-        coordenacao: form[n].coordenacao,
-        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-        estadia_tipo: tipo,
-        estadia_obs: obsNorm,
-
-        // ✅ manda separado também (se o back quiser usar direto)
-        hotel_dias: (String(tipo).trim()==="Hotel" ? (dias>0?dias:1) : ""),
-        hotel_chegada: (String(tipo).trim()==="Hotel" ? hora : "")
-      };
-    });
+        return {
+          colaborador: n,
+          coordenacao: form[n].coordenacao,
+          supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+          estadia_tipo: tipo,
+          estadia_obs: obsNorm,
+          hotel_dias: (String(tipo).trim()==="Hotel" ? (dias>0?dias:1) : ""),
+          hotel_chegada: (String(tipo).trim()==="Hotel" ? hora : "")
+        };
+      });
   }
+
   if(step === "C"){
     registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
@@ -1669,6 +1657,7 @@ async function salvarEtapaAtual_(){
       janta_valor: form[n].janta_valor
     }));
   }
+
   if(step === "D"){
     registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
@@ -1678,6 +1667,7 @@ async function salvarEtapaAtual_(){
       deslocamento_obs: form[n].deslocamento_obs
     }));
   }
+
   if(step === "E"){
     registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
       colaborador: n,
@@ -1702,7 +1692,9 @@ async function salvarEtapaAtual_(){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
 
+    // ✅ FIX: também garante OK aqui
     const regsW = namesAll
+      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .filter(n => !!form[n].wknd_hosp)
       .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
       .map(n => {
