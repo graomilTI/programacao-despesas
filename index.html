@@ -53,13 +53,11 @@
     .inlineVal{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .inlineVal input[type="number"]{ width:160px; }
 
-    /* === PAINÉIS: transição leve (sem rebuild) === */
     .step{ display:none; }
     .step.active{ display:block; }
     .step.fadeIn{ animation: fadeIn .12s ease; }
     @keyframes fadeIn{ from{opacity:.7} to{opacity:1} }
 
-    /* “bloqueado” nos painéis B/C/D/E quando não OK */
     .rowBlocked{
       opacity:.45 !important;
       pointer-events:none;
@@ -77,7 +75,6 @@
       .inlineVal input[type="number"]{ width:100%; }
     }
 
-    /* === AJUDA (Grão 1000) === */
     .helpBtn{
       width:auto;
       padding:9px 14px;
@@ -168,10 +165,8 @@
     .helpCard.warn{ background:#fff7e6; border-color: rgba(244,180,0,.40); }
     .helpCard.warn h4{ color:#7a4b00; }
 
-    /* E: inputs extras escondidos */
     .extraInputHidden{ display:none !important; }
 
-    /* B: campos extras de HOTEL */
     .hotelFields{
       margin-top:8px;
       border:1px dashed #e5e7eb;
@@ -193,7 +188,6 @@
       .hotelFields .grid2{ grid-template-columns: 1fr; }
     }
 
-    /* ✅ Transferir: esconder campos sem rebuild */
     .transferHidden{ display:none !important; }
   </style>
 </head>
@@ -266,14 +260,15 @@
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
         <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.<br>
-        <b>Alojamento</b>: consulta D-1 e exige Nome do alojamento se não achar.
+        <b>Alojamento</b>: consulta D-1 e exige Nome do alojamento se não achar.<br>
+        <b>Fazenda</b>: força <b>Pernoite</b>.
       </div>
       <div id="listaB"></div>
     </div>
 
     <div id="stepC" class="card step">
       <h3>Painel C – Alimentação</h3>
-      <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = <b>NÃO</b>.</div>
+      <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = vazio.</div>
       <div class="toolsRow">
         <button class="light" onclick="toggleAllAlmoco(true)">Todos Almoço</button>
         <button class="light" onclick="toggleAllAlmoco(false)">Limpar Almoço</button>
@@ -329,8 +324,8 @@
         <h4>✅ 2) Disponibilidade</h4>
         <ul>
           <li><b>OK:</b> disponível.</li>
-          <li><b>Atestado / Férias / Folga / Falta:</b> informar observação e avisar RH quando necessário.</li>
-          <li><b>Inativo:</b> colaborador Inativo (não segue).</li>
+          <li><b>Atestado / Férias / Folga / Falta:</b> informar observação.</li>
+          <li><b>Inativo:</b> colaborador não segue.</li>
           <li><b>Transferir:</b> informar supervisão destino (não segue).</li>
         </ul>
       </div>
@@ -354,7 +349,7 @@
       <div class="helpCard">
         <h4>🚗 5) Deslocamento</h4>
         <ul>
-          <li><b>Frota (motorista)</b>, <b>Carona</b>, <b>Uber</b> ou <b>Km</b>.</li>
+          <li><b>Empresa</b>, <b>Veículo próprio</b>, <b>Frota</b>, <b>Carona</b>, <b>Uber</b>, <b>Km</b>, <b>Manutenção</b>.</li>
           <li class="muted">Use Obs quando necessário.</li>
         </ul>
       </div>
@@ -362,7 +357,7 @@
       <div class="helpCard">
         <h4>➕ 6) Extras</h4>
         <p>Inserir despesas extras do dia.</p>
-        <p class="muted">Ao marcar, informe um valor &gt; 0 (Recarga, Passagem, Lavagem, Manutenção Veiculo).</p>
+        <p class="muted">Ao marcar, informe um valor &gt; 0 (Recarga, Passagem, Lavagem, Manutenção Veículo).</p>
       </div>
     </div>
   </div>
@@ -385,36 +380,25 @@ let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 let supPorNomeFast = {};
 let coordPorNomeFast = {};
 
-/** ✅ Ordem fixa (evita sort/rebuild em cada painel) */
-let orderedNames = []; // nomes já na ordem final (coord/sup/nome)
+/** ✅ Ordem fixa */
+let orderedNames = [];
 
 /** ✅ Cache D-1 no front */
-const cacheD1 = {
-  hotel: new Map(),
-  aloj: new Map()
-};
+const cacheD1 = { hotel: new Map(), aloj: new Map() };
 
-/** ✅ Supervisões (aba Gestores → coluna Supervisão) p/ sugestão no Transferir */
+/** ✅ Supervisões (para Transferir) */
 let supervisoesGestores = [];
 
 const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
 
-/** ✅ “index” de elementos DOM por nome (para updates rápidos) */
-const domIndex = {
-  A: new Map(),
-  B: new Map(),
-  C: new Map(),
-  D: new Map(),
-  E: new Map()
-};
+/** ✅ “index” de elementos DOM por nome */
+const domIndex = { A: new Map(), B: new Map(), C: new Map(), D: new Map(), E: new Map() };
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 function escAttr(s){ return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
 function cssEsc_(s){
-  try{
-    if(window.CSS && typeof CSS.escape === "function") return CSS.escape(String(s));
-  }catch(e){}
+  try{ if(window.CSS && typeof CSS.escape === "function") return CSS.escape(String(s)); }catch(e){}
   return String(s).replace(/["\\]/g, "\\$&");
 }
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
@@ -448,13 +432,10 @@ function setBusy(v){
   });
 }
 
-/** ✅ helper robusto para achar linha por data-nome */
 function qByNomeRow_(nome){
   const v = (window.CSS && CSS.escape) ? CSS.escape(String(nome)) : String(nome).replace(/["\\]/g, "\\$&");
   return document.querySelector(`.nomeRow[data-nome="${v}"]`);
 }
-
-/** ✅ trava só a linha (p/ Hotel/Alojamento), não a UI inteira */
 function setRowLoading_(nome, on){
   const row = qByNomeRow_(nome);
   if(!row) return;
@@ -582,53 +563,37 @@ function base64ToBlob_(b64, mime){
   for(let i=0;i<byteChars.length;i++) byteNumbers[i] = byteChars.charCodeAt(i);
   return new Blob([new Uint8Array(byteNumbers)], { type: mime || "application/pdf" });
 }
-
-// ✅ não abrir aba (evita "abrir PDF" em vez de baixar)
-function openReservedPdfTab_(){
-  return null;
-}
-
-// ✅ sempre baixa (download)
 function downloadPdfFromB64_(b64, fileName){
   const blob = base64ToBlob_(b64, "application/pdf");
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName || "programacao.pdf";
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   setTimeout(()=> URL.revokeObjectURL(url), 120000);
 }
-
 async function baixarPDFProgramacao_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
     alert("❌ Data inválida para gerar PDF.");
     return false;
   }
-
   setBusy(true);
   setDebug("Gerando PDF...");
-
   const r = await api("gerarPDFProgramacao", { dataRef });
-
   setBusy(false);
-
   if(!r || !r.ok){
     const err = r?.error || "Erro ao gerar PDF";
     setDebug(err);
     alert(err);
     return false;
   }
-
   downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf");
   setDebug("PDF baixado ✅");
   return true;
 }
-
 async function finalizarEtapaEComPdf_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -639,7 +604,6 @@ async function finalizarEtapaEComPdf_(){
   }
 
   const namesAll = Object.keys(form);
-
   const registros = namesAll
     .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
     .map(n => ({
@@ -660,7 +624,6 @@ async function finalizarEtapaEComPdf_(){
     payload: { dataReferencia: dataRef, etapa:"E", registros }
   });
 
-  // fallback: se o backend não retornou pdf, tenta gerar
   if(r && r.ok && !(r.pdf && r.pdf.b64)){
     const g = await api("gerarPDFProgramacao", { dataRef });
     if(g && g.ok && g.b64){
@@ -818,7 +781,7 @@ function setStep(s){
   setTimeout(()=>cur.classList.remove("fadeIn"), 140);
 }
 
-/** ✅ Normaliza obs do hotel e (opcional) anexa diárias/chegada */
+/** ✅ Normaliza obs do hotel e anexa diárias/chegada */
 function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
   const t = String(tipo||"").trim();
   let s = String(obs||"").trim();
@@ -829,7 +792,6 @@ function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
     const dias = Number(hotelDias || 0);
     const hora = String(hotelChegada || "").trim();
 
-    // remove duplicados se o usuário alternar e salvar várias vezes
     s = s.replace(/\|\s*Diárias\s*:\s*\d+\s*/gi, "").replace(/\|\s*Chegada\s*:\s*\d{2}:\d{2}\s*/gi, "").trim();
     s = s.replace(/\s*\|\s*\|\s*/g, " | ");
 
@@ -848,14 +810,9 @@ function chunkArray(arr, size){
 
 async function salvarEtapaPayload_(dataRef, etapa, registros){
   const parts = chunkArray(registros || [], 500);
-
   for (let i=0;i<parts.length;i++){
     const r = await api("salvarEtapa", {
-      payload: {
-        dataReferencia: dataRef,
-        etapa: etapa,
-        registros: parts[i]
-      }
+      payload: { dataReferencia: dataRef, etapa: etapa, registros: parts[i] }
     });
 
     if(!r || !r.ok){
@@ -868,7 +825,6 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   return { ok:true };
 }
 
-/** ✅ ENFILEIRAR PÓS-PROCESSO COM DEBUG (para não “sumir” erro) */
 async function enfileirarPosProcesso_(dataRef, etapa, registros){
   try{
     const r = await api("posProcessar", { payload: { dataReferencia: dataRef, etapa, registros } });
@@ -921,18 +877,26 @@ function setEstadiaObsUI_(nome){
   const el = document.getElementById("eobs_" + idSafe(nome));
   if(el) el.value = form[nome]?.estadia_obs || "";
 }
-
-/** ✅ mostra/esconde bloco de campos hotel sem rebuild */
 function setHotelFieldsVisible_(nome, show){
   const wrap = document.querySelector(`[data-hotelwrap="${cssEsc_(nome)}"]`);
   if(wrap) wrap.style.display = show ? "" : "none";
 }
 
+/** ✅ Status do Painel A SEM ACENTO (valores que o GAS costuma esperar) */
+const DISP_OPTIONS = [
+  { value: "OK",         label: "OK" },
+  { value: "ATESTADO",   label: "Atestado" },
+  { value: "FERIAS",     label: "Férias" },
+  { value: "FOLGA",      label: "Folga" },
+  { value: "FALTA",      label: "Falta" },
+  { value: "INATIVO",    label: "Inativo" },
+  { value: "TRANSFERIR", label: "Transferir" }
+];
+
 /** ===== BUILD DOM 1x POR CARGA ===== */
 function buildAllStepsDom_(){
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
 
-  // ✅ datalist de supervisões (para Transferir)
   const datalistSup = `
     <datalist id="dlSupGestores">
       ${(supervisoesGestores || [])
@@ -948,9 +912,9 @@ function buildAllStepsDom_(){
     datalistSup +
     renderGroupedOnce_(orderedNames, (n)=>{
       const extraLine = getOSLocaisLine_(n);
-      const status = String(form[n].disponibilidade_status||"OK").trim();
-      const isTransf = status.toUpperCase() === "TRANSFERIR";
-      const opacity = status.toUpperCase() === "OK" ? "1" : "0.55";
+      const status = String(form[n].disponibilidade_status||"OK").trim().toUpperCase();
+      const isTransf = status === "TRANSFERIR";
+      const opacity = status === "OK" ? "1" : "0.55";
       const rowId = `rowA_${idSafe(n)}`;
 
       const transfVal = form[n].disponibilidade_Transferir_para || "";
@@ -964,12 +928,11 @@ function buildAllStepsDom_(){
           </div>
 
           <select data-action="disp" data-nome="${escAttr(n)}">
-            ${["OK","Atestado","Férias","Folga","Falta","Inativo","Transferir"].map(op=>`
-              <option ${status===op?"selected":""}>${op}</option>
+            ${DISP_OPTIONS.map(op=>`
+              <option value="${escAttr(op.value)}" ${status===op.value?"selected":""}>${esc(op.label)}</option>
             `).join("")}
           </select>
 
-          <!-- ✅ Coluna 3: OBS ou TRANSFERIR PARA -->
           <div style="grid-column:3; display:flex; flex-direction:column; gap:6px;">
             <input
               data-action="dispObs" data-nome="${escAttr(n)}"
@@ -1016,7 +979,7 @@ function buildAllStepsDom_(){
 
         <select data-action="estadiaTipo" data-nome="${escAttr(n)}">
           ${["Casa","Hotel","Alojamento","Fazenda"].map(op=>`
-            <option ${tipo===op?"selected":""}>${op}</option>
+            <option value="${escAttr(op)}" ${tipo===op?"selected":""}>${esc(op)}</option>
           `).join("")}
         </select>
 
@@ -1059,9 +1022,9 @@ function buildAllStepsDom_(){
   document.getElementById("listaC").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
     const rowId = `rowC_${idSafe(n)}`;
-    const cafe = String(form[n].cafe_valor||"NÃO").toUpperCase()==="SIM";
-    const alm  = String(form[n].almoco_valor||"NÃO").toUpperCase()==="SIM";
-    const jan  = String(form[n].janta_valor||"NÃO").toUpperCase()==="SIM";
+    const cafe = String(form[n].cafe_valor||"") === "SIM";
+    const alm  = String(form[n].almoco_valor||"") === "SIM";
+    const jan  = String(form[n].janta_valor||"") === "SIM";
 
     return `
       <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
@@ -1095,6 +1058,17 @@ function buildAllStepsDom_(){
     const rowId = `rowD_${idSafe(n)}`;
     const tipo = String(form[n].deslocamento_tipo||"");
 
+    const opts = [
+      "",
+      "Empresa",
+      "Veículo próprio",
+      "Frota (motorista)",
+      "Carona",
+      "Uber",
+      "Km",
+      "Manutenção"
+    ];
+
     return `
       <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
         <div class="nomeMain">
@@ -1103,8 +1077,8 @@ function buildAllStepsDom_(){
         </div>
 
         <select data-action="deslocTipo" data-nome="${escAttr(n)}">
-          ${["","Frota (motorista)","Carona","Uber","Km"].map(op=>`
-            <option ${tipo===op?"selected":""}>${op}</option>
+          ${opts.map(op=>`
+            <option value="${escAttr(op)}" ${tipo===op?"selected":""}>${esc(op || "Selecione...")}</option>
           `).join("")}
         </select>
 
@@ -1164,7 +1138,7 @@ function buildAllStepsDom_(){
           <div class="inlineVal">
             <div class="chkRow">
               <input type="checkbox" data-action="extraToggle" data-field="manut_veic_valor" data-nome="${escAttr(n)}" ${man?"checked":""}>
-              <span>Manutenção Veiculo</span>
+              <span>Manutenção Veículo</span>
             </div>
             <input type="number" step="0.01" class="${man?"":"extraInputHidden"}"
               data-action="extraVal" data-field="manut_veic_valor" data-nome="${escAttr(n)}"
@@ -1205,10 +1179,10 @@ function bindDelegationA_(){
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
 
-    const novo = String(el.value || "").trim();
+    const novo = String(el.value || "").trim().toUpperCase();
     form[nome].disponibilidade_status = novo;
 
-    const isTransf = novo.toUpperCase() === "TRANSFERIR";
+    const isTransf = novo === "TRANSFERIR";
     const row = domIndex["A"].get(nome);
 
     if(row){
@@ -1238,8 +1212,8 @@ function bindDelegationA_(){
     }
 
     if(act === "transferTo"){
-      form[nome].disponibilidade_Transferir_para = el.value; // ✅ destino
-      form[nome].disponibilidade_obs = el.value; // mantém compatível (e aparece na conferência como destino)
+      form[nome].disponibilidade_Transferir_para = el.value;
+      form[nome].disponibilidade_obs = el.value; // compatível
       return;
     }
   });
@@ -1321,9 +1295,9 @@ function bindDelegationC_(){
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
 
-    if(act === "cafe")   form[nome].cafe_valor = el.checked ? "SIM" : "NÃO";
-    if(act === "almoco") form[nome].almoco_valor = el.checked ? "SIM" : "NÃO";
-    if(act === "janta")  form[nome].janta_valor = el.checked ? "SIM" : "NÃO";
+    if(act === "cafe")   form[nome].cafe_valor = el.checked ? "SIM" : "";
+    if(act === "almoco") form[nome].almoco_valor = el.checked ? "SIM" : "";
+    if(act === "janta")  form[nome].janta_valor = el.checked ? "SIM" : "";
   });
 }
 
@@ -1404,7 +1378,7 @@ function bindDelegationE_(){
   });
 }
 
-/** ===== Painel B (Hotel/Alojamento D-1) ===== */
+/** ===== Painel B (Hotel/Alojamento/Fazenda) ===== */
 async function onEstadiaChangeByNome_(nome, val){
   if(!form[nome]) return;
 
@@ -1415,6 +1389,17 @@ async function onEstadiaChangeByNome_(nome, val){
     String(supPorNomeFast[nome] || ctx?.mapSupPorNome?.[nome] || "SEM SUPERVISÃO").trim() || "SEM SUPERVISÃO";
 
   const dataRef = document.getElementById("dataRef").value.trim();
+
+  if(tipo === "Fazenda"){
+    form[nome].estadia_obs = "Pernoite";
+    setEstadiaObsUI_(nome);
+    return;
+  }
+
+  if(tipo === "Casa"){
+    // opcional: limpar obs, mas deixei sem apagar automaticamente
+    return;
+  }
 
   if(tipo === "Hotel"){
     setRowLoading_(nome, true);
@@ -1473,14 +1458,12 @@ async function onEstadiaChangeByNome_(nome, val){
     setEstadiaObsUI_(nome);
     return;
   }
-
-  return;
 }
 
 function toggleAllAlmoco(on){
   orderedNames.forEach(n=>{
     if(!PROSSEGUIR(form[n].disponibilidade_status)) return;
-    form[n].almoco_valor = on ? "SIM" : "NÃO";
+    form[n].almoco_valor = on ? "SIM" : "";
     const row = domIndex.C.get(n);
     if(!row) return;
     const chk = row.querySelector(`input[data-action="almoco"][data-nome="${cssEsc_(n)}"]`);
@@ -1539,14 +1522,24 @@ async function carregar(){
   (res.liberados || []).forEach(p=>{
     const nome = p.colaborador;
     const prev = lanc[nome] || {};
+
+    // ✅ status SEM ACENTO (se vier com acento, converte)
+    const prevStatusRaw = String(prev.disponibilidade_status ?? "OK");
+    const prevStatus = prevStatusRaw
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .toUpperCase().trim();
+
+    const st = ["OK","ATESTADO","FERIAS","FOLGA","FALTA","INATIVO","TRANSFERIR"].includes(prevStatus) ? prevStatus : "OK";
+
     form[nome] = {
       coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
-      disponibilidade_status: prev.disponibilidade_status ?? "OK",
+
+      disponibilidade_status: st,
       disponibilidade_obs: prev.disponibilidade_obs ?? "",
 
       disponibilidade_Transferir_para:
-        (String(prev.disponibilidade_status||"").toUpperCase() === "TRANSFERIR"
-          ? String(prev.disponibilidade_obs || "")
+        (st === "TRANSFERIR"
+          ? String(prev.disponibilidade_obs || prev.disponibilidade_Transferir_para || "")
           : String(prev.disponibilidade_Transferir_para || "")),
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
@@ -1556,9 +1549,10 @@ async function carregar(){
       hotel_dias: Number(prev.hotel_dias ?? 1),
       hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
 
-      cafe_valor: (prev.cafe_valor ?? "NÃO"),
-      almoco_valor: (prev.almoco_valor ?? "NÃO"),
-      janta_valor: (prev.janta_valor ?? "NÃO"),
+      // ✅ Alimentação: SIM ou ""
+      cafe_valor: (prev.cafe_valor === "SIM" ? "SIM" : ""),
+      almoco_valor: (prev.almoco_valor === "SIM" ? "SIM" : ""),
+      janta_valor: (prev.janta_valor === "SIM" ? "SIM" : ""),
 
       deslocamento_tipo: prev.deslocamento_tipo ?? "",
       deslocamento_obs: prev.deslocamento_obs ?? "",
@@ -1588,7 +1582,7 @@ async function carregar(){
   show("bottomBar");
 }
 
-/** ✅ Salva etapa e ENFILEIRA pós-processo (com debug) */
+/** ✅ Salva etapa e enfileira pós-processo */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -1598,14 +1592,11 @@ async function salvarEtapaAtual_(){
   let registros = [];
   if(step === "A"){
     registros = namesAll.map(n => {
-      const statusRaw = String(form[n].disponibilidade_status || "").trim();
-      const status = statusRaw.toUpperCase(); // ✅ garante INATIVO/TRANSFERIR em caixa alta
+      const status = String(form[n].disponibilidade_status || "OK").trim().toUpperCase();
       const isTransf = status === "TRANSFERIR";
 
       const supAtual = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || "").trim();
-      const supDestino = String(
-        form[n].disponibilidade_Transferir_para || form[n].disponibilidade_obs || ""
-      ).trim();
+      const supDestino = String(form[n].disponibilidade_Transferir_para || form[n].disponibilidade_obs || "").trim();
 
       return {
         colaborador: n,
@@ -1619,13 +1610,17 @@ async function salvarEtapaAtual_(){
   }
 
   if(step === "B"){
-    // ✅ só salva B para quem está OK
     registros = namesAll
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => {
-        const tipo = form[n].estadia_tipo;
+        const tipo = String(form[n].estadia_tipo || "Casa").trim();
         const dias = Number(form[n].hotel_dias || 0);
         const hora = String(form[n].hotel_chegada || "").trim();
+
+        // ✅ Fazenda força pernoite
+        if(tipo === "Fazenda"){
+          form[n].estadia_obs = "Pernoite";
+        }
 
         const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
 
@@ -1635,44 +1630,50 @@ async function salvarEtapaAtual_(){
           supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
           estadia_tipo: tipo,
           estadia_obs: obsNorm,
-          hotel_dias: (String(tipo).trim()==="Hotel" ? (dias>0?dias:1) : ""),
-          hotel_chegada: (String(tipo).trim()==="Hotel" ? hora : "")
+          hotel_dias: (tipo==="Hotel" ? (dias>0?dias:1) : ""),
+          hotel_chegada: (tipo==="Hotel" ? hora : "")
         };
       });
   }
 
   if(step === "C"){
-    registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
-      colaborador: n,
-      coordenacao: form[n].coordenacao,
-      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-      cafe_valor: form[n].cafe_valor,
-      almoco_valor: form[n].almoco_valor,
-      janta_valor: form[n].janta_valor
-    }));
+    registros = namesAll
+      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+      .map(n => ({
+        colaborador: n,
+        coordenacao: form[n].coordenacao,
+        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+        cafe_valor: form[n].cafe_valor,     // "SIM" ou ""
+        almoco_valor: form[n].almoco_valor, // "SIM" ou ""
+        janta_valor: form[n].janta_valor    // "SIM" ou ""
+      }));
   }
 
   if(step === "D"){
-    registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
-      colaborador: n,
-      coordenacao: form[n].coordenacao,
-      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-      deslocamento_tipo: form[n].deslocamento_tipo,
-      deslocamento_obs: form[n].deslocamento_obs
-    }));
+    registros = namesAll
+      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+      .map(n => ({
+        colaborador: n,
+        coordenacao: form[n].coordenacao,
+        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+        deslocamento_tipo: form[n].deslocamento_tipo,
+        deslocamento_obs: form[n].deslocamento_obs
+      }));
   }
 
   if(step === "E"){
-    registros = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status)).map(n => ({
-      colaborador: n,
-      coordenacao: form[n].coordenacao,
-      supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-      extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
-      extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
-      extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
-      manut_veic_valor: Number(form[n].manut_veic_valor||0),
-      extras_obs: form[n].extras_obs || ""
-    }));
+    registros = namesAll
+      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+      .map(n => ({
+        colaborador: n,
+        coordenacao: form[n].coordenacao,
+        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+        extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
+        extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
+        extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
+        manut_veic_valor: Number(form[n].manut_veic_valor||0),
+        extras_obs: form[n].extras_obs || ""
+      }));
   }
 
   setBusy(true);
@@ -1680,7 +1681,6 @@ async function salvarEtapaAtual_(){
   const r = await salvarEtapaPayload_(dataRef, step, registros);
   if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  // ✅ agora ENFILEIRA e mostra erro se falhar (p/ descobrir pq não notifica)
   await enfileirarPosProcesso_(dataRef, step, registros);
 
   if(step === "B" && isFriday_(dataRef)){
@@ -1692,9 +1692,14 @@ async function salvarEtapaAtual_(){
       .filter(n => !!form[n].wknd_hosp)
       .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
       .map(n => {
-        const tipo = form[n].estadia_tipo;
+        const tipo = String(form[n].estadia_tipo||"").trim();
         const dias = Number(form[n].hotel_dias || 0);
         const hora = String(form[n].hotel_chegada || "").trim();
+
+        if(tipo === "Fazenda"){
+          form[n].estadia_obs = "Pernoite";
+        }
+
         const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
 
         return {
@@ -1703,8 +1708,8 @@ async function salvarEtapaAtual_(){
           supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
           estadia_tipo: tipo,
           estadia_obs: obsNorm,
-          hotel_dias: (String(tipo).trim()==="Hotel" ? (dias>0?dias:1) : ""),
-          hotel_chegada: (String(tipo).trim()==="Hotel" ? hora : "")
+          hotel_dias: (tipo==="Hotel" ? (dias>0?dias:1) : ""),
+          hotel_chegada: (tipo==="Hotel" ? hora : "")
         };
       });
 
