@@ -1296,18 +1296,22 @@ function bindDelegationC_(){
   if(!box || box._bound) return;
   box._bound = true;
 
+  const toSN = (checked)=> checked ? "SIM" : "NÃO";
+
   box.addEventListener("change", (e)=>{
     const el = e.target;
     const act = el.getAttribute("data-action");
     if(!act) return;
+
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
 
-    if(act === "cafe")   form[nome].cafe_valor = el.checked ? "SIM" : "";
-    if(act === "almoco") form[nome].almoco_valor = el.checked ? "SIM" : "";
-    if(act === "janta")  form[nome].janta_valor = el.checked ? "SIM" : "";
+    if(act === "cafe")   form[nome].cafe_valor   = toSN(el.checked);
+    if(act === "almoco") form[nome].almoco_valor = toSN(el.checked);
+    if(act === "janta")  form[nome].janta_valor  = toSN(el.checked);
   });
 }
+
 
 /** ===== Delegation D ===== */
 function bindDelegationD_(){
@@ -1554,10 +1558,11 @@ async function carregar(){
 
       hotel_dias: Number(prev.hotel_dias ?? 1),
       hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
+    
+    cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
+    almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
+    janta_valor:  isSim_(prev.janta_valor)  ? "SIM" : "NÃO",
 
-      cafe_valor: (prev.cafe_valor === "SIM" ? "SIM" : ""),
-      almoco_valor: (prev.almoco_valor === "SIM" ? "SIM" : ""),
-      janta_valor: (prev.janta_valor === "SIM" ? "SIM" : ""),
 
       deslocamento_tipo: prev.deslocamento_tipo ?? "",
       deslocamento_obs: prev.deslocamento_obs ?? "",
@@ -1640,18 +1645,36 @@ async function salvarEtapaAtual_(){
       });
   }
 
-  if(step === "C"){
-    registros = namesAll
-      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-      .map(n => ({
+if(step === "C"){
+  registros = namesAll
+    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+    .map(n => {
+      const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "NÃO";
+      const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "NÃO";
+      const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "NÃO";
+
+      return {
         colaborador: n,
         coordenacao: form[n].coordenacao,
         supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-        cafe_valor: form[n].cafe_valor,
-        almoco_valor: form[n].almoco_valor,
-        janta_valor: form[n].janta_valor
-      }));
-  }
+
+        // nomes atuais (como você já tinha)
+        cafe_valor: cafe,
+        almoco_valor: almoco,
+        janta_valor: janta,
+
+        // ✅ compat extra (caso o GAS espere sem _valor)
+        cafe: cafe,
+        almoco: almoco,
+        janta: janta,
+
+        // ✅ compat extra (caso o GAS espere boolean/1-0)
+        cafe_bool: (cafe === "SIM") ? 1 : 0,
+        almoco_bool: (almoco === "SIM") ? 1 : 0,
+        janta_bool: (janta === "SIM") ? 1 : 0
+      };
+    });
+}
 
   if(step === "D"){
     registros = namesAll
@@ -1799,3 +1822,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
