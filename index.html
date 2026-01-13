@@ -394,6 +394,16 @@ const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
 /** ✅ “index” de elementos DOM por nome */
 const domIndex = { A: new Map(), B: new Map(), C: new Map(), D: new Map(), E: new Map() };
 
+/** ✅ DIRTY tracking (para salvar só o que mudou e acelerar Próximo) */
+const dirty = { A:new Set(), B:new Set(), C:new Set(), D:new Set(), E:new Set() };
+function resetDirty_(){ ["A","B","C","D","E"].forEach(k=>dirty[k].clear()); }
+function markDirty_(etapa, nome){
+  if(!etapa || !nome) return;
+  const k = String(etapa).toUpperCase();
+  if(!dirty[k]) return;
+  dirty[k].add(nome);
+}
+
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 function escAttr(s){ return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
@@ -504,6 +514,7 @@ function logoutForcado(msg){
   coordPorNomeFast = {};
   orderedNames = [];
   supervisoesGestores = [];
+  resetDirty_();
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
   hide("app"); hide("bottomBar"); show("loginCard");
   document.getElementById("loginStatus").innerText = msg || "Faça login novamente.";
@@ -847,20 +858,26 @@ async function enfileirarPosProcesso_(dataRef, etapa, registros){
   }
 }
 
+/** ✅ Atualiza bloqueio/visibilidade só de 1 colaborador (mais rápido) */
+function syncBlockedRowsByNome_(nome){
+  const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
+
+  ["B","C","D","E"].forEach(k=>{
+    const row = domIndex[k].get(nome);
+    if(!row) return;
+    row.classList.toggle("rowHidden", !ok);
+    row.classList.toggle("rowBlocked", !ok);
+  });
+
+  const rowA = domIndex["A"].get(nome);
+  if(rowA) rowA.style.opacity = ok ? "1" : "0.55";
+}
+
+/** ✅ Mantido para uso só no build inicial */
 function syncBlockedRowsAllSteps_(){
   const names = orderedNames;
   names.forEach(nome=>{
-    const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
-
-    ["B","C","D","E"].forEach(k=>{
-      const row = domIndex[k].get(nome);
-      if(!row) return;
-      row.classList.toggle("rowHidden", !ok);
-      row.classList.toggle("rowBlocked", !ok);
-    });
-
-    const rowA = domIndex["A"].get(nome);
-    if(rowA) rowA.style.opacity = ok ? "1" : "0.55";
+    syncBlockedRowsByNome_(nome);
   });
 }
 
@@ -921,13 +938,12 @@ function buildAllStepsDom_(){
       const status = String(form[n].disponibilidade_status||"OK").trim().toUpperCase();
       const isTransf = status === "TRANSFERIR";
       const opacity = status === "OK" ? "1" : "0.55";
-      const rowId = `rowA_${idSafe(n)}`;
 
       const transfVal = form[n].disponibilidade_Transferir_para || "";
       const obsVal = form[n].disponibilidade_obs || "";
 
       return `
-        <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}" style="opacity:${opacity}">
+        <div class="nomeRow" id="rowA_${idSafe(n)}" data-nome="${escAttr(n)}" style="opacity:${opacity}">
           <div class="nomeMain">
             <div class="nome">${esc(n)}</div>
             ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -969,15 +985,13 @@ function buildAllStepsDom_(){
     const tipo = String(form[n].estadia_tipo||"Casa").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
     const extraLine = getOSLocaisLine_(n);
-    const rowId = `rowB_${idSafe(n)}`;
 
     const showHotelFields = (tipo === "Hotel");
-
     const hotelDias = Number(form[n].hotel_dias || 0) > 0 ? Number(form[n].hotel_dias) : 1;
     const hotelChegada = String(form[n].hotel_chegada || "18:00");
 
     return `
-      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+      <div class="nomeRow" id="rowB_${idSafe(n)}" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -1025,17 +1039,14 @@ function buildAllStepsDom_(){
     `;
   });
 
-  /** ✅ Painel C (Ajustado) */
   document.getElementById("listaC").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
-    const rowId = `rowC_${idSafe(n)}`;
-
     const cafe = isSim_(form[n].cafe_valor);
     const alm  = isSim_(form[n].almoco_valor);
     const jan  = isSim_(form[n].janta_valor);
 
     return `
-      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+      <div class="nomeRow" id="rowC_${idSafe(n)}" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -1063,7 +1074,6 @@ function buildAllStepsDom_(){
 
   document.getElementById("listaD").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
-    const rowId = `rowD_${idSafe(n)}`;
     const tipo = String(form[n].deslocamento_tipo||"");
 
     const opts = [
@@ -1078,7 +1088,7 @@ function buildAllStepsDom_(){
     ];
 
     return `
-      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+      <div class="nomeRow" id="rowD_${idSafe(n)}" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -1098,7 +1108,6 @@ function buildAllStepsDom_(){
 
   document.getElementById("listaE").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
-    const rowId = `rowE_${idSafe(n)}`;
 
     const rec = Number(form[n].extras_recarga_valor||0) > 0;
     const pas = Number(form[n].extras_passagem_valor||0) > 0;
@@ -1106,7 +1115,7 @@ function buildAllStepsDom_(){
     const man = Number(form[n].manut_veic_valor||0) > 0;
 
     return `
-      <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
+      <div class="nomeRow" id="rowE_${idSafe(n)}" data-nome="${escAttr(n)}">
         <div class="nomeMain">
           <div class="nome">${esc(n)}</div>
           ${extraLine ? `<div class="sub">${esc(extraLine)}</div>` : `<div class="sub muted">Sem Local de Embarque</div>`}
@@ -1205,7 +1214,8 @@ function bindDelegationA_(){
       }
     }
 
-    syncBlockedRowsAllSteps_();
+    markDirty_("A", nome);
+    syncBlockedRowsByNome_(nome); // ✅ muito mais rápido que varrer todo mundo
   });
 
   box.addEventListener("input", (e)=>{
@@ -1216,12 +1226,14 @@ function bindDelegationA_(){
 
     if(act === "dispObs"){
       form[nome].disponibilidade_obs = el.value;
+      markDirty_("A", nome);
       return;
     }
 
     if(act === "transferTo"){
       form[nome].disponibilidade_Transferir_para = el.value;
       form[nome].disponibilidade_obs = el.value; // compatível
+      markDirty_("A", nome);
       return;
     }
   });
@@ -1241,6 +1253,7 @@ function bindDelegationB_(){
 
     if(act === "estadiaTipo"){
       await onEstadiaChangeByNome_(nome, el.value);
+      markDirty_("B", nome);
 
       const dataRef = document.getElementById("dataRef").value.trim();
       const sexta = isFriday_(dataRef);
@@ -1261,6 +1274,7 @@ function bindDelegationB_(){
 
     if(act === "wknd"){
       form[nome].wknd_hosp = !!el.checked;
+      markDirty_("B", nome);
       return;
     }
   });
@@ -1273,6 +1287,7 @@ function bindDelegationB_(){
 
     if(act === "estadiaObs"){
       form[nome].estadia_obs = el.value;
+      markDirty_("B", nome);
       return;
     }
 
@@ -1280,11 +1295,13 @@ function bindDelegationB_(){
       const v = Number(el.value || 0);
       form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : 1;
       el.value = String(form[nome].hotel_dias);
+      markDirty_("B", nome);
       return;
     }
 
     if(act === "hotelChegada"){
       form[nome].hotel_chegada = String(el.value || "").trim();
+      markDirty_("B", nome);
       return;
     }
   });
@@ -1309,9 +1326,10 @@ function bindDelegationC_(){
     if(act === "cafe")   form[nome].cafe_valor   = toSN(el.checked);
     if(act === "almoco") form[nome].almoco_valor = toSN(el.checked);
     if(act === "janta")  form[nome].janta_valor  = toSN(el.checked);
+
+    markDirty_("C", nome);
   });
 }
-
 
 /** ===== Delegation D ===== */
 function bindDelegationD_(){
@@ -1326,6 +1344,7 @@ function bindDelegationD_(){
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
     form[nome].deslocamento_tipo = el.value;
+    markDirty_("D", nome);
   });
 
   box.addEventListener("input", (e)=>{
@@ -1335,6 +1354,7 @@ function bindDelegationD_(){
     const nome = el.getAttribute("data-nome") || "";
     if(!nome || !form[nome]) return;
     form[nome].deslocamento_obs = el.value;
+    markDirty_("D", nome);
   });
 }
 
@@ -1365,6 +1385,8 @@ function bindDelegationE_(){
         input.classList.toggle("extraInputHidden", !el.checked);
         if(el.checked) input.value = String(form[nome][field] || 0);
       }
+
+      markDirty_("E", nome);
       return;
     }
   });
@@ -1380,11 +1402,13 @@ function bindDelegationE_(){
       if(!field) return;
       const num = Number(String(el.value||"").replace(",", "."));
       form[nome][field] = isNaN(num) ? 0 : num;
+      markDirty_("E", nome);
       return;
     }
 
     if(act === "extrasObs"){
       form[nome].extras_obs = el.value;
+      markDirty_("E", nome);
       return;
     }
   });
@@ -1475,6 +1499,7 @@ function toggleAllAlmoco(on){
   orderedNames.forEach(n=>{
     if(!PROSSEGUIR(form[n].disponibilidade_status)) return;
     form[n].almoco_valor = on ? "SIM" : "";
+    markDirty_("C", n);
     const row = domIndex.C.get(n);
     if(!row) return;
     const chk = row.querySelector(`input[data-action="almoco"][data-nome="${cssEsc_(n)}"]`);
@@ -1554,15 +1579,14 @@ async function carregar(){
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
       estadia_obs: prev.estadia_obs ?? "",
-      wknd_hosp: false,
+      wknd_hosp: !!prev.wknd_hosp,
 
       hotel_dias: Number(prev.hotel_dias ?? 1),
       hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
-    
-    cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
-    almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
-    janta_valor:  isSim_(prev.janta_valor)  ? "SIM" : "NÃO",
 
+      cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
+      almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
+      janta_valor:  isSim_(prev.janta_valor)  ? "SIM" : "NÃO",
 
       deslocamento_tipo: prev.deslocamento_tipo ?? "",
       deslocamento_obs: prev.deslocamento_obs ?? "",
@@ -1578,7 +1602,6 @@ async function carregar(){
   });
 
   orderedNames = computeOrderedNames_();
-
   buildAllStepsDom_();
 
   bindDelegationA_();
@@ -1587,21 +1610,30 @@ async function carregar(){
   bindDelegationD_();
   bindDelegationE_();
 
+  resetDirty_(); // ✅ tudo carregado = nada “sujo” ainda
+
   setStep("A");
   setDebug("OK");
   show("bottomBar");
 }
 
-/** ✅ Salva etapa e enfileira pós-processo */
+/** ✅ Salva etapa (somente alterados) e enfileira pós-processo */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
 
+  const dirtyNames = Array.from(dirty[step] || []);
+  if(dirtyNames.length === 0){
+    setDebug("Nada para salvar (sem alterações).");
+    return { ok:true, skipped:true };
+  }
+
   let registros = [];
+
   if(step === "A"){
-    registros = namesAll.map(n => {
+    registros = dirtyNames.map(n => {
       const status = String(form[n].disponibilidade_status || "OK").trim().toUpperCase();
       const isTransf = status === "TRANSFERIR";
 
@@ -1620,7 +1652,7 @@ async function salvarEtapaAtual_(){
   }
 
   if(step === "B"){
-    registros = namesAll
+    registros = dirtyNames
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => {
         const tipo = String(form[n].estadia_tipo || "Casa").trim();
@@ -1645,39 +1677,36 @@ async function salvarEtapaAtual_(){
       });
   }
 
-if(step === "C"){
-  registros = namesAll
-    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-    .map(n => {
-      const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "NÃO";
-      const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "NÃO";
-      const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "NÃO";
+  if(step === "C"){
+    registros = dirtyNames
+      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+      .map(n => {
+        const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "NÃO";
+        const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "NÃO";
+        const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "NÃO";
 
-      return {
-        colaborador: n,
-        coordenacao: form[n].coordenacao,
-        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+        return {
+          colaborador: n,
+          coordenacao: form[n].coordenacao,
+          supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
 
-        // nomes atuais (como você já tinha)
-        cafe_valor: cafe,
-        almoco_valor: almoco,
-        janta_valor: janta,
+          cafe_valor: cafe,
+          almoco_valor: almoco,
+          janta_valor: janta,
 
-        // ✅ compat extra (caso o GAS espere sem _valor)
-        cafe: cafe,
-        almoco: almoco,
-        janta: janta,
+          cafe: cafe,
+          almoco: almoco,
+          janta: janta,
 
-        // ✅ compat extra (caso o GAS espere boolean/1-0)
-        cafe_bool: (cafe === "SIM") ? 1 : 0,
-        almoco_bool: (almoco === "SIM") ? 1 : 0,
-        janta_bool: (janta === "SIM") ? 1 : 0
-      };
-    });
-}
+          cafe_bool: (cafe === "SIM") ? 1 : 0,
+          almoco_bool: (almoco === "SIM") ? 1 : 0,
+          janta_bool: (janta === "SIM") ? 1 : 0
+        };
+      });
+  }
 
   if(step === "D"){
-    registros = namesAll
+    registros = dirtyNames
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => ({
         colaborador: n,
@@ -1689,7 +1718,7 @@ if(step === "C"){
   }
 
   if(step === "E"){
-    registros = namesAll
+    registros = dirtyNames
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => ({
         colaborador: n,
@@ -1710,6 +1739,7 @@ if(step === "C"){
 
   await enfileirarPosProcesso_(dataRef, step, registros);
 
+  /** ✅ Sexta: replica B para SÁB/DOM quando marcado */
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -1752,6 +1782,10 @@ if(step === "C"){
   }
 
   setBusy(false);
+
+  // ✅ limpa dirty da etapa atual após salvar
+  dirty[step].clear();
+
   return { ok:true };
 }
 
@@ -1822,4 +1856,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
