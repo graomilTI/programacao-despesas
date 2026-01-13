@@ -405,6 +405,12 @@ function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || 
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
 
+/** ✅ SIM robusto (para checkbox vindo do back) */
+function isSim_(v){
+  const s = String(v ?? "").trim().toUpperCase();
+  return s === "SIM" || s === "S" || s === "TRUE" || s === "1" || s === "X" || s === "OK";
+}
+
 function openHelpModal(){
   const m = document.getElementById("helpModal");
   if(!m) return;
@@ -1019,12 +1025,14 @@ function buildAllStepsDom_(){
     `;
   });
 
+  /** ✅ Painel C (Ajustado) */
   document.getElementById("listaC").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const extraLine = getOSLocaisLine_(n);
     const rowId = `rowC_${idSafe(n)}`;
-    const cafe = String(form[n].cafe_valor||"") === "SIM";
-    const alm  = String(form[n].almoco_valor||"") === "SIM";
-    const jan  = String(form[n].janta_valor||"") === "SIM";
+
+    const cafe = isSim_(form[n].cafe_valor);
+    const alm  = isSim_(form[n].almoco_valor);
+    const jan  = isSim_(form[n].janta_valor);
 
     return `
       <div class="nomeRow" id="${rowId}" data-nome="${escAttr(n)}">
@@ -1397,7 +1405,6 @@ async function onEstadiaChangeByNome_(nome, val){
   }
 
   if(tipo === "Casa"){
-    // opcional: limpar obs, mas deixei sem apagar automaticamente
     return;
   }
 
@@ -1523,7 +1530,6 @@ async function carregar(){
     const nome = p.colaborador;
     const prev = lanc[nome] || {};
 
-    // ✅ status SEM ACENTO (se vier com acento, converte)
     const prevStatusRaw = String(prev.disponibilidade_status ?? "OK");
     const prevStatus = prevStatusRaw
       .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
@@ -1549,7 +1555,6 @@ async function carregar(){
       hotel_dias: Number(prev.hotel_dias ?? 1),
       hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
 
-      // ✅ Alimentação: SIM ou ""
       cafe_valor: (prev.cafe_valor === "SIM" ? "SIM" : ""),
       almoco_valor: (prev.almoco_valor === "SIM" ? "SIM" : ""),
       janta_valor: (prev.janta_valor === "SIM" ? "SIM" : ""),
@@ -1617,7 +1622,6 @@ async function salvarEtapaAtual_(){
         const dias = Number(form[n].hotel_dias || 0);
         const hora = String(form[n].hotel_chegada || "").trim();
 
-        // ✅ Fazenda força pernoite
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
         }
@@ -1643,9 +1647,9 @@ async function salvarEtapaAtual_(){
         colaborador: n,
         coordenacao: form[n].coordenacao,
         supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-        cafe_valor: form[n].cafe_valor,     // "SIM" ou ""
-        almoco_valor: form[n].almoco_valor, // "SIM" ou ""
-        janta_valor: form[n].janta_valor    // "SIM" ou ""
+        cafe_valor: form[n].cafe_valor,
+        almoco_valor: form[n].almoco_valor,
+        janta_valor: form[n].janta_valor
       }));
   }
 
