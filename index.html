@@ -607,10 +607,42 @@ async function baixarPDFProgramacao_(){
     alert(err);
     return false;
   }
-  downloadPdfFromB64_(r.b64, r.fileName || "programacao.pdf");
+const url  = r.pdfDownloadUrl || r.downloadUrl || "";
+const nome = r.pdfFileName || r.fileName || "programacao.pdf";
+
+// ✅ prioridade: baixar direto pela URL
+if(url){
+  forceDownloadUrl_(url, nome);
   setDebug("PDF baixado ✅");
   return true;
 }
+
+// 🔁 fallback (caso ainda venha base64)
+if(r.b64){
+  downloadPdfFromB64_(r.b64, nome);
+  setDebug("PDF baixado ✅");
+  return true;
+}
+
+setDebug("PDF não retornou URL nem base64 ❌");
+alert("PDF não retornou URL nem base64.");
+return false;
+
+function forceDownloadUrl_(url, fileName){
+  if(!url) return false;
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "programacao.pdf"; // ✅ força baixar
+  a.rel = "noopener";
+  a.target = "_self";
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return true;
+}
+
 async function finalizarEtapaEComPdf_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -641,13 +673,6 @@ async function finalizarEtapaEComPdf_(){
     payload: { dataReferencia: dataRef, etapa:"E", registros }
   });
 
-  if(r && r.ok && !(r.pdf && r.pdf.b64)){
-    const g = await api("gerarPDFProgramacao", { dataRef });
-    if(g && g.ok && g.b64){
-      r.pdf = { b64: g.b64, fileName: g.fileName || "programacao.pdf" };
-    }
-  }
-
   setBusy(false);
 
   if(!r || !r.ok){
@@ -658,15 +683,31 @@ async function finalizarEtapaEComPdf_(){
     return { ok:false };
   }
 
-  if(r.pdf?.b64){
-    downloadPdfFromB64_(r.pdf.b64, r.pdf.fileName || "programacao.pdf");
+const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
+const nome = r.pdfFileName || r.fileName || "programacao.pdf";
+
+if(url){
+  const ok = forceDownloadUrl_(url, nome);
+  if(ok){
     setDebug("PDF baixado ✅");
     return { ok:true, pdf:true };
   }
-
-  setDebug("Salvo ✅ (não retornou PDF)");
-  return { ok:true, pdf:false };
 }
+
+// fallback base64 (se existir)
+if(r.pdf?.b64){
+  downloadPdfFromB64_(r.pdf.b64, nome);
+  setDebug("PDF baixado ✅");
+  return { ok:true, pdf:true };
+}
+
+setDebug("Salvo ✅ (não retornou PDF)");
+return { ok:true, pdf:false };
+
+
+setDebug("Salvo ✅ (não retornou URL do PDF)");
+return { ok:true, pdf:false };
+
 
 async function login(){
   const raw = document.getElementById("loginInput").value;
@@ -1856,3 +1897,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
