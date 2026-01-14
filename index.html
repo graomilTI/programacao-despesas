@@ -572,7 +572,7 @@ async function api(action, args){
 }
 
 /** =========================
- * ✅ PDF (FORÇAR DOWNLOAD)
+ * ✅ PDF (FORÇAR DOWNLOAD)  ✅ (corrigido)
  * ========================= */
 function base64ToBlob_(b64, mime){
   const byteChars = atob(b64);
@@ -591,6 +591,18 @@ function downloadPdfFromB64_(b64, fileName){
   a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 120000);
 }
+function forceDownloadUrl_(url, fileName){
+  if(!url) return false;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "programacao.pdf";
+  a.rel = "noopener";
+  a.target = "_self";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return true;
+}
 async function baixarPDFProgramacao_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
@@ -601,46 +613,32 @@ async function baixarPDFProgramacao_(){
   setDebug("Gerando PDF...");
   const r = await api("gerarPDFProgramacao", { dataRef });
   setBusy(false);
+
   if(!r || !r.ok){
     const err = r?.error || "Erro ao gerar PDF";
     setDebug(err);
     alert(err);
     return false;
   }
-const url  = r.pdfDownloadUrl || r.downloadUrl || "";
-const nome = r.pdfFileName || r.fileName || "programacao.pdf";
 
-// ✅ prioridade: baixar direto pela URL
-if(url){
-  forceDownloadUrl_(url, nome);
-  setDebug("PDF baixado ✅");
-  return true;
-}
+  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
+  const nome = r.pdfFileName || r.fileName || "programacao.pdf";
 
-// 🔁 fallback (caso ainda venha base64)
-if(r.b64){
-  downloadPdfFromB64_(r.b64, nome);
-  setDebug("PDF baixado ✅");
-  return true;
-}
+  if(url){
+    forceDownloadUrl_(url, nome);
+    setDebug("PDF baixado ✅");
+    return true;
+  }
 
-setDebug("PDF não retornou URL nem base64 ❌");
-alert("PDF não retornou URL nem base64.");
-return false;
+  if(r.b64){
+    downloadPdfFromB64_(r.b64, nome);
+    setDebug("PDF baixado ✅");
+    return true;
+  }
 
-function forceDownloadUrl_(url, fileName){
-  if(!url) return false;
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName || "programacao.pdf"; // ✅ força baixar
-  a.rel = "noopener";
-  a.target = "_self";
-
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  return true;
+  setDebug("PDF não retornou URL nem base64 ❌");
+  alert("PDF não retornou URL nem base64.");
+  return false;
 }
 
 async function finalizarEtapaEComPdf_(){
@@ -669,7 +667,7 @@ async function finalizarEtapaEComPdf_(){
   setBusy(true);
   setDebug("Salvando + gerando PDF...");
 
-  let r = await api("finalizarEtapaE", {
+  const r = await api("finalizarEtapaE", {
     payload: { dataReferencia: dataRef, etapa:"E", registros }
   });
 
@@ -683,32 +681,30 @@ async function finalizarEtapaEComPdf_(){
     return { ok:false };
   }
 
-const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
-const nome = r.pdfFileName || r.fileName || "programacao.pdf";
+  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
+  const nome = r.pdfFileName || r.fileName || "programacao.pdf";
 
-if(url){
-  const ok = forceDownloadUrl_(url, nome);
-  if(ok){
+  if(url){
+    forceDownloadUrl_(url, nome);
     setDebug("PDF baixado ✅");
     return { ok:true, pdf:true };
   }
+
+  // fallback base64 (se existir)
+  const b64 = r.pdf?.b64 || r.b64 || "";
+  if(b64){
+    downloadPdfFromB64_(b64, nome);
+    setDebug("PDF baixado ✅");
+    return { ok:true, pdf:true };
+  }
+
+  setDebug("Salvo ✅ (não retornou PDF)");
+  return { ok:true, pdf:false };
 }
 
-// fallback base64 (se existir)
-if(r.pdf?.b64){
-  downloadPdfFromB64_(r.pdf.b64, nome);
-  setDebug("PDF baixado ✅");
-  return { ok:true, pdf:true };
-}
-
-setDebug("Salvo ✅ (não retornou PDF)");
-return { ok:true, pdf:false };
-
-
-setDebug("Salvo ✅ (não retornou URL do PDF)");
-return { ok:true, pdf:false };
-
-
+/** =========================
+ * ✅ LOGIN / DATA PADRÃO
+ * ========================= */
 async function login(){
   const raw = document.getElementById("loginInput").value;
 
@@ -1256,7 +1252,7 @@ function bindDelegationA_(){
     }
 
     markDirty_("A", nome);
-    syncBlockedRowsByNome_(nome); // ✅ muito mais rápido que varrer todo mundo
+    syncBlockedRowsByNome_(nome);
   });
 
   box.addEventListener("input", (e)=>{
@@ -1273,7 +1269,7 @@ function bindDelegationA_(){
 
     if(act === "transferTo"){
       form[nome].disponibilidade_Transferir_para = el.value;
-      form[nome].disponibilidade_obs = el.value; // compatível
+      form[nome].disponibilidade_obs = el.value;
       markDirty_("A", nome);
       return;
     }
@@ -1575,7 +1571,6 @@ async function carregar(){
   }
 
   ctx = res;
-
   supervisoesGestores = Array.isArray(res.supervisoesGestores) ? res.supervisoesGestores : [];
 
   supPorNomeFast = {};
@@ -1651,8 +1646,7 @@ async function carregar(){
   bindDelegationD_();
   bindDelegationE_();
 
-  resetDirty_(); // ✅ tudo carregado = nada “sujo” ainda
-
+  resetDirty_();
   setStep("A");
   setDebug("OK");
   show("bottomBar");
@@ -1824,9 +1818,7 @@ async function salvarEtapaAtual_(){
 
   setBusy(false);
 
-  // ✅ limpa dirty da etapa atual após salvar
   dirty[step].clear();
-
   return { ok:true };
 }
 
@@ -1897,4 +1889,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
