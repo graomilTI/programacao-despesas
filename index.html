@@ -1781,6 +1781,18 @@ async function salvarEtapaAtual_(){
   }
 
   let registros = [];
+  
+  if(step === "B"){
+  const rCopy = await api("copiarEstadiaAgora", {
+    payload: { dataReferencia: dataRef }
+  });
+
+  if(!rCopy || !rCopy.ok){
+    setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
+  } else {
+    setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
+  }
+}
 
   if(step === "A"){
     registros = dirtyNames.map(n => {
@@ -2010,3 +2022,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
