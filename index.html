@@ -189,6 +189,12 @@
     }
 
     .transferHidden{ display:none !important; }
+
+    /* ✅ Campo inválido (obrigatórios hotel/aloj) */
+    .inputInvalid{
+      border-color:#dc2626 !important;
+      box-shadow: 0 0 0 3px rgba(220,38,38,.15);
+    }
   </style>
 </head>
 
@@ -259,8 +265,8 @@
       <h3>Painel B – Estadia</h3>
       <div class="muted">
         Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige Cidade/UF se não achar.<br>
-        <b>Alojamento</b>: consulta D-1 e exige Nome do alojamento se não achar.<br>
+        <b>Hotel</b>: consulta D-1 e exige <b>Cidade</b> no Obs (formato: <b>Cidade:</b>).<br>
+        <b>Alojamento</b>: consulta D-1 e exige <b>Alojamento</b> no Obs (formato: <b>Alojamento:</b>).<br>
         <b>Fazenda</b>: força <b>Pernoite</b>.
       </div>
       <div id="listaB"></div>
@@ -334,8 +340,8 @@
         <h4>🏨 3) Estadia</h4>
         <ul>
           <li><b>Casa:</b> padrão.</li>
-          <li><b>Hotel:</b> tenta preencher via D-1; se não achar, pede cidade/UF.</li>
-          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, pede nome do alojamento.</li>
+          <li><b>Hotel:</b> tenta preencher via D-1; se não achar, pede cidade/UF (e Obs deve conter <b>Cidade:</b>).</li>
+          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, pede nome (e Obs deve conter <b>Alojamento:</b>).</li>
           <li><b>Fazenda:</b> preenche pernoite automático.</li>
         </ul>
       </div>
@@ -572,7 +578,7 @@ async function api(action, args){
 }
 
 /** =========================
- * ✅ PDF (FORÇAR DOWNLOAD)  ✅ (corrigido)
+ * ✅ PDF (FORÇAR DOWNLOAD)
  * ========================= */
 function base64ToBlob_(b64, mime){
   const byteChars = atob(b64);
@@ -690,7 +696,6 @@ async function finalizarEtapaEComPdf_(){
     return { ok:true, pdf:true };
   }
 
-  // fallback base64 (se existir)
   const b64 = r.pdf?.b64 || r.b64 || "";
   if(b64){
     downloadPdfFromB64_(b64, nome);
@@ -835,7 +840,7 @@ function setStep(s){
   setTimeout(()=>cur.classList.remove("fadeIn"), 140);
 }
 
-/** ✅ Normaliza obs do hotel e anexa diárias/chegada */
+/** ✅ Normaliza obs do hotel e anexa diárias/chegada (diárias permite vazio) */
 function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
   const t = String(tipo||"").trim();
   let s = String(obs||"").trim();
@@ -843,17 +848,54 @@ function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
   if(t === "Hotel"){
     if(s && !/cidade\s*:/i.test(s)) s = "Cidade: " + s;
 
-    const dias = Number(hotelDias || 0);
+    const dias = (hotelDias === "" || hotelDias == null) ? 0 : Number(hotelDias || 0);
     const hora = String(hotelChegada || "").trim();
 
     s = s.replace(/\|\s*Diárias\s*:\s*\d+\s*/gi, "").replace(/\|\s*Chegada\s*:\s*\d{2}:\d{2}\s*/gi, "").trim();
     s = s.replace(/\s*\|\s*\|\s*/g, " | ");
 
-    if(dias > 0) s += ` | Diárias: ${dias}`;
+    if(dias > 0) s += ` | Diárias: ${Math.floor(dias)}`;
     if(hora)     s += ` | Chegada: ${hora}`;
   }
 
   return s.trim();
+}
+
+/** ✅ Obrigatórios Hotel/Alojamento no Obs */
+function clearInvalidEstadiaUI_(nome){
+  const el = document.getElementById("eobs_" + idSafe(nome));
+  if(el) el.classList.remove("inputInvalid");
+}
+function markInvalidEstadiaUI_(nome){
+  const el = document.getElementById("eobs_" + idSafe(nome));
+  if(el){
+    el.classList.add("inputInvalid");
+    try{ el.focus({ preventScroll:false }); }catch(e){ el.focus(); }
+  }
+}
+function hasCidade_(obs){ return /cidade\s*:/i.test(String(obs||"")); }
+function hasAlojamento_(obs){ return /alojamento\s*:/i.test(String(obs||"")); }
+function validarObrigatoriosEstadia_(names){
+  const invalidHotel = [];
+  const invalidAloj = [];
+
+  (names || []).forEach(n=>{
+    if(!form[n] || !PROSSEGUIR(form[n].disponibilidade_status)) return;
+
+    clearInvalidEstadiaUI_(n);
+
+    const tipo = String(form[n].estadia_tipo || "Casa").trim();
+    const obs  = String(form[n].estadia_obs || "").trim();
+
+    if(tipo === "Hotel"){
+      if(!obs || !hasCidade_(obs)) invalidHotel.push(n);
+    }
+    if(tipo === "Alojamento"){
+      if(!obs || !hasAlojamento_(obs)) invalidAloj.push(n);
+    }
+  });
+
+  return { invalidHotel, invalidAloj };
 }
 
 function chunkArray(arr, size){
@@ -1024,8 +1066,11 @@ function buildAllStepsDom_(){
     const extraLine = getOSLocaisLine_(n);
 
     const showHotelFields = (tipo === "Hotel");
-    const hotelDias = Number(form[n].hotel_dias || 0) > 0 ? Number(form[n].hotel_dias) : 1;
-    const hotelChegada = String(form[n].hotel_chegada || "18:00");
+
+    /* ✅ diárias e chegada podem ficar vazias */
+    const hotelDiasRaw = (form[n].hotel_dias ?? "");
+    const hotelDias = (hotelDiasRaw === "" || hotelDiasRaw === null) ? "" : Number(hotelDiasRaw || 0);
+    const hotelChegada = String(form[n].hotel_chegada ?? "");
 
     return `
       <div class="nomeRow" id="rowB_${idSafe(n)}" data-nome="${escAttr(n)}">
@@ -1053,8 +1098,8 @@ function buildAllStepsDom_(){
                 <div class="miniLabel">Quantos dias? (Diárias)</div>
                 <input type="number" min="1" step="1"
                   data-action="hotelDias" data-nome="${escAttr(n)}"
-                  value="${escAttr(hotelDias)}"
-                  placeholder="Ex: 2">
+                  value="${escAttr(hotelDias === 0 ? "" : hotelDias)}"
+                  placeholder="(vazio = gestor define)">
               </div>
               <div>
                 <div class="miniLabel">Chegada (horário)</div>
@@ -1301,9 +1346,11 @@ function bindDelegationB_(){
       if(wk) wk.style.display = showWknd ? "" : "none";
 
       setHotelFieldsVisible_(nome, tipo === "Hotel");
+
       if(tipo === "Hotel"){
-        if(!Number(form[nome].hotel_dias || 0)) form[nome].hotel_dias = 1;
-        if(!String(form[nome].hotel_chegada || "").trim()) form[nome].hotel_chegada = "18:00";
+        // ✅ não força dias/chegada - pode ficar vazio
+        if(form[nome].hotel_dias == null) form[nome].hotel_dias = "";
+        if(form[nome].hotel_chegada == null) form[nome].hotel_chegada = "";
       }
 
       return;
@@ -1324,14 +1371,22 @@ function bindDelegationB_(){
 
     if(act === "estadiaObs"){
       form[nome].estadia_obs = el.value;
+      clearInvalidEstadiaUI_(nome); // ✅ limpa borda vermelha ao digitar
       markDirty_("B", nome);
       return;
     }
 
     if(act === "hotelDias"){
-      const v = Number(el.value || 0);
-      form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : 1;
-      el.value = String(form[nome].hotel_dias);
+      const raw = String(el.value ?? "").trim();
+      if(raw === ""){
+        form[nome].hotel_dias = "";   // ✅ permite vazio
+        markDirty_("B", nome);
+        return;
+      }
+      const v = Number(raw);
+      form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : "";
+      if(form[nome].hotel_dias === "") el.value = "";
+      else el.value = String(form[nome].hotel_dias);
       markDirty_("B", nome);
       return;
     }
@@ -1456,6 +1511,7 @@ async function onEstadiaChangeByNome_(nome, val){
   if(!form[nome]) return;
 
   form[nome].estadia_tipo = val;
+  clearInvalidEstadiaUI_(nome);
 
   const tipo = String(val||"").trim();
   const sup =
@@ -1617,8 +1673,9 @@ async function carregar(){
       estadia_obs: prev.estadia_obs ?? "",
       wknd_hosp: !!prev.wknd_hosp,
 
-      hotel_dias: Number(prev.hotel_dias ?? 1),
-      hotel_chegada: String(prev.hotel_chegada ?? "18:00"),
+      /* ✅ hotel_dias / chegada podem ser vazios */
+      hotel_dias: (prev.hotel_dias === "" || prev.hotel_dias == null) ? "" : Number(prev.hotel_dias),
+      hotel_chegada: (prev.hotel_chegada == null) ? "" : String(prev.hotel_chegada),
 
       cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
       almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
@@ -1665,6 +1722,40 @@ async function salvarEtapaAtual_(){
     return { ok:true, skipped:true };
   }
 
+  /* ✅ Painel B: validar obrigatórios ANTES de salvar */
+  if(step === "B"){
+    const okNames = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    const v = validarObrigatoriosEstadia_(okNames);
+
+    if(v.invalidHotel.length || v.invalidAloj.length){
+      const first = v.invalidHotel[0] || v.invalidAloj[0];
+      if(first) markInvalidEstadiaUI_(first);
+
+      v.invalidHotel.forEach(markInvalidEstadiaUI_);
+      v.invalidAloj.forEach(markInvalidEstadiaUI_);
+
+      const msgParts = [];
+      if(v.invalidHotel.length){
+        msgParts.push(
+          `🏨 HOTEL: preencha "Cidade:" no Obs (${v.invalidHotel.length}):\n- ` +
+          v.invalidHotel.slice(0,10).join("\n- ") +
+          (v.invalidHotel.length > 10 ? `\n... (+${v.invalidHotel.length-10})` : "")
+        );
+      }
+      if(v.invalidAloj.length){
+        msgParts.push(
+          `🏠 ALOJAMENTO: preencha "Alojamento:" no Obs (${v.invalidAloj.length}):\n- ` +
+          v.invalidAloj.slice(0,10).join("\n- ") +
+          (v.invalidAloj.length > 10 ? `\n... (+${v.invalidAloj.length-10})` : "")
+        );
+      }
+
+      alert("❌ Campos obrigatórios faltando no Painel B:\n\n" + msgParts.join("\n\n"));
+      setDebug("❌ Corrija os obrigatórios do Painel B (Hotel/Alojamento).");
+      return { ok:false };
+    }
+  }
+
   let registros = [];
 
   if(step === "A"){
@@ -1691,14 +1782,17 @@ async function salvarEtapaAtual_(){
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => {
         const tipo = String(form[n].estadia_tipo || "Casa").trim();
-        const dias = Number(form[n].hotel_dias || 0);
+
+        const diasRaw = form[n].hotel_dias;
+        const dias = (diasRaw === "" || diasRaw == null) ? 0 : Number(diasRaw || 0);
+
         const hora = String(form[n].hotel_chegada || "").trim();
 
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
         }
 
-        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
+        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
 
         return {
           colaborador: n,
@@ -1706,7 +1800,7 @@ async function salvarEtapaAtual_(){
           supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
           estadia_tipo: tipo,
           estadia_obs: obsNorm,
-          hotel_dias: (tipo==="Hotel" ? (dias>0?dias:1) : ""),
+          hotel_dias: (tipo==="Hotel" ? (dias>0 ? Math.floor(dias) : "") : ""),
           hotel_chegada: (tipo==="Hotel" ? hora : "")
         };
       });
@@ -1785,14 +1879,17 @@ async function salvarEtapaAtual_(){
       .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
       .map(n => {
         const tipo = String(form[n].estadia_tipo||"").trim();
-        const dias = Number(form[n].hotel_dias || 0);
+
+        const diasRaw = form[n].hotel_dias;
+        const dias = (diasRaw === "" || diasRaw == null) ? 0 : Number(diasRaw || 0);
+
         const hora = String(form[n].hotel_chegada || "").trim();
 
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
         }
 
-        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, dias, hora);
+        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
 
         return {
           colaborador: n,
@@ -1800,7 +1897,7 @@ async function salvarEtapaAtual_(){
           supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
           estadia_tipo: tipo,
           estadia_obs: obsNorm,
-          hotel_dias: (tipo==="Hotel" ? (dias>0?dias:1) : ""),
+          hotel_dias: (tipo==="Hotel" ? (dias>0 ? Math.floor(dias) : "") : ""),
           hotel_chegada: (tipo==="Hotel" ? hora : "")
         };
       });
