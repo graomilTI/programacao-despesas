@@ -1322,6 +1322,7 @@ function bindDelegationA_(){
 }
 
 /** ===== Delegation B ===== */
+/** ✅ AJUSTADO: marca dirty também em CHANGE p/ hotelDias/hotelChegada (alguns browsers não disparam INPUT) */
 function bindDelegationB_(){
   const box = document.getElementById("listaB");
   if(!box || box._bound) return;
@@ -1348,16 +1349,34 @@ function bindDelegationB_(){
       setHotelFieldsVisible_(nome, tipo === "Hotel");
 
       if(tipo === "Hotel"){
-        // ✅ não força dias/chegada - pode ficar vazio
         if(form[nome].hotel_dias == null) form[nome].hotel_dias = "";
         if(form[nome].hotel_chegada == null) form[nome].hotel_chegada = "";
       }
-
       return;
     }
 
     if(act === "wknd"){
       form[nome].wknd_hosp = !!el.checked;
+      markDirty_("B", nome);
+      return;
+    }
+
+    // ✅ fallback: alguns browsers só disparam CHANGE
+    if(act === "hotelDias"){
+      const raw = String(el.value ?? "").trim();
+      if(raw === ""){
+        form[nome].hotel_dias = "";   // permite vazio
+      } else {
+        const v = Number(raw);
+        form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : "";
+        el.value = form[nome].hotel_dias === "" ? "" : String(form[nome].hotel_dias);
+      }
+      markDirty_("B", nome);
+      return;
+    }
+
+    if(act === "hotelChegada"){
+      form[nome].hotel_chegada = String(el.value || "").trim(); // permite vazio
       markDirty_("B", nome);
       return;
     }
@@ -1371,7 +1390,7 @@ function bindDelegationB_(){
 
     if(act === "estadiaObs"){
       form[nome].estadia_obs = el.value;
-      clearInvalidEstadiaUI_(nome); // ✅ limpa borda vermelha ao digitar
+      clearInvalidEstadiaUI_(nome);
       markDirty_("B", nome);
       return;
     }
@@ -1379,14 +1398,13 @@ function bindDelegationB_(){
     if(act === "hotelDias"){
       const raw = String(el.value ?? "").trim();
       if(raw === ""){
-        form[nome].hotel_dias = "";   // ✅ permite vazio
-        markDirty_("B", nome);
-        return;
+        form[nome].hotel_dias = "";
+      } else {
+        const v = Number(raw);
+        form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : "";
+        if(form[nome].hotel_dias === "") el.value = "";
+        else el.value = String(form[nome].hotel_dias);
       }
-      const v = Number(raw);
-      form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : "";
-      if(form[nome].hotel_dias === "") el.value = "";
-      else el.value = String(form[nome].hotel_dias);
       markDirty_("B", nome);
       return;
     }
@@ -1710,16 +1728,22 @@ async function carregar(){
 }
 
 /** ✅ Salva etapa (somente alterados) e enfileira pós-processo */
+/** ✅ AJUSTADO: Painel B salva/enfileira mesmo se dirty estiver vazio (garante cópia hotel/alojamento) */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
   const dataRef = document.getElementById("dataRef").value.trim();
   const namesAll = Object.keys(form);
 
-  const dirtyNames = Array.from(dirty[step] || []);
+  let dirtyNames = Array.from(dirty[step] || []);
   if(dirtyNames.length === 0){
-    setDebug("Nada para salvar (sem alterações).");
-    return { ok:true, skipped:true };
+    if(step === "B"){
+      dirtyNames = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+      setDebug("Painel B: salvando padrão (sem alterações detectadas)...");
+    } else {
+      setDebug("Nada para salvar (sem alterações).");
+      return { ok:true, skipped:true };
+    }
   }
 
   /* ✅ Painel B: validar obrigatórios ANTES de salvar */
