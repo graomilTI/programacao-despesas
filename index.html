@@ -167,14 +167,14 @@
 
     .extraInputHidden{ display:none !important; }
 
-    .hotelFields, .alojFields{
+    .hotelFields{
       margin-top:8px;
       border:1px dashed #e5e7eb;
       border-radius:12px;
       padding:10px;
       background:#fafafa;
     }
-    .hotelFields .miniLabel, .alojFields .miniLabel{
+    .hotelFields .miniLabel{
       font-size:11px;
       color:#6b7280;
       margin:0 0 4px;
@@ -194,6 +194,58 @@
     .inputInvalid{
       border-color:#dc2626 !important;
       box-shadow: 0 0 0 3px rgba(220,38,38,.15);
+    }
+
+    /* ✅ NOVO: Menu Programação | Alojamentos */
+    .menuTabs{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .tabBtn{
+      width:auto;
+      padding:9px 14px;
+      border-radius:999px;
+      border:1px solid #d1d5db;
+      background:#fff;
+      color:#111827;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .tabBtn.active{
+      background:#166534;
+      border-color:#166534;
+      color:#fff;
+    }
+    .screen{ display:none; }
+    .screen.active{ display:block; }
+
+    /* ✅ Resultado Alojamentos */
+    .listBox{
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      padding:10px;
+      background:#fff;
+      margin-top:10px;
+    }
+    .listItem{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:8px 0;
+      border-bottom:1px solid #f3f4f6;
+      font-size:13px;
+    }
+    .listItem:last-child{ border-bottom:none; }
+    .tag{
+      font-size:12px;
+      padding:3px 8px;
+      border-radius:999px;
+      background:#eef2ff;
+      color:#3730a3;
+      white-space:nowrap;
+      height:fit-content;
     }
   </style>
 </head>
@@ -231,71 +283,115 @@
     <div class="card">
       <div class="topbar">
         <div>
-          <h3 style="margin:0;">Programação</h3>
+          <h3 style="margin:0;">Painel</h3>
           <div id="topInfo" class="muted" style="margin-top:4px;"></div>
           <div id="janelaInfo" class="muted"></div>
+
+          <!-- ✅ NOVO: Tabs -->
+          <div class="menuTabs">
+            <button id="tabProgramacao" class="tabBtn active" type="button" onclick="switchScreen('programacao')">📋 Programação</button>
+            <button id="tabAloj" class="tabBtn" type="button" onclick="switchScreen('aloj')">🏠 Alojamentos</button>
+          </div>
         </div>
         <div class="right">
           <button class="helpBtn" type="button" onclick="openHelpModal()" title="Ajuda">❓ Ajuda</button>
           <button class="logoutBtn" onclick="logout()">Logout</button>
         </div>
       </div>
+    </div>
 
-      <div class="row" style="margin-top:10px;">
-        <div class="col">
-          <label class="muted">Data</label>
-          <input id="dataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+    <!-- ✅ TELA: PROGRAMAÇÃO (SEU ORIGINAL) -->
+    <div id="screenProgramacao" class="screen active">
+
+      <div class="card">
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Data</label>
+            <input id="dataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="col">
+            <label class="muted">&nbsp;</label>
+            <button id="btnCarregar" onclick="carregar()">Carregar</button>
+          </div>
         </div>
-        <div class="col">
-          <label class="muted">&nbsp;</label>
-          <button id="btnCarregar" onclick="carregar()">Carregar</button>
+
+        <div id="debugInfo" class="muted" style="margin-top:6px;"></div>
+      </div>
+
+      <div id="stepA" class="card step">
+        <h3>Painel A – Disponibilidade</h3>
+        <div class="muted">Somente <b>OK</b> segue para os próximos painéis.</div>
+        <div id="listaA"></div>
+      </div>
+
+      <div id="stepB" class="card step">
+        <h3>Painel B – Estadia</h3>
+        <div class="muted">
+          Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
+          <b>Hotel</b>: consulta D-1 e exige <b>Cidade</b> no Obs (formato: <b>Cidade:</b>).<br>
+          <b>Alojamento</b>: consulta D-1 e exige <b>Alojamento</b> no Obs (formato: <b>Alojamento:</b>).<br>
+          <b>Fazenda</b>: força <b>Pernoite</b>.
         </div>
+        <div id="listaB"></div>
       </div>
 
-      <div id="debugInfo" class="muted" style="margin-top:6px;"></div>
-    </div>
-
-    <div id="stepA" class="card step">
-      <h3>Painel A – Disponibilidade</h3>
-      <div class="muted">Somente <b>OK</b> segue para os próximos painéis.</div>
-      <div id="listaA"></div>
-    </div>
-
-    <div id="stepB" class="card step">
-      <h3>Painel B – Estadia</h3>
-      <div class="muted">
-        Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-        <b>Hotel</b>: consulta D-1 e exige <b>Cidade</b> no Obs (formato: <b>Cidade:</b>).<br>
-        <b>Alojamento</b>: consulta D-1 e exige <b>Alojamento</b> no Obs (formato: <b>Alojamento:</b>).<br>
-        <b>Fazenda</b>: força <b>Pernoite</b>.
+      <div id="stepC" class="card step">
+        <h3>Painel C – Alimentação</h3>
+        <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = vazio.</div>
+        <div class="toolsRow">
+          <button class="light" onclick="toggleAllAlmoco(true)">Todos Almoço</button>
+          <button class="light" onclick="toggleAllAlmoco(false)">Limpar Almoço</button>
+        </div>
+        <div id="listaC"></div>
       </div>
-      <div id="listaB"></div>
-    </div>
 
-    <div id="stepC" class="card step">
-      <h3>Painel C – Alimentação</h3>
-      <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = vazio.</div>
-      <div class="toolsRow">
-        <button class="light" onclick="toggleAllAlmoco(true)">Todos Almoço</button>
-        <button class="light" onclick="toggleAllAlmoco(false)">Limpar Almoço</button>
+      <div id="stepD" class="card step">
+        <h3>Painel D – Deslocamento</h3>
+        <div id="listaD"></div>
       </div>
-      <div id="listaC"></div>
-    </div>
 
-    <div id="stepD" class="card step">
-      <h3>Painel D – Deslocamento</h3>
-      <div id="listaD"></div>
-    </div>
-
-    <div id="stepE" class="card step">
-      <div class="topbar" style="margin-bottom:6px;">
-        <h3 style="margin:0;">Painel E – Extras</h3>
-        <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
+      <div id="stepE" class="card step">
+        <div class="topbar" style="margin-bottom:6px;">
+          <h3 style="margin:0;">Painel E – Extras</h3>
+          <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
+        </div>
+        <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
+        <div id="listaE"></div>
+        <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
       </div>
-      <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
-      <div id="listaE"></div>
-      <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
+
     </div>
+
+    <!-- ✅ TELA: ALOJAMENTOS (NOVO) -->
+    <div id="screenAloj" class="screen">
+      <div class="card">
+        <h3 style="margin-bottom:6px;">🏠 Consulta – Histórico do Alojamento</h3>
+        <div class="muted">Selecione o alojamento e o período para ver os hospedados (aba Relatórios).</div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Alojamento</label>
+            <select id="alojSelect"></select>
+          </div>
+          <div class="col">
+            <label class="muted">Data inicial</label>
+            <input id="alojDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="col">
+            <label class="muted">Data final</label>
+            <input id="alojDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="col" style="min-width:220px;">
+            <label class="muted">&nbsp;</label>
+            <button id="btnAlojBuscar" onclick="buscarHistoricoAlojamento()">🔎 Buscar</button>
+          </div>
+        </div>
+
+        <div id="alojInfo" class="muted" style="margin-top:8px;"></div>
+        <div id="alojResultado" class="listBox" style="display:none;"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -306,7 +402,7 @@
   </div>
 </div>
 
-<!-- MODAL AJUDA -->
+<!-- MODAL AJUDA (SEU ORIGINAL) -->
 <div id="helpModal" class="helpModal" aria-hidden="true">
   <div class="helpBackdrop" onclick="closeHelpModal()"></div>
 
@@ -341,7 +437,7 @@
         <ul>
           <li><b>Casa:</b> padrão.</li>
           <li><b>Hotel:</b> tenta preencher via D-1; se não achar, pede cidade/UF (e Obs deve conter <b>Cidade:</b>).</li>
-          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, selecione no <b>menu de alojamentos</b> (e Obs deve conter <b>Alojamento:</b>).</li>
+          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, pede nome (e Obs deve conter <b>Alojamento:</b>).</li>
           <li><b>Fazenda:</b> preenche pernoite automático.</li>
         </ul>
       </div>
@@ -400,7 +496,7 @@ const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
 /** ✅ “index” de elementos DOM por nome */
 const domIndex = { A: new Map(), B: new Map(), C: new Map(), D: new Map(), E: new Map() };
 
-/** ✅ DIRTY tracking */
+/** ✅ DIRTY tracking (para salvar só o que mudou e acelerar Próximo) */
 const dirty = { A:new Set(), B:new Set(), C:new Set(), D:new Set(), E:new Set() };
 function resetDirty_(){ ["A","B","C","D","E"].forEach(k=>dirty[k].clear()); }
 function markDirty_(etapa, nome){
@@ -409,6 +505,11 @@ function markDirty_(etapa, nome){
   if(!dirty[k]) return;
   dirty[k].add(nome);
 }
+
+/** ✅ NOVO: Estado do menu Alojamentos */
+let alojLoadedOnce = false;
+let alojPerm = null;
+let alojList = [];
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 function escAttr(s){ return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
@@ -421,7 +522,7 @@ function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || 
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
 
-/** ✅ SIM robusto */
+/** ✅ SIM robusto (para checkbox vindo do back) */
 function isSim_(v){
   const s = String(v ?? "").trim().toUpperCase();
   return s === "SIM" || s === "S" || s === "TRUE" || s === "1" || s === "X" || s === "OK";
@@ -448,10 +549,28 @@ document.addEventListener("keydown", (e)=>{
 
 function setBusy(v){
   busy = !!v;
-  ["btnProximo","btnVoltar","btnCarregar","btnLogin"].forEach(id=>{
+  ["btnProximo","btnVoltar","btnCarregar","btnLogin","btnAlojBuscar"].forEach(id=>{
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
+}
+
+/** ✅ NOVO: alterna entre telas */
+function switchScreen(which){
+  const isProg = which === "programacao";
+
+  document.getElementById("screenProgramacao").classList.toggle("active", isProg);
+  document.getElementById("screenAloj").classList.toggle("active", !isProg);
+
+  document.getElementById("tabProgramacao").classList.toggle("active", isProg);
+  document.getElementById("tabAloj").classList.toggle("active", !isProg);
+
+  // BottomBar só na Programação e quando já carregou contexto
+  document.getElementById("bottomBar").style.display = (isProg && ctx) ? "block" : "none";
+
+  if(!isProg){
+    carregarMenuAlojamentos_().catch(()=>{});
+  }
 }
 
 function qByNomeRow_(nome){
@@ -520,6 +639,9 @@ function logoutForcado(msg){
   coordPorNomeFast = {};
   orderedNames = [];
   supervisoesGestores = [];
+  alojLoadedOnce = false;
+  alojPerm = null;
+  alojList = [];
   resetDirty_();
   ["A","B","C","D","E"].forEach(k=>domIndex[k].clear());
   hide("app"); hide("bottomBar"); show("loginCard");
@@ -732,7 +854,7 @@ async function login(){
 
   hide("loginCard");
   show("app");
-  hide("bottomBar");
+  switchScreen("programacao");
 
   await carregarDataPadrao();
 }
@@ -861,13 +983,6 @@ function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
   return s.trim();
 }
 
-/** ✅ Parse "Alojamento:" do Obs (pra pré-preencher menu) */
-function parseAlojFromObs_(obs){
-  const s = String(obs||"");
-  const m = s.match(/alojamento\s*:\s*([^|]+)/i);
-  return m ? String(m[1]||"").trim() : "";
-}
-
 /** ✅ Obrigatórios Hotel/Alojamento no Obs */
 function clearInvalidEstadiaUI_(nome){
   const el = document.getElementById("eobs_" + idSafe(nome));
@@ -910,7 +1025,8 @@ function chunkArray(arr, size){
   for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
   return out;
 }
-  async function salvarEtapaPayload_(dataRef, etapa, registros){
+
+async function salvarEtapaPayload_(dataRef, etapa, registros){
   const parts = chunkArray(registros || [], 500);
   for (let i=0;i<parts.length;i++){
     const r = await api("salvarEtapa", {
@@ -942,7 +1058,7 @@ async function enfileirarPosProcesso_(dataRef, etapa, registros){
     return { ok:false, error:String(e) };
   }
 }
-
+  <script>
 /** ✅ Atualiza bloqueio/visibilidade só de 1 colaborador (mais rápido) */
 function syncBlockedRowsByNome_(nome){
   const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
@@ -957,6 +1073,8 @@ function syncBlockedRowsByNome_(nome){
   const rowA = domIndex["A"].get(nome);
   if(rowA) rowA.style.opacity = ok ? "1" : "0.55";
 }
+
+/** ✅ Mantido para uso só no build inicial */
 function syncBlockedRowsAllSteps_(){
   const names = orderedNames;
   names.forEach(nome=>{
@@ -987,18 +1105,8 @@ function setHotelFieldsVisible_(nome, show){
   const wrap = document.querySelector(`[data-hotelwrap="${cssEsc_(nome)}"]`);
   if(wrap) wrap.style.display = show ? "" : "none";
 }
-function setAlojFieldsVisible_(nome, show){
-  const wrap = document.querySelector(`[data-alojwrap="${cssEsc_(nome)}"]`);
-  if(wrap) wrap.style.display = show ? "" : "none";
-}
-function focusAlojInput_(nome){
-  const box = document.getElementById("listaB");
-  if(!box) return;
-  const inp = box.querySelector(`input[data-action="alojNome"][data-nome="${cssEsc_(nome)}"]`);
-  if(inp) setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 0);
-}
 
-/** ✅ Status do Painel A SEM ACENTO */
+/** ✅ Status do Painel A SEM ACENTO (valores que o GAS costuma esperar) */
 const DISP_OPTIONS = [
   { value: "OK",         label: "OK" },
   { value: "ATESTADO",   label: "Atestado" },
@@ -1074,23 +1182,17 @@ function buildAllStepsDom_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   const sexta = isFriday_(dataRef);
 
-  document.getElementById("listaB").innerHTML = renderGroupedOnce_(orderedNames, (n, coord, sup)=>{
+  document.getElementById("listaB").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
     const tipo = String(form[n].estadia_tipo||"Casa").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
     const extraLine = getOSLocaisLine_(n);
 
     const showHotelFields = (tipo === "Hotel");
-    const showAlojFields  = (tipo === "Alojamento");
 
     /* ✅ diárias e chegada podem ficar vazias */
     const hotelDiasRaw = (form[n].hotel_dias ?? "");
     const hotelDias = (hotelDiasRaw === "" || hotelDiasRaw === null) ? "" : Number(hotelDiasRaw || 0);
     const hotelChegada = String(form[n].hotel_chegada ?? "");
-
-    /* ✅ opções de alojamento por supervisão (menu) */
-    const alojList = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 200);
-    const dlId = `dlAloj_${idSafe(n)}`;
-    const alojPref = form[n].alojamento_nome || parseAlojFromObs_(form[n].estadia_obs);
 
     return `
       <div class="nomeRow" id="rowB_${idSafe(n)}" data-nome="${escAttr(n)}">
@@ -1127,25 +1229,6 @@ function buildAllStepsDom_(){
                   data-action="hotelChegada" data-nome="${escAttr(n)}"
                   value="${escAttr(hotelChegada)}">
               </div>
-            </div>
-          </div>
-
-          <!-- ✅ MENU ALOJAMENTO (aparece quando tipo = Alojamento) -->
-          <div class="alojFields" data-alojwrap="${escAttr(n)}" style="${showAlojFields ? "" : "display:none;"}">
-            <div class="miniLabel">Alojamento (menu da Supervisão: ${esc(sup)})</div>
-
-            <datalist id="${dlId}">
-              ${alojList.map(x=>`<option value="${escAttr(x)}"></option>`).join("")}
-            </datalist>
-
-            <input
-              data-action="alojNome"
-              data-nome="${escAttr(n)}"
-              list="${dlId}"
-              placeholder="${alojList.length ? "Selecione ou digite o alojamento..." : "Sem lista nesta supervisão — digite o alojamento..."}"
-              value="${escAttr(alojPref)}">
-            <div class="muted" style="margin-top:6px;">
-              Ao escolher/digitar, o sistema grava automaticamente em Obs como <b>Alojamento:</b>.
             </div>
           </div>
 
@@ -1385,16 +1468,10 @@ function bindDelegationB_(){
       if(wk) wk.style.display = showWknd ? "" : "none";
 
       setHotelFieldsVisible_(nome, tipo === "Hotel");
-      setAlojFieldsVisible_(nome, tipo === "Alojamento");
 
       if(tipo === "Hotel"){
         if(form[nome].hotel_dias == null) form[nome].hotel_dias = "";
         if(form[nome].hotel_chegada == null) form[nome].hotel_chegada = "";
-      }
-      if(tipo === "Alojamento"){
-        if(form[nome].alojamento_nome == null) form[nome].alojamento_nome = parseAlojFromObs_(form[nome].estadia_obs);
-        // foco no menu
-        focusAlojInput_(nome);
       }
       return;
     }
@@ -1405,7 +1482,6 @@ function bindDelegationB_(){
       return;
     }
 
-    // ✅ fallback: alguns browsers só disparam CHANGE
     if(act === "hotelDias"){
       const raw = String(el.value ?? "").trim();
       if(raw === ""){
@@ -1424,16 +1500,6 @@ function bindDelegationB_(){
       markDirty_("B", nome);
       return;
     }
-
-    if(act === "alojNome"){
-      const val = String(el.value || "").trim();
-      form[nome].alojamento_nome = val;
-      form[nome].estadia_obs = val ? `Alojamento: ${val}` : "";
-      setEstadiaObsUI_(nome);
-      clearInvalidEstadiaUI_(nome);
-      markDirty_("B", nome);
-      return;
-    }
   });
 
   box.addEventListener("input", (e)=>{
@@ -1445,12 +1511,6 @@ function bindDelegationB_(){
     if(act === "estadiaObs"){
       form[nome].estadia_obs = el.value;
       clearInvalidEstadiaUI_(nome);
-      // se editar manualmente e tiver "Alojamento:", tenta manter menu sincronizado
-      if(/alojamento\s*:/i.test(form[nome].estadia_obs || "")){
-        form[nome].alojamento_nome = parseAlojFromObs_(form[nome].estadia_obs);
-        const inp = box.querySelector(`input[data-action="alojNome"][data-nome="${cssEsc_(nome)}"]`);
-        if(inp) inp.value = form[nome].alojamento_nome || "";
-      }
       markDirty_("B", nome);
       return;
     }
@@ -1471,16 +1531,6 @@ function bindDelegationB_(){
 
     if(act === "hotelChegada"){
       form[nome].hotel_chegada = String(el.value || "").trim();
-      markDirty_("B", nome);
-      return;
-    }
-
-    if(act === "alojNome"){
-      const val = String(el.value || "").trim();
-      form[nome].alojamento_nome = val;
-      form[nome].estadia_obs = val ? `Alojamento: ${val}` : "";
-      setEstadiaObsUI_(nome);
-      clearInvalidEstadiaUI_(nome);
       markDirty_("B", nome);
       return;
     }
@@ -1645,23 +1695,33 @@ async function onEstadiaChangeByNome_(nome, val){
     setRowLoading_(nome, false);
 
     if(r && r.ok && r.found && r.alojamento){
-      form[nome].alojamento_nome = String(r.alojamento || "").trim();
-      form[nome].estadia_obs = form[nome].alojamento_nome ? `Alojamento: ${form[nome].alojamento_nome}` : "";
+      form[nome].estadia_obs = `Alojamento: ${r.alojamento}`;
       setEstadiaObsUI_(nome);
-      // sincroniza UI do menu
-      const box = document.getElementById("listaB");
-      const inp = box?.querySelector(`input[data-action="alojNome"][data-nome="${cssEsc_(nome)}"]`);
-      if(inp) inp.value = form[nome].alojamento_nome || "";
       return;
     }
 
-    // ✅ sem prompt: mostrar menu e pedir escolha
-    form[nome].alojamento_nome = parseAlojFromObs_(form[nome].estadia_obs);
-    form[nome].estadia_obs = form[nome].alojamento_nome ? `Alojamento: ${form[nome].alojamento_nome}` : "";
-    setEstadiaObsUI_(nome);
+    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30);
+    let escolha = "";
 
-    setAlojFieldsVisible_(nome, true);
-    focusAlojInput_(nome);
+    if(opcoes.length){
+      const lista = opcoes.map((x,i)=> `${i+1} - ${x}`).join("\n");
+      const resp = prompt(
+        `Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nEscolha pelo número ou digite o nome:\n\n${lista}`,
+        ""
+      );
+
+      if(resp){
+        const n = Number(resp);
+        if(!isNaN(n) && n >= 1 && n <= opcoes.length) escolha = opcoes[n-1];
+        else escolha = resp.trim();
+      }
+    } else {
+      const resp = prompt(`Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nDigite o nome do alojamento:`, "");
+      if(resp) escolha = resp.trim();
+    }
+
+    form[nome].estadia_obs = escolha ? `Alojamento: ${escolha}` : "";
+    setEstadiaObsUI_(nome);
     return;
   }
 }
@@ -1676,6 +1736,100 @@ function toggleAllAlmoco(on){
     const chk = row.querySelector(`input[data-action="almoco"][data-nome="${cssEsc_(n)}"]`);
     if(chk) chk.checked = on;
   });
+}
+
+/** ======================
+ * ✅ MENU ALOJAMENTOS (NOVO)
+ * ====================== */
+function setAlojInfo_(msg){
+  const el = document.getElementById("alojInfo");
+  if(el) el.innerText = msg || "";
+}
+function setAlojResultado_(itens){
+  const box = document.getElementById("alojResultado");
+  if(!box) return;
+
+  if(!Array.isArray(itens) || !itens.length){
+    box.style.display = "block";
+    box.innerHTML = `<div class="muted">Nenhum registro encontrado no período.</div>`;
+    return;
+  }
+
+  box.style.display = "block";
+  box.innerHTML = itens.map(it=>{
+    const data = esc(it.data || "");
+    const nome = esc(it.funcionario || it.colaborador || "");
+    return `
+      <div class="listItem">
+        <div>${nome}</div>
+        <div class="tag">${data}</div>
+      </div>
+    `;
+  }).join("");
+}
+function setAlojDefaultsPeriod_(){
+  const hoje = new Date();
+  const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const ini = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()-15);
+  const elIni = document.getElementById("alojDtIni");
+  const elFim = document.getElementById("alojDtFim");
+  if(elIni && !elIni.value) elIni.value = formatDMY_(ini);
+  if(elFim && !elFim.value) elFim.value = formatDMY_(fim);
+}
+async function carregarMenuAlojamentos_(){
+  if(alojLoadedOnce) return;
+  alojLoadedOnce = true;
+
+  setAlojInfo_("Carregando alojamentos...");
+  setBusy(true);
+  const r = await api("aloj_getPermissoes", {});
+  setBusy(false);
+
+  if(!r || !r.ok){
+    alojLoadedOnce = false;
+    const err = r?.error || "Erro ao carregar alojamentos";
+    if(isAuthError_(err)) { logoutForcado(err); return; }
+    setAlojInfo_("❌ " + err);
+    return;
+  }
+
+  alojPerm = r;
+  alojList = Array.isArray(r.alojamentos) ? r.alojamentos : [];
+
+  const sel = document.getElementById("alojSelect");
+  if(sel){
+    const opts = ['<option value="">Selecione...</option>']
+      .concat(alojList.map(a => `<option value="${escAttr(a)}">${esc(a)}</option>`));
+    sel.innerHTML = opts.join("");
+  }
+
+  setAlojDefaultsPeriod_();
+  setAlojInfo_(alojList.length ? `✅ ${alojList.length} alojamentos disponíveis.` : "⚠️ Nenhum alojamento liberado para seu perfil.");
+}
+async function buscarHistoricoAlojamento(){
+  const aloj = String(document.getElementById("alojSelect")?.value || "").trim();
+  const dtIni = String(document.getElementById("alojDtIni")?.value || "").trim();
+  const dtFim = String(document.getElementById("alojDtFim")?.value || "").trim();
+
+  if(!aloj){ alert("Selecione um alojamento."); return; }
+  if(dtIni && !parseDMY_(dtIni)){ alert("Data inicial inválida."); return; }
+  if(dtFim && !parseDMY_(dtFim)){ alert("Data final inválida."); return; }
+
+  setAlojInfo_("Buscando...");
+  setBusy(true);
+  const r = await api("aloj_listarHospedados", { alojamento: aloj, dtIni, dtFim });
+  setBusy(false);
+
+  if(!r || !r.ok){
+    const err = r?.error || "Erro ao consultar";
+    if(isAuthError_(err)) { logoutForcado(err); return; }
+    setAlojInfo_("❌ " + err);
+    setAlojResultado_([]);
+    return;
+  }
+
+  setAlojInfo_(`✅ ${r.total || 0} registro(s) • ${r.dtIni || dtIni} → ${r.dtFim || dtFim}`);
+  setAlojResultado_(r.itens || []);
 }
 
 /** ======================
@@ -1736,8 +1890,6 @@ async function carregar(){
 
     const st = ["OK","ATESTADO","FERIAS","FOLGA","FALTA","INATIVO","TRANSFERIR"].includes(prevStatus) ? prevStatus : "OK";
 
-    const prevObsEstadia = (prev.estadia_obs ?? "");
-
     form[nome] = {
       coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
 
@@ -1750,15 +1902,11 @@ async function carregar(){
           : String(prev.disponibilidade_Transferir_para || "")),
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
-      estadia_obs: prevObsEstadia,
+      estadia_obs: prev.estadia_obs ?? "",
       wknd_hosp: !!prev.wknd_hosp,
 
-      /* ✅ hotel_dias / chegada podem ser vazios */
       hotel_dias: (prev.hotel_dias === "" || prev.hotel_dias == null) ? "" : Number(prev.hotel_dias),
       hotel_chegada: (prev.hotel_chegada == null) ? "" : String(prev.hotel_chegada),
-
-      /* ✅ alojamento menu (pré-preenche a partir do Obs) */
-      alojamento_nome: parseAlojFromObs_(prevObsEstadia),
 
       cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
       almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
@@ -1789,7 +1937,10 @@ async function carregar(){
   resetDirty_();
   setStep("A");
   setDebug("OK");
-  show("bottomBar");
+
+  // ✅ mostra bottomBar somente se estiver na Programação
+  const progAtivo = document.getElementById("screenProgramacao").classList.contains("active");
+  document.getElementById("bottomBar").style.display = progAtivo ? "block" : "none";
 }
 
 /** ✅ Salva etapa (somente alterados) e enfileira pós-processo */
@@ -1810,7 +1961,6 @@ async function salvarEtapaAtual_(){
     }
   }
 
-  /* ✅ Painel B: validar obrigatórios ANTES de salvar */
   if(step === "B"){
     const okNames = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
     const v = validarObrigatoriosEstadia_(okNames);
@@ -1832,7 +1982,7 @@ async function salvarEtapaAtual_(){
       }
       if(v.invalidAloj.length){
         msgParts.push(
-          `🏠 ALOJAMENTO: selecione/digite no menu ou preencha "Alojamento:" no Obs (${v.invalidAloj.length}):\n- ` +
+          `🏠 ALOJAMENTO: preencha "Alojamento:" no Obs (${v.invalidAloj.length}):\n- ` +
           v.invalidAloj.slice(0,10).join("\n- ") +
           (v.invalidAloj.length > 10 ? `\n... (+${v.invalidAloj.length-10})` : "")
         );
@@ -1847,10 +1997,7 @@ async function salvarEtapaAtual_(){
   let registros = [];
 
   if(step === "B"){
-    const rCopy = await api("copiarEstadiaAgora", {
-      payload: { dataReferencia: dataRef }
-    });
-
+    const rCopy = await api("copiarEstadiaAgora", { payload: { dataReferencia: dataRef } });
     if(!rCopy || !rCopy.ok){
       setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
     } else {
@@ -1885,17 +2032,10 @@ async function salvarEtapaAtual_(){
 
         const diasRaw = form[n].hotel_dias;
         const dias = (diasRaw === "" || diasRaw == null) ? 0 : Number(diasRaw || 0);
-
         const hora = String(form[n].hotel_chegada || "").trim();
 
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
-        }
-
-        // se for alojamento e tiver alojamento_nome, garante "Alojamento: ..."
-        if(tipo === "Alojamento"){
-          const nm = String(form[n].alojamento_nome || parseAlojFromObs_(form[n].estadia_obs) || "").trim();
-          if(nm) form[n].estadia_obs = `Alojamento: ${nm}`;
         }
 
         const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
@@ -1974,7 +2114,6 @@ async function salvarEtapaAtual_(){
 
   await enfileirarPosProcesso_(dataRef, step, registros);
 
-  /** ✅ Sexta: replica B para SÁB/DOM quando marcado */
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
     const dom = addDays_(dataRef, 2);
@@ -1988,16 +2127,10 @@ async function salvarEtapaAtual_(){
 
         const diasRaw = form[n].hotel_dias;
         const dias = (diasRaw === "" || diasRaw == null) ? 0 : Number(diasRaw || 0);
-
         const hora = String(form[n].hotel_chegada || "").trim();
 
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
-        }
-
-        if(tipo === "Alojamento"){
-          const nm = String(form[n].alojamento_nome || parseAlojFromObs_(form[n].estadia_obs) || "").trim();
-          if(nm) form[n].estadia_obs = `Alojamento: ${nm}`;
         }
 
         const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
@@ -2076,6 +2209,12 @@ window.onload = async () => {
   dataRef.addEventListener("input", ()=>{ dataRef.value = maskData(dataRef.value); });
   dataRef.addEventListener("keydown", (e)=>{ if(e.key === "Enter") carregar(); });
 
+  // ✅ máscaras nas datas do alojamento
+  const alojDtIni = document.getElementById("alojDtIni");
+  const alojDtFim = document.getElementById("alojDtFim");
+  if(alojDtIni) alojDtIni.addEventListener("input", ()=>{ alojDtIni.value = maskData(alojDtIni.value); });
+  if(alojDtFim) alojDtFim.addEventListener("input", ()=>{ alojDtFim.value = maskData(alojDtFim.value); });
+
   show("loginCard");
   hide("app");
   hide("bottomBar");
@@ -2086,7 +2225,7 @@ window.onload = async () => {
     if(res && res.ok){
       hide("loginCard");
       show("app");
-      hide("bottomBar");
+      switchScreen("programacao");
       await carregarDataPadrao();
       document.getElementById("loginStatus").innerText = "";
     } else {
@@ -2097,5 +2236,4 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
 
