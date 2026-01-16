@@ -679,27 +679,38 @@ function setLoginMode(mode){
 /** ✅ API */
 async function api(action, args){
   const payload = { action, ...(args||{}) };
+
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
     payload.token = token;
   }
+
+  const controller = new AbortController();
+  const t = setTimeout(()=> controller.abort(), 20000); // 20s timeout
 
   let txt = "";
   try{
     const res = await fetch(API_BASE, {
       method:"POST",
       headers:{ "Content-Type":"application/json;charset=utf-8" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
     txt = await res.text();
   }catch(e){
-    return { ok:false, error:"Falha de rede / CORS", raw:String(e) };
+    clearTimeout(t);
+    const msg = (String(e).includes("AbortError"))
+      ? "Tempo excedido (servidor demorou). Tente novamente."
+      : "Falha de rede / CORS";
+    return { ok:false, error: msg, raw:String(e) };
+  }finally{
+    clearTimeout(t);
   }
 
   try { return JSON.parse(txt); }
   catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
 }
 
-/** =========================
+  /** =========================
  * ✅ PDF (FORÇAR DOWNLOAD)
  * ========================= */
 function base64ToBlob_(b64, mime){
@@ -1058,7 +1069,7 @@ async function enfileirarPosProcesso_(dataRef, etapa, registros){
     return { ok:false, error:String(e) };
   }
 }
-  <script>
+
 /** ✅ Atualiza bloqueio/visibilidade só de 1 colaborador (mais rápido) */
 function syncBlockedRowsByNome_(nome){
   const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
@@ -2236,4 +2247,5 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
 
