@@ -678,7 +678,7 @@ function setLoginMode(mode){
 
 /** ✅ API */
 async function api(action, args){
-  const payload = { action, ...(args||{}) };
+ const payload = { action, ...(args||{}) };
 
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
     payload.token = token;
@@ -2247,5 +2247,6 @@ window.onload = async () => {
 </script>
 </body>
 </html>
+
 
 
