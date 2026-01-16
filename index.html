@@ -167,14 +167,14 @@
 
     .extraInputHidden{ display:none !important; }
 
-    .hotelFields{
+    .hotelFields, .alojFields{
       margin-top:8px;
       border:1px dashed #e5e7eb;
       border-radius:12px;
       padding:10px;
       background:#fafafa;
     }
-    .hotelFields .miniLabel{
+    .hotelFields .miniLabel, .alojFields .miniLabel{
       font-size:11px;
       color:#6b7280;
       margin:0 0 4px;
@@ -341,7 +341,7 @@
         <ul>
           <li><b>Casa:</b> padrão.</li>
           <li><b>Hotel:</b> tenta preencher via D-1; se não achar, pede cidade/UF (e Obs deve conter <b>Cidade:</b>).</li>
-          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, pede nome (e Obs deve conter <b>Alojamento:</b>).</li>
+          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, selecione no <b>menu de alojamentos</b> (e Obs deve conter <b>Alojamento:</b>).</li>
           <li><b>Fazenda:</b> preenche pernoite automático.</li>
         </ul>
       </div>
@@ -400,7 +400,7 @@ const PROSSEGUIR = (st) => String(st||"").trim().toUpperCase() === "OK";
 /** ✅ “index” de elementos DOM por nome */
 const domIndex = { A: new Map(), B: new Map(), C: new Map(), D: new Map(), E: new Map() };
 
-/** ✅ DIRTY tracking (para salvar só o que mudou e acelerar Próximo) */
+/** ✅ DIRTY tracking */
 const dirty = { A:new Set(), B:new Set(), C:new Set(), D:new Set(), E:new Set() };
 function resetDirty_(){ ["A","B","C","D","E"].forEach(k=>dirty[k].clear()); }
 function markDirty_(etapa, nome){
@@ -421,7 +421,7 @@ function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || 
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
 
-/** ✅ SIM robusto (para checkbox vindo do back) */
+/** ✅ SIM robusto */
 function isSim_(v){
   const s = String(v ?? "").trim().toUpperCase();
   return s === "SIM" || s === "S" || s === "TRUE" || s === "1" || s === "X" || s === "OK";
@@ -861,6 +861,13 @@ function normalizeHotelObs_(tipo, obs, hotelDias, hotelChegada){
   return s.trim();
 }
 
+/** ✅ Parse "Alojamento:" do Obs (pra pré-preencher menu) */
+function parseAlojFromObs_(obs){
+  const s = String(obs||"");
+  const m = s.match(/alojamento\s*:\s*([^|]+)/i);
+  return m ? String(m[1]||"").trim() : "";
+}
+
 /** ✅ Obrigatórios Hotel/Alojamento no Obs */
 function clearInvalidEstadiaUI_(nome){
   const el = document.getElementById("eobs_" + idSafe(nome));
@@ -903,8 +910,7 @@ function chunkArray(arr, size){
   for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
   return out;
 }
-
-async function salvarEtapaPayload_(dataRef, etapa, registros){
+  async function salvarEtapaPayload_(dataRef, etapa, registros){
   const parts = chunkArray(registros || [], 500);
   for (let i=0;i<parts.length;i++){
     const r = await api("salvarEtapa", {
@@ -951,8 +957,6 @@ function syncBlockedRowsByNome_(nome){
   const rowA = domIndex["A"].get(nome);
   if(rowA) rowA.style.opacity = ok ? "1" : "0.55";
 }
-
-/** ✅ Mantido para uso só no build inicial */
 function syncBlockedRowsAllSteps_(){
   const names = orderedNames;
   names.forEach(nome=>{
@@ -983,8 +987,18 @@ function setHotelFieldsVisible_(nome, show){
   const wrap = document.querySelector(`[data-hotelwrap="${cssEsc_(nome)}"]`);
   if(wrap) wrap.style.display = show ? "" : "none";
 }
+function setAlojFieldsVisible_(nome, show){
+  const wrap = document.querySelector(`[data-alojwrap="${cssEsc_(nome)}"]`);
+  if(wrap) wrap.style.display = show ? "" : "none";
+}
+function focusAlojInput_(nome){
+  const box = document.getElementById("listaB");
+  if(!box) return;
+  const inp = box.querySelector(`input[data-action="alojNome"][data-nome="${cssEsc_(nome)}"]`);
+  if(inp) setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 0);
+}
 
-/** ✅ Status do Painel A SEM ACENTO (valores que o GAS costuma esperar) */
+/** ✅ Status do Painel A SEM ACENTO */
 const DISP_OPTIONS = [
   { value: "OK",         label: "OK" },
   { value: "ATESTADO",   label: "Atestado" },
@@ -1060,17 +1074,23 @@ function buildAllStepsDom_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   const sexta = isFriday_(dataRef);
 
-  document.getElementById("listaB").innerHTML = renderGroupedOnce_(orderedNames, (n)=>{
+  document.getElementById("listaB").innerHTML = renderGroupedOnce_(orderedNames, (n, coord, sup)=>{
     const tipo = String(form[n].estadia_tipo||"Casa").trim();
     const showWknd = sexta && ["Hotel","Fazenda","Alojamento"].includes(tipo);
     const extraLine = getOSLocaisLine_(n);
 
     const showHotelFields = (tipo === "Hotel");
+    const showAlojFields  = (tipo === "Alojamento");
 
     /* ✅ diárias e chegada podem ficar vazias */
     const hotelDiasRaw = (form[n].hotel_dias ?? "");
     const hotelDias = (hotelDiasRaw === "" || hotelDiasRaw === null) ? "" : Number(hotelDiasRaw || 0);
     const hotelChegada = String(form[n].hotel_chegada ?? "");
+
+    /* ✅ opções de alojamento por supervisão (menu) */
+    const alojList = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 200);
+    const dlId = `dlAloj_${idSafe(n)}`;
+    const alojPref = form[n].alojamento_nome || parseAlojFromObs_(form[n].estadia_obs);
 
     return `
       <div class="nomeRow" id="rowB_${idSafe(n)}" data-nome="${escAttr(n)}">
@@ -1107,6 +1127,25 @@ function buildAllStepsDom_(){
                   data-action="hotelChegada" data-nome="${escAttr(n)}"
                   value="${escAttr(hotelChegada)}">
               </div>
+            </div>
+          </div>
+
+          <!-- ✅ MENU ALOJAMENTO (aparece quando tipo = Alojamento) -->
+          <div class="alojFields" data-alojwrap="${escAttr(n)}" style="${showAlojFields ? "" : "display:none;"}">
+            <div class="miniLabel">Alojamento (menu da Supervisão: ${esc(sup)})</div>
+
+            <datalist id="${dlId}">
+              ${alojList.map(x=>`<option value="${escAttr(x)}"></option>`).join("")}
+            </datalist>
+
+            <input
+              data-action="alojNome"
+              data-nome="${escAttr(n)}"
+              list="${dlId}"
+              placeholder="${alojList.length ? "Selecione ou digite o alojamento..." : "Sem lista nesta supervisão — digite o alojamento..."}"
+              value="${escAttr(alojPref)}">
+            <div class="muted" style="margin-top:6px;">
+              Ao escolher/digitar, o sistema grava automaticamente em Obs como <b>Alojamento:</b>.
             </div>
           </div>
 
@@ -1322,7 +1361,6 @@ function bindDelegationA_(){
 }
 
 /** ===== Delegation B ===== */
-/** ✅ AJUSTADO: marca dirty também em CHANGE p/ hotelDias/hotelChegada (alguns browsers não disparam INPUT) */
 function bindDelegationB_(){
   const box = document.getElementById("listaB");
   if(!box || box._bound) return;
@@ -1347,10 +1385,16 @@ function bindDelegationB_(){
       if(wk) wk.style.display = showWknd ? "" : "none";
 
       setHotelFieldsVisible_(nome, tipo === "Hotel");
+      setAlojFieldsVisible_(nome, tipo === "Alojamento");
 
       if(tipo === "Hotel"){
         if(form[nome].hotel_dias == null) form[nome].hotel_dias = "";
         if(form[nome].hotel_chegada == null) form[nome].hotel_chegada = "";
+      }
+      if(tipo === "Alojamento"){
+        if(form[nome].alojamento_nome == null) form[nome].alojamento_nome = parseAlojFromObs_(form[nome].estadia_obs);
+        // foco no menu
+        focusAlojInput_(nome);
       }
       return;
     }
@@ -1365,7 +1409,7 @@ function bindDelegationB_(){
     if(act === "hotelDias"){
       const raw = String(el.value ?? "").trim();
       if(raw === ""){
-        form[nome].hotel_dias = "";   // permite vazio
+        form[nome].hotel_dias = "";
       } else {
         const v = Number(raw);
         form[nome].hotel_dias = (!isNaN(v) && v > 0) ? Math.floor(v) : "";
@@ -1376,7 +1420,17 @@ function bindDelegationB_(){
     }
 
     if(act === "hotelChegada"){
-      form[nome].hotel_chegada = String(el.value || "").trim(); // permite vazio
+      form[nome].hotel_chegada = String(el.value || "").trim();
+      markDirty_("B", nome);
+      return;
+    }
+
+    if(act === "alojNome"){
+      const val = String(el.value || "").trim();
+      form[nome].alojamento_nome = val;
+      form[nome].estadia_obs = val ? `Alojamento: ${val}` : "";
+      setEstadiaObsUI_(nome);
+      clearInvalidEstadiaUI_(nome);
       markDirty_("B", nome);
       return;
     }
@@ -1391,6 +1445,12 @@ function bindDelegationB_(){
     if(act === "estadiaObs"){
       form[nome].estadia_obs = el.value;
       clearInvalidEstadiaUI_(nome);
+      // se editar manualmente e tiver "Alojamento:", tenta manter menu sincronizado
+      if(/alojamento\s*:/i.test(form[nome].estadia_obs || "")){
+        form[nome].alojamento_nome = parseAlojFromObs_(form[nome].estadia_obs);
+        const inp = box.querySelector(`input[data-action="alojNome"][data-nome="${cssEsc_(nome)}"]`);
+        if(inp) inp.value = form[nome].alojamento_nome || "";
+      }
       markDirty_("B", nome);
       return;
     }
@@ -1411,6 +1471,16 @@ function bindDelegationB_(){
 
     if(act === "hotelChegada"){
       form[nome].hotel_chegada = String(el.value || "").trim();
+      markDirty_("B", nome);
+      return;
+    }
+
+    if(act === "alojNome"){
+      const val = String(el.value || "").trim();
+      form[nome].alojamento_nome = val;
+      form[nome].estadia_obs = val ? `Alojamento: ${val}` : "";
+      setEstadiaObsUI_(nome);
+      clearInvalidEstadiaUI_(nome);
       markDirty_("B", nome);
       return;
     }
@@ -1575,33 +1645,23 @@ async function onEstadiaChangeByNome_(nome, val){
     setRowLoading_(nome, false);
 
     if(r && r.ok && r.found && r.alojamento){
-      form[nome].estadia_obs = `Alojamento: ${r.alojamento}`;
+      form[nome].alojamento_nome = String(r.alojamento || "").trim();
+      form[nome].estadia_obs = form[nome].alojamento_nome ? `Alojamento: ${form[nome].alojamento_nome}` : "";
       setEstadiaObsUI_(nome);
+      // sincroniza UI do menu
+      const box = document.getElementById("listaB");
+      const inp = box?.querySelector(`input[data-action="alojNome"][data-nome="${cssEsc_(nome)}"]`);
+      if(inp) inp.value = form[nome].alojamento_nome || "";
       return;
     }
 
-    const opcoes = (ctx?.alojRefPorSupervisao?.[sup] || []).slice(0, 30);
-    let escolha = "";
-
-    if(opcoes.length){
-      const lista = opcoes.map((x,i)=> `${i+1} - ${x}`).join("\n");
-      const resp = prompt(
-        `Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nEscolha pelo número ou digite o nome:\n\n${lista}`,
-        ""
-      );
-
-      if(resp){
-        const n = Number(resp);
-        if(!isNaN(n) && n >= 1 && n <= opcoes.length) escolha = opcoes[n-1];
-        else escolha = resp.trim();
-      }
-    } else {
-      const resp = prompt(`Alojamento não encontrado no D-1 para:\n${nome}\nSupervisão: ${sup}\n\nDigite o nome do alojamento:`, "");
-      if(resp) escolha = resp.trim();
-    }
-
-    form[nome].estadia_obs = escolha ? `Alojamento: ${escolha}` : "";
+    // ✅ sem prompt: mostrar menu e pedir escolha
+    form[nome].alojamento_nome = parseAlojFromObs_(form[nome].estadia_obs);
+    form[nome].estadia_obs = form[nome].alojamento_nome ? `Alojamento: ${form[nome].alojamento_nome}` : "";
     setEstadiaObsUI_(nome);
+
+    setAlojFieldsVisible_(nome, true);
+    focusAlojInput_(nome);
     return;
   }
 }
@@ -1676,6 +1736,8 @@ async function carregar(){
 
     const st = ["OK","ATESTADO","FERIAS","FOLGA","FALTA","INATIVO","TRANSFERIR"].includes(prevStatus) ? prevStatus : "OK";
 
+    const prevObsEstadia = (prev.estadia_obs ?? "");
+
     form[nome] = {
       coordenacao: prev.coordenacao ?? p.coordenacao ?? "",
 
@@ -1688,12 +1750,15 @@ async function carregar(){
           : String(prev.disponibilidade_Transferir_para || "")),
 
       estadia_tipo: prev.estadia_tipo ?? "Casa",
-      estadia_obs: prev.estadia_obs ?? "",
+      estadia_obs: prevObsEstadia,
       wknd_hosp: !!prev.wknd_hosp,
 
       /* ✅ hotel_dias / chegada podem ser vazios */
       hotel_dias: (prev.hotel_dias === "" || prev.hotel_dias == null) ? "" : Number(prev.hotel_dias),
       hotel_chegada: (prev.hotel_chegada == null) ? "" : String(prev.hotel_chegada),
+
+      /* ✅ alojamento menu (pré-preenche a partir do Obs) */
+      alojamento_nome: parseAlojFromObs_(prevObsEstadia),
 
       cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
       almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
@@ -1728,7 +1793,6 @@ async function carregar(){
 }
 
 /** ✅ Salva etapa (somente alterados) e enfileira pós-processo */
-/** ✅ AJUSTADO: Painel B salva/enfileira mesmo se dirty estiver vazio (garante cópia hotel/alojamento) */
 async function salvarEtapaAtual_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
 
@@ -1768,7 +1832,7 @@ async function salvarEtapaAtual_(){
       }
       if(v.invalidAloj.length){
         msgParts.push(
-          `🏠 ALOJAMENTO: preencha "Alojamento:" no Obs (${v.invalidAloj.length}):\n- ` +
+          `🏠 ALOJAMENTO: selecione/digite no menu ou preencha "Alojamento:" no Obs (${v.invalidAloj.length}):\n- ` +
           v.invalidAloj.slice(0,10).join("\n- ") +
           (v.invalidAloj.length > 10 ? `\n... (+${v.invalidAloj.length-10})` : "")
         );
@@ -1781,18 +1845,18 @@ async function salvarEtapaAtual_(){
   }
 
   let registros = [];
-  
-  if(step === "B"){
-  const rCopy = await api("copiarEstadiaAgora", {
-    payload: { dataReferencia: dataRef }
-  });
 
-  if(!rCopy || !rCopy.ok){
-    setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
-  } else {
-    setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
+  if(step === "B"){
+    const rCopy = await api("copiarEstadiaAgora", {
+      payload: { dataReferencia: dataRef }
+    });
+
+    if(!rCopy || !rCopy.ok){
+      setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
+    } else {
+      setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
+    }
   }
-}
 
   if(step === "A"){
     registros = dirtyNames.map(n => {
@@ -1826,6 +1890,12 @@ async function salvarEtapaAtual_(){
 
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
+        }
+
+        // se for alojamento e tiver alojamento_nome, garante "Alojamento: ..."
+        if(tipo === "Alojamento"){
+          const nm = String(form[n].alojamento_nome || parseAlojFromObs_(form[n].estadia_obs) || "").trim();
+          if(nm) form[n].estadia_obs = `Alojamento: ${nm}`;
         }
 
         const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
@@ -1923,6 +1993,11 @@ async function salvarEtapaAtual_(){
 
         if(tipo === "Fazenda"){
           form[n].estadia_obs = "Pernoite";
+        }
+
+        if(tipo === "Alojamento"){
+          const nm = String(form[n].alojamento_nome || parseAlojFromObs_(form[n].estadia_obs) || "").trim();
+          if(nm) form[n].estadia_obs = `Alojamento: ${nm}`;
         }
 
         const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
