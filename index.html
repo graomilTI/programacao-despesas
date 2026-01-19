@@ -566,7 +566,7 @@
 
       <div class="clField clSpan2">
         <div class="clActions">
-          <button class="btn" type="button" onclick="cliSalvarContato_()">Gerar PDF e Salvar</button>
+          <button class="btn" type="button" onclick="cliSalvarRegistro_()">Gerar PDF e Salvar</button>
           <button class="btn secondary" type="button" onclick="cliLimpar_()">Limpar</button>
         </div>
         <div id="cli_status" class="clHint" style="margin-top:10px;"></div>
@@ -1042,30 +1042,37 @@ async function cliSalvarRegistro_(){
 
   const payload = {
     cliente,
-    nomeContato: document.getElementById('cli_contato_nome')?.value?.trim() || '',
+    contato_nome: document.getElementById('cli_contato_nome')?.value?.trim() || '',
     telefone: document.getElementById('cli_contato_tel')?.value?.trim() || '',
     data,
     supervisao: (ctx?.supervisao || ''),
-    tipoInteracao: {
+    coordenacao: (ctx?.coordenacao || ''),
+    gestorNome: (ctx?.nome || ctx?.gestorNome || ''),
+    interacoes: {
       visita: !!document.getElementById('cli_tipo_visita')?.checked,
       online: !!document.getElementById('cli_tipo_online')?.checked,
       almoco: !!document.getElementById('cli_tipo_almoco')?.checked,
-      outros: !!document.getElementById('cli_tipo_outros')?.checked,
-      outrosDesc: document.getElementById('cli_outros_desc')?.value?.trim() || ''
+      outros: !!document.getElementById('cli_tipo_outros')?.checked
     },
-    participantesGrao: cli_part_grao.slice(),
-    participantesCliente: cli_part_cliente.slice(),
+    outros_desc: document.getElementById('cli_outros_desc')?.value?.trim() || '',
+    participantes_grao: cli_part_grao.slice(),
+    participantes_cliente: cli_part_cliente.slice(),
     resumo: document.getElementById('cli_resumo')?.value || '',
     providencias: document.getElementById('cli_providencias')?.value || ''
   };
 
-  // fotos -> base64 (limitado)
+  if(payload.interacoes && payload.interacoes.outros && !String(payload.outros_desc||"").trim()){
+    alert("Descreva o campo \"Outros\" (obrigatório quando selecionado).");
+    return;
+  }
+
+  // fotos -> dataUrl (base64 embutido; limitado)
   const files = Array.from(document.getElementById('cli_fotos')?.files || []);
   const photos = [];
   const maxPhotos = 6; // evita payload gigante
   for(const f of files.slice(0,maxPhotos)){
-    const b64 = await fileToB64_(f);
-    if(b64) photos.push({ name: f.name, type: f.type, b64 });
+    const dataUrl = await fileToDataUrl_(f);
+    if(dataUrl) photos.push({ name: f.name, mimeType: f.type, dataUrl });
   }
   payload.fotos = photos;
 
@@ -1073,7 +1080,7 @@ async function cliSalvarRegistro_(){
   if(st) st.innerText = 'Salvando...';
   setBusy(true);
 
-  const r = await api('clientes_registroContato', { payload }, { timeoutMs: 180000 });
+  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
 
   setBusy(false);
   if(!r || !r.ok){
@@ -1096,7 +1103,7 @@ async function cliSalvarRegistro_(){
   }
 }
 
-function fileToB64_(file){
+function fileToDataUrl_(file){
   return new Promise((resolve)=>{
     try{
       const fr = new FileReader();
@@ -3050,49 +3057,7 @@ function cliLimpar_(){
 }
 
 async function cliSalvarContato_(){
-  const outros = document.getElementById("cli_tipo_outros")?.checked;
-  const outrosDesc = String(document.getElementById("cli_outros_desc")?.value || "").trim();
-  if(outros && !outrosDesc){
-    alert("Informe a descrição em 'Outros'.");
-    document.getElementById("cli_outros_desc")?.focus();
-    return;
-  }
-
-  const payload = {
-    cliente: String(document.getElementById("cli_cliente")?.value || "").trim(),
-    nomeContato: String(document.getElementById("cli_contato")?.value || "").trim(),
-    telefone: String(document.getElementById("cli_tel")?.value || "").trim(),
-    data: String(document.getElementById("cli_data")?.value || "").trim(),
-    tiposInteracao: [
-      ...(document.getElementById("cli_tipo_visita")?.checked ? ["Visita sede do cliente"] : []),
-      ...(document.getElementById("cli_tipo_online")?.checked ? ["Reunião online"] : []),
-      ...(document.getElementById("cli_tipo_almoco")?.checked ? ["Almoço/Jantar"] : []),
-      ...(outros ? ["Outros"] : [])
-    ],
-    outrosDescricao: outrosDesc,
-    participantesGrao1000: (cliPartGrao_||[]).slice(),
-    participantesCliente: (cliPartCli_||[]).slice(),
-    resumo: String(document.getElementById("cli_resumo")?.value || "").trim(),
-    providencias: String(document.getElementById("cli_providencias")?.value || "").trim()
-    // fotos: você liga depois com base64/multipart
-  };
-
-  const st = document.getElementById("cli_status");
-  if(st) st.innerText = "Enviando...";
-
-  try{
-    // 🔌 Integração (quando seu GAS estiver pronto):
-    // const r = await api("cliente_registrarContato", { payload });
-    // if(!r || !r.ok) throw new Error(r?.error || "Falha ao salvar");
-    // if(st) st.innerText = "Salvo ✅ PDF gerado.";
-    // return;
-
-    if(st) st.innerText = "UI OK ✅ (integração com GAS pendente)";
-    alert("UI ajustada ✅ Agora é só ligar no GAS para gerar/salvar o PDF.");
-  }catch(e){
-    if(st) st.innerText = "Erro: " + String(e?.message || e);
-    alert("Erro ao salvar: " + String(e?.message || e));
-  }
+  return cliSalvarRegistro_();
 }
 
 document.addEventListener("DOMContentLoaded", ()=>{
@@ -3114,4 +3079,3 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
 </body>
 </html>
-
