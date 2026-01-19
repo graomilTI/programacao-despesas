@@ -403,16 +403,19 @@
         <h3>Painel D – Deslocamento</h3>
         <div id="listaD"></div>
       </div>
-
-      <div id="stepE" class="card step">
-        <div class="topbar" style="margin-bottom:6px;">
-          <h3 style="margin:0;">Painel E – Extras</h3>
-          <button class="light" type="button" onclick="baixarPDFProgramacao_()">📄 Baixar PDF</button>
-        </div>
-        <div class="muted">Padrão = 0. Ao marcar, abre campo para valor e salva o valor.</div>
-        <div id="listaE"></div>
-        <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
-      </div>
+  
+  <div id="stepE" class="card step">
+    <div class="topbar" style="margin-bottom:6px;">
+      <h3 style="margin:0;">Painel E – Extras</h3>
+    </div>
+  
+    <div class="muted">
+      Padrão = 0. Ao marcar, abre campo para valor e salva o valor.
+    </div>
+  
+    <div id="listaE"></div>
+    <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
+  </div>
 
     </div>
 
@@ -602,10 +605,51 @@ let alojList = [];
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 function escAttr(s){ return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function idSafe(s){ return String(s||"").replace(/[^a-zA-Z0-9]/g,"_"); }
+
 function cssEsc_(s){
   try{ if(window.CSS && typeof CSS.escape === "function") return CSS.escape(String(s)); }catch(e){}
   return String(s).replace(/["\\]/g, "\\$&");
 }
+
+/* =========================
+ * ✅ HELPERS DOWNLOAD PDF
+ * ========================= */
+function openDownloadWindow_(){
+  try{
+    return window.open("about:blank", "_blank", "noopener");
+  }catch(e){
+    return null;
+  }
+}
+
+function toDirectDownloadUrl_(url){
+  url = String(url||"");
+
+  // file/d/<id>/view
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(m1) return `https://drive.google.com/uc?export=download&id=${m1[1]}`;
+
+  // open?id=<id> ou ?id=<id>
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if(m2 && url.includes("drive.google.com")){
+    return `https://drive.google.com/uc?export=download&id=${m2[1]}`;
+  }
+
+  return url;
+}
+
+function sendToWindowOrDownload_(win, url, fileName){
+  url = toDirectDownloadUrl_(url);
+  if(win && !win.closed){
+    try{
+      win.location.href = url;
+      return true;
+    }catch(e){}
+  }
+  return forceDownloadUrl_(url, fileName);
+}
+
+
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
 function hide(id){ document.getElementById(id).style.display="none"; }
@@ -846,10 +890,16 @@ async function baixarPDFProgramacao_(){
     alert("❌ Data inválida para gerar PDF.");
     return false;
   }
+
+  // ✅ AQUI
+  const win = openDownloadWindow_();
+  if(win) win.document.title = "Baixando PDF...";
+
   setBusy(true);
   setDebug("Gerando PDF...");
-  const r = await api("gerarPDFProgramacao", { dataRef });
-  setBusy(false);
+
+  const r = await api("gerarPDFProgramacao", { payload: { dataReferencia: dataRef } });
+  setBusy(false); // ✅ ADICIONE AQUI (logo após o await)
 
   if(!r || !r.ok){
     const err = r?.error || "Erro ao gerar PDF";
@@ -861,11 +911,11 @@ async function baixarPDFProgramacao_(){
   const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   const nome = r.pdfFileName || r.fileName || "programacao.pdf";
 
-  if(url){
-    forceDownloadUrl_(url, nome);
-    setDebug("PDF baixado ✅");
-    return true;
-  }
+if(url){
+  sendToWindowOrDownload_(win, url, nome);
+  setDebug("PDF gerado ✅ (abrindo download)");
+  return true;
+}
 
   if(r.b64){
     downloadPdfFromB64_(r.b64, nome);
@@ -904,11 +954,16 @@ async function finalizarEtapaEComPdf_(){
   setBusy(true);
   setDebug("Salvando + gerando PDF...");
 
+  
+  const win = openDownloadWindow_();
+  if (win) win.document.title = "Gerando PDF..."; // ✅ AQUI
+  
   const r = await api("finalizarEtapaE", {
     payload: { dataReferencia: dataRef, etapa:"E", registros }
   });
-
+  
   setBusy(false);
+
 
   if(!r || !r.ok){
     const err = r?.error || "Erro ao finalizar Etapa E.";
@@ -921,11 +976,11 @@ async function finalizarEtapaEComPdf_(){
   const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   const nome = r.pdfFileName || r.fileName || "programacao.pdf";
 
-  if(url){
-    forceDownloadUrl_(url, nome);
-    setDebug("PDF baixado ✅");
-    return { ok:true, pdf:true };
-  }
+if(url){
+  sendToWindowOrDownload_(win, url, nome);
+  setDebug("PDF gerado ✅ (abrindo download)");
+  return { ok:true, pdf:true };
+}
 
   const b64 = r.pdf?.b64 || r.b64 || "";
   if(b64){
@@ -2034,12 +2089,13 @@ function renderAdminConferencia_(){
   box.innerHTML = html || '<div class="muted">Nenhuma despesa liberada para o filtro.</div>';
   info.innerText = `Mostrando ${shown} colaborador(es) com despesas liberadas.`;
 }
-function adminCarregar(){
+function adminCarregar_(){
   const d = String(document.getElementById('adminDataRef')?.value||'').trim();
   if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
   document.getElementById('dataRef').value = d;
   carregar();
 }
+
 /** ======================
  * ✅ CARREGAR CONTEXTO
  * ====================== */
@@ -2164,15 +2220,33 @@ async function salvarEtapaAtual_(){
   const namesAll = Object.keys(form);
 
   let dirtyNames = Array.from(dirty[step] || []);
+
+  // ✅ Se não teve mudanças, NÃO salva tudo no B.
+  // Salva apenas o que foge do padrão (Casa) ou o que tem wknd/obs/campos hotel.
   if(dirtyNames.length === 0){
     if(step === "B"){
-      dirtyNames = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
-      setDebug("Painel B: salvando padrão (sem alterações detectadas)...");
+      const okNames = Object.keys(form).filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+      dirtyNames = okNames.filter(n=>{
+        const f = form[n] || {};
+        const tipo = String(f.estadia_tipo || "Casa").trim();
+        const obs  = String(f.estadia_obs || "").trim();
+        const hasHotel = (tipo==="Hotel") && (String(f.hotel_dias ?? "").trim() !== "" || String(f.hotel_chegada ?? "").trim() !== "");
+        const hasWknd  = !!f.wknd_hosp;
+        return (tipo !== "Casa") || !!obs || hasHotel || hasWknd;
+      });
+
+      if(dirtyNames.length === 0){
+        setDebug("Nada para salvar no Painel B (tudo padrão).");
+        return { ok:true, skipped:true };
+      }
+
+      setDebug(`Painel B: salvando apenas exceções (${dirtyNames.length}).`);
     } else {
       setDebug("Nada para salvar (sem alterações).");
       return { ok:true, skipped:true };
     }
   }
+
 
   if(step === "B"){
     const okNames = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
@@ -2207,16 +2281,7 @@ async function salvarEtapaAtual_(){
     }
   }
 
-  let registros = [];
-
-  if(step === "B"){
-    const rCopy = await api("copiarEstadiaAgora", { payload: { dataReferencia: dataRef } });
-    if(!rCopy || !rCopy.ok){
-      setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
-    } else {
-      setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
-    }
-  }
+let registros = [];
 
   if(step === "A"){
     registros = dirtyNames.map(n => {
@@ -2320,12 +2385,26 @@ async function salvarEtapaAtual_(){
       }));
   }
 
-  setBusy(true);
+ setBusy(true);
 
-  const r = await salvarEtapaPayload_(dataRef, step, registros);
-  if(!r || !r.ok){ setBusy(false); return { ok:false }; }
+const r = await salvarEtapaPayload_(dataRef, step, registros);
+if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-  await enfileirarPosProcesso_(dataRef, step, registros);
+// ✅ COPIA hotel/aloj/fazenda SÓ DEPOIS DE SALVAR
+if (
+  step === "B" &&
+  Array.isArray(registros) && registros.length &&
+  registros.some(r => ["Hotel","Alojamento","Fazenda"].includes(String(r.estadia_tipo||"").trim()))
+){
+  const rCopy = await api("copiarEstadiaAgora", { payload: { dataReferencia: dataRef } });
+
+  if(!rCopy || !rCopy.ok){
+    setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
+  } else {
+    setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
+  }
+}
+
 
   if(step === "B" && isFriday_(dataRef)){
     const sab = addDays_(dataRef, 1);
@@ -2501,4 +2580,5 @@ window.onload = async () => {
 
 </body>
 </html>
+
 
