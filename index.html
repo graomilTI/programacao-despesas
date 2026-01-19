@@ -248,6 +248,17 @@
       height:fit-content;
     }
 
+
+    .adminOnly{ display:none; }
+    details.adminBlock{ border:1px solid #e5e7eb; border-radius:14px; background:#fff; margin:10px 0; overflow:hidden; }
+    details.adminBlock > summary{ list-style:none; cursor:pointer; padding:12px 14px; font-weight:900; background:#f9fafb; display:flex; justify-content:space-between; gap:10px; }
+    details.adminBlock > summary::-webkit-details-marker{ display:none; }
+    .adminMeta{ font-size:12px; color:#6b7280; font-weight:700; }
+    .adminBody{ padding:12px 14px; }
+    .adminItem{ display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid #f3f4f6; font-size:13px; }
+    .adminItem:last-child{ border-bottom:none; }
+    .pillMini{ font-size:11px; padding:3px 8px; border-radius:999px; background:#e0f2fe; color:#0f172a; white-space:nowrap; }
+
     /* ✅ FAB WhatsApp (Suporte Técnico) */
 .waFab{
   position: fixed;
@@ -333,6 +344,7 @@
           <div class="menuTabs">
             <button id="tabProgramacao" class="tabBtn active" type="button" onclick="switchScreen('programacao')">📋 Programação</button>
             <button id="tabAloj" class="tabBtn" type="button" onclick="switchScreen('aloj')">🏠 Alojamentos</button>
+            <button id="tabAdmin" class="tabBtn" type="button" onclick="switchScreen('admin')" style="display:none;">Conferencia</button>
           </div>
         </div>
         <div class="right">
@@ -437,6 +449,40 @@
   </div>
 </div>
 
+
+
+    <!-- TELA: CONFERENCIA (ADMIN) -->
+    <div id="screenAdmin" class="screen">
+      <div class="card">
+        <h3 style="margin-bottom:6px;">Conferencia diaria</h3>
+        <div class="muted">Resumo por Coordenacao / Supervisao / Colaborador. Apenas despesas marcadas pelo gestor aparecem.</div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Data</label>
+            <input id="adminDataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="col">
+            <label class="muted">Conferente</label>
+            <select id="adminConferente">
+              <option value="">Todos</option>
+              <option value="ANDREA">Andrea</option>
+              <option value="TAINA">Taina</option>
+              <option value="GRAZI">Grazi</option>
+              <option value="RENATA">Renata</option>
+              <option value="MARIA">Maria</option>
+            </select>
+          </div>
+          <div class="col" style="min-width:220px;">
+            <label class="muted">&nbsp;</label>
+            <button id="btnAdminCarregar" onclick="adminCarregar_()">Carregar</button>
+          </div>
+        </div>
+
+        <div id="adminInfo" class="muted" style="margin-top:8px;"></div>
+        <div id="adminResultado" style="margin-top:10px;"></div>
+      </div>
+    </div>
 <div class="bottomBar" id="bottomBar" style="display:none;">
   <div class="inner">
     <button id="btnVoltar" class="secondary" onclick="voltar()">Voltar</button>
@@ -600,18 +646,28 @@ function setBusy(v){
 /** ✅ NOVO: alterna entre telas */
 function switchScreen(which){
   const isProg = which === "programacao";
+  const isAloj = which === "aloj";
+  const isAdm  = which === "admin";
 
   document.getElementById("screenProgramacao").classList.toggle("active", isProg);
-  document.getElementById("screenAloj").classList.toggle("active", !isProg);
+  document.getElementById("screenAloj").classList.toggle("active", isAloj);
+  const scrAdm = document.getElementById("screenAdmin");
+  if(scrAdm) scrAdm.classList.toggle("active", isAdm);
 
   document.getElementById("tabProgramacao").classList.toggle("active", isProg);
-  document.getElementById("tabAloj").classList.toggle("active", !isProg);
+  document.getElementById("tabAloj").classList.toggle("active", isAloj);
+  const tabAdm = document.getElementById("tabAdmin");
+  if(tabAdm) tabAdm.classList.toggle("active", isAdm);
 
-  // BottomBar só na Programação e quando já carregou contexto
-  document.getElementById("bottomBar").style.display = (isProg && ctx) ? "block" : "none";
+  // BottomBar somente no modo Programacao e nao ADMIN
+  const showBottom = (isProg && ctx && !ctx.isAdmin);
+  document.getElementById("bottomBar").style.display = showBottom ? "block" : "none";
 
-  if(!isProg){
+  if(isAloj){
     carregarMenuAlojamentos_().catch(()=>{});
+  }
+  if(isAdm){
+    renderAdminConferencia_();
   }
 }
 
@@ -1885,6 +1941,105 @@ async function buscarHistoricoAlojamento(){
   setAlojResultado_(r.itens || []);
 }
 
+
+
+// ADMIN: CONFERENCIA (resumo)
+function adminIsOn_(){
+  return !!(ctx && ctx.isAdmin);
+}
+function adminGetConferenteBySup_(sup){
+  const m = ctx && (ctx.conferentePorSupervisao || ctx.conferentesPorSupervisao);
+  if(m && typeof m === 'object') return String(m[sup]||'').trim();
+  return '';
+}
+function adminGetLiberadas_(n){
+  const f = form[n] || {};
+  const out = [];
+  if(!PROSSEGUIR(f.disponibilidade_status)) return out;
+  const est = String(f.estadia_tipo||'Casa').trim();
+  if(est && est !== 'Casa') out.push('Estadia: '+est);
+  if(isSim_(f.cafe_valor)) out.push('Cafe');
+  if(isSim_(f.almoco_valor)) out.push('Almoco');
+  if(isSim_(f.janta_valor)) out.push('Janta');
+  const dt = String(f.deslocamento_tipo||'').trim();
+  if(dt) out.push('Desloc: '+dt);
+  if(Number(f.extras_recarga_valor||0)>0) out.push('Recarga');
+  if(Number(f.extras_passagem_valor||0)>0) out.push('Passagem');
+  if(Number(f.extras_lavagem_valor||0)>0) out.push('Lavagem');
+  if(Number(f.manut_veic_valor||0)>0) out.push('Manut');
+  return out;
+}
+function renderAdminConferencia_(){
+  if(!adminIsOn_()) return;
+  const tab = document.getElementById('tabAdmin');
+  if(tab) tab.style.display = '';
+
+  const dMain = document.getElementById('dataRef')?.value || '';
+  const dAdm  = document.getElementById('adminDataRef');
+  if(dAdm && !dAdm.value) dAdm.value = dMain;
+
+  // conferentes list
+  const sel = document.getElementById('adminConferente');
+  if(sel && !sel._filled){
+    sel._filled = true;
+    const names = ['Todos','Andrea','Taina','Grazi','Renata','Maria'];
+    sel.innerHTML = names.map(x=>`<option value="${x==='Todos'?'':x}">${x}</option>`).join('');
+  }
+
+  const chosen = (document.getElementById('adminConferente')?.value || '').trim();
+  const box = document.getElementById('adminResultado');
+  const info = document.getElementById('adminInfo');
+  if(!box || !info) return;
+
+  const rows = [];
+  let shown = 0;
+  (orderedNames||[]).forEach(n=>{
+    const sup = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || '').trim();
+    const conf = adminGetConferenteBySup_(sup);
+    if(chosen && conf && conf !== chosen) return;
+    const itens = adminGetLiberadas_(n);
+    if(!itens.length) return;
+    shown++;
+    rows.push({ n, sup, coord: String(form[n]?.coordenacao||''), conf, itens });
+  });
+
+  // group by coord->sup
+  const byC = {};
+  for(const r of rows){
+    const c = r.coord || 'SEM COORD';
+    const s = r.sup || 'SEM SUP';
+    byC[c] = byC[c] || {};
+    byC[c][s] = byC[c][s] || [];
+    byC[c][s].push(r);
+  }
+
+  const esc = (s)=> String(s||'').replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]||c));
+  let html = '';
+  const coords = Object.keys(byC).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  for(const c of coords){
+    html += `<details class="adminBlock" open><summary>${esc(c)}</summary><div class="adminBody">`;
+    const sups = Object.keys(byC[c]).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+    for(const s of sups){
+      html += `<details class="adminBlock" style="margin:10px 0;"><summary>${esc(s)}</summary><div class="adminBody">`;
+      for(const r of byC[c][s]){
+        const tag = (r.conf?`<span class="tag">${esc(r.conf)}</span>`:'');
+        html += `<div class="adminNameRow"><div><div class="adminName">${esc(r.n)}</div><div class="adminBadges">${r.itens.map(x=>`<span class="adminBadge">${esc(x)}</span>`).join('')}</div></div>${tag}</div>`;
+      }
+      html += `</div></details>`;
+    }
+    html += `</div></details>`;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = html || '<div class="muted">Nenhuma despesa liberada para o filtro.</div>';
+  info.innerText = `Mostrando ${shown} colaborador(es) com despesas liberadas.`;
+}
+function adminCarregar(){
+  const d = String(document.getElementById('adminDataRef')?.value||'').trim();
+  if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
+  document.getElementById('dataRef').value = d;
+  carregar();
+}
 /** ======================
  * ✅ CARREGAR CONTEXTO
  * ====================== */
@@ -1925,6 +2080,11 @@ async function carregar(){
   const coordStr = (res.coordenacoesPermitidas||[]).join(", ");
   document.getElementById("topInfo").innerText =
     `${perfil} | Coordenações: ${coordStr} | Liberados: ${(res.liberados||[]).length} | Bloqueados: ${(res.bloqueados||[]).length}`;
+  // ADMIN UI
+  (function(){
+    var tA=document.getElementById("tabAdmin");
+    if(tA){ tA.style.display = (ctx && ctx.isAdmin)?"inline-block":"none"; }
+  })();
 
   const permit = res.janela?.permitidas || [];
   document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
@@ -2330,7 +2490,7 @@ window.onload = async () => {
 </script>
 
   <!-- ✅ FAB WhatsApp (Suporte) -->
-<a id="waFab" class="waFab" href="javascript:void(0)" title="Suporte Técnico no WhatsApp" aria-label="Suporte Técnico no WhatsApp">
+<a id="waFab" class="waFab" href="https://wa.me/554598341000?text=Ola%20FAB%21%20Preciso%20de%20suporte%20no%20Painel%20Programacao%20-%20Despesas." target="_blank" rel="noopener" title="Suporte Técnico no WhatsApp" aria-label="Suporte Técnico no WhatsApp">
   <span>Suporte WhatsApp</span>
   <!-- ícone WhatsApp (inline SVG) -->
   <svg viewBox="0 0 32 32" aria-hidden="true">
