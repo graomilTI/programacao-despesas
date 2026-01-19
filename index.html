@@ -650,23 +650,23 @@ function sendToWindowOrDownload_(win, url, fileName){
       const safeUrl  = String(url).replace(/"/g, "%22");
       const safeName = String(fileName || "programacao.pdf").replace(/"/g, "");
       win.document.open();
-      win.document.write(`
-        <!doctype html>
-        <html>
-          <head><title>Baixando...</title></head>
-          <body style="font-family:Arial;padding:12px">
-            <p>Baixando PDF...</p>
-            <a id="dl" href="${safeUrl}" download="${safeName}">Clique se não baixar</a>
-            <script>
-              (function(){
-                var a = document.getElementById('dl');
-                try{ a.click(); }catch(e){}
-                setTimeout(function(){ try{ window.close(); }catch(e){} }, 1800);
-              })();
-            </script>
-          </body>
-        </html>
-      `);
+win.document.write(`
+  <!doctype html>
+  <html>
+    <head><title>Baixando...</title></head>
+    <body style="font-family:Arial;padding:12px">
+      <p>Baixando PDF...</p>
+      <a id="dl" href="${safeUrl}" download="${safeName}">Clique se não baixar</a>
+      <script>
+        (function(){
+          var a = document.getElementById('dl');
+          try{ a.click(); }catch(e){}
+          setTimeout(function(){ try{ window.close(); }catch(e){} }, 1800);
+        })();
+      <\/script>
+    </body>
+  </html>
+`);
       win.document.close();
       return true;
     }catch(e){
@@ -2634,6 +2634,7 @@ window.onload = async () => {
 
 </body>
 </html>
+
 
 
 
