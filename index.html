@@ -614,7 +614,12 @@ function cssEsc_(s){
  * ========================= */
 function openDownloadWindow_(){
   try{
-    return window.open("about:blank", "_blank", "noopener");
+    const w = window.open("", "_blank"); // sem noopener
+    if(w){
+      w.document.write("<!doctype html><title>Baixando...</title><p style='font-family:Arial'>Baixando PDF...</p>");
+      w.document.close();
+    }
+    return w;
   }catch(e){
     return null;
   }
@@ -638,15 +643,40 @@ function toDirectDownloadUrl_(url){
 
 function sendToWindowOrDownload_(win, url, fileName){
   url = toDirectDownloadUrl_(url);
+
+  // ✅ Se abriu janela, força um clique lá dentro e tenta fechar
   if(win && !win.closed){
     try{
-      win.location.href = url;
+      const safeUrl  = String(url).replace(/"/g, "%22");
+      const safeName = String(fileName || "programacao.pdf").replace(/"/g, "");
+      win.document.open();
+      win.document.write(`
+        <!doctype html>
+        <html>
+          <head><title>Baixando...</title></head>
+          <body style="font-family:Arial;padding:12px">
+            <p>Baixando PDF...</p>
+            <a id="dl" href="${safeUrl}" download="${safeName}">Clique se não baixar</a>
+            <script>
+              (function(){
+                var a = document.getElementById('dl');
+                try{ a.click(); }catch(e){}
+                setTimeout(function(){ try{ window.close(); }catch(e){} }, 1800);
+              })();
+            </script>
+          </body>
+        </html>
+      `);
+      win.document.close();
       return true;
-    }catch(e){}
+    }catch(e){
+      // cai pro fallback abaixo
+    }
   }
+
+  // ✅ fallback: tenta no mesmo tab via <a>
   return forceDownloadUrl_(url, fileName);
 }
-
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
@@ -2604,6 +2634,7 @@ window.onload = async () => {
 
 </body>
 </html>
+
 
 
 
