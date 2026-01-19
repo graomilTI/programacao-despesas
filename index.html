@@ -344,6 +344,7 @@
           <div class="menuTabs">
             <button id="tabProgramacao" class="tabBtn active" type="button" onclick="switchScreen('programacao')">📋 Programação</button>
             <button id="tabAloj" class="tabBtn" type="button" onclick="switchScreen('aloj')">🏠 Alojamentos</button>
+            <button id="tabClientes" class="tabBtn" type="button" onclick="switchScreen('clientes')">👥 Clientes</button>
             <button id="tabAdmin" class="tabBtn" type="button" onclick="switchScreen('admin')" style="display:none;">Conferencia</button>
           </div>
         </div>
@@ -449,7 +450,118 @@
       </div>
     </div>
 
-    <!-- TELA: CONFERENCIA (ADMIN) -->
+    
+
+    <!-- ✅ TELA: CLIENTES (NOVO) -->
+    <div id="screenClientes" class="screen">
+      <div class="card">
+        <h3 style="margin-bottom:6px;">👥 Clientes – Registro de Contato</h3>
+        <div class="muted">Preencha o registro. Ao salvar, um PDF será gerado e salvo na pasta definida no GAS.</div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Cliente</label>
+            <input id="cli_cliente" placeholder="Nome do cliente" autocomplete="off">
+          </div>
+          <div class="col">
+            <label class="muted">Data</label>
+            <input id="cli_data" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Nome do contato</label>
+            <input id="cli_contato_nome" placeholder="Nome" autocomplete="off">
+          </div>
+          <div class="col">
+            <label class="muted">Telefone</label>
+            <input id="cli_contato_tel" placeholder="(xx) xxxxx-xxxx" inputmode="tel" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="card" style="box-shadow:none; border:1px dashed #d1d5db; margin-top:12px;">
+          <div style="font-weight:700; margin-bottom:6px;">Tipo de interação</div>
+          <div class="toolsRow" style="gap:10px; flex-wrap:wrap;">
+            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_visita"> Visita sede do cliente</label>
+            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_online"> Reunião Online</label>
+            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_almoco"> Almoço/Jantar</label>
+            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_outros"> Outros</label>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <div class="col">
+              <label class="muted">Se "Outros", descreva</label>
+              <input id="cli_outros_desc" placeholder="Descreva..." autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Participantes Grão 1000</label>
+            <div class="row" style="gap:8px;">
+              <div class="col"><input id="cli_add_grao" placeholder="Nome" autocomplete="off"></div>
+              <div class="col" style="max-width:220px;"><button class="light" type="button" onclick="cliAddParticipante_('grao')">+ Adicionar</button></div>
+            </div>
+            <div id="cli_lista_grao" class="listBox" style="display:none; margin-top:8px;"></div>
+          </div>
+          <div class="col">
+            <label class="muted">Participantes do Cliente</label>
+            <div class="row" style="gap:8px;">
+              <div class="col"><input id="cli_add_cliente" placeholder="Nome" autocomplete="off"></div>
+              <div class="col" style="max-width:220px;"><button class="light" type="button" onclick="cliAddParticipante_('cliente')">+ Adicionar</button></div>
+            </div>
+            <div id="cli_lista_cliente" class="listBox" style="display:none; margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Resumo do que foi discutido</label>
+            <textarea id="cli_resumo" style="width:100%; min-height:110px; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px;"></textarea>
+          </div>
+          <div class="col">
+            <label class="muted">Providências a serem tomadas</label>
+            <textarea id="cli_providencias" style="width:100%; min-height:110px; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px;"></textarea>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Anexar fotos do evento</label>
+            <input id="cli_fotos" type="file" accept="image/*" multiple>
+            <div class="muted" style="margin-top:6px;">Dica: fotos grandes podem demorar. Se travar, envie menos fotos por vez.</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <div class="col" style="min-width:220px;">
+            <button id="btnCliSalvar" onclick="cliSalvarRegistro_()">✅ Salvar e gerar PDF</button>
+          </div>
+          <div class="col">
+            <button class="light" type="button" onclick="cliLimparForm_()">🧹 Limpar</button>
+          </div>
+        </div>
+
+        <div id="cliStatus" class="muted" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <!-- ✅ TELA: ENCERRAMENTO (NOVO) -->
+    <div id="screenEncerramento" class="screen">
+      <div class="card">
+        <h3 style="margin-bottom:6px;">✅ Encerramento</h3>
+        <div class="muted">Programação finalizada. Use os botões abaixo para baixar o(s) PDF(s).</div>
+        <div id="encInfo" class="muted" style="margin-top:8px;"></div>
+        <div id="encLista" style="margin-top:10px;"></div>
+        <div class="toolsRow" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+          <button class="light" type="button" onclick="encVoltarInicio_()">🏠 Voltar para início</button>
+          <button type="button" onclick="encVoltarProgramacao_()">📋 Voltar para programação</button>
+        </div>
+      </div>
+    </div>
+
+<!-- TELA: CONFERENCIA (ADMIN) -->
     <div id="screenAdmin" class="screen">
       <div class="card">
         <h3 style="margin-bottom:6px;">Conferencia diaria</h3>
@@ -719,15 +831,23 @@ function setBusy(v){
 function switchScreen(which){
   const isProg = which === "programacao";
   const isAloj = which === "aloj";
+  const isCli  = which === "clientes";
+  const isEnc  = which === "encerramento";
   const isAdm  = which === "admin";
 
   document.getElementById("screenProgramacao").classList.toggle("active", isProg);
   document.getElementById("screenAloj").classList.toggle("active", isAloj);
+  const scrCli = document.getElementById("screenClientes");
+  if(scrCli) scrCli.classList.toggle("active", isCli);
+  const scrEnc = document.getElementById("screenEncerramento");
+  if(scrEnc) scrEnc.classList.toggle("active", isEnc);
   const scrAdm = document.getElementById("screenAdmin");
   if(scrAdm) scrAdm.classList.toggle("active", isAdm);
 
   document.getElementById("tabProgramacao").classList.toggle("active", isProg);
   document.getElementById("tabAloj").classList.toggle("active", isAloj);
+  const tabCli = document.getElementById("tabClientes");
+  if(tabCli) tabCli.classList.toggle("active", isCli);
   const tabAdm = document.getElementById("tabAdmin");
   if(tabAdm) tabAdm.classList.toggle("active", isAdm);
 
@@ -738,11 +858,231 @@ function switchScreen(which){
   if(isAloj){
     carregarMenuAlojamentos_().catch(()=>{});
   }
+  if(isCli){
+    cliInit_();
+  }
   if(isAdm){
     renderAdminConferencia_();
   }
 }
 
+
+
+// =========================
+// ✅ ENCERRAMENTO (PDFs)
+// =========================
+let enc_lastPdfs = [];
+function encRender_(dataRef, pdfs){
+  enc_lastPdfs = Array.isArray(pdfs) ? pdfs : [];
+  const info = document.getElementById('encInfo');
+  const lista = document.getElementById('encLista');
+  if(info) info.innerText = `Data: ${dataRef} | PDFs: ${enc_lastPdfs.length}`;
+  if(!lista) return;
+
+  if(!enc_lastPdfs.length){
+    lista.innerHTML = `<div class="muted">Nenhum PDF retornado. Se necessário, use o botão de gerar PDF (Admin) ou peça para o TI verificar permissões do Drive.</div>`;
+    return;
+  }
+
+  lista.innerHTML = enc_lastPdfs.map((p,i)=>{
+    const name = (p && (p.name || p.fileName)) ? (p.name || p.fileName) : `PDF_${i+1}.pdf`;
+    const url  = (p && (p.pdfDownloadUrl || p.downloadUrl || p.pdfViewUrl || p.viewUrl)) ? (p.pdfDownloadUrl || p.downloadUrl || p.pdfViewUrl || p.viewUrl) : '';
+    const safeName = String(name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `
+      <div class="card" style="box-shadow:none; border:1px solid #e5e7eb; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div style="font-weight:700;">📄 ${safeName}</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="light" type="button" onclick="encBaixar_(${i})">⬇️ Baixar</button>
+            <button class="light" type="button" onclick="encAbrir_(${i})">🔗 Abrir</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function encBaixar_(i){
+  const p = enc_lastPdfs[i];
+  if(!p) return;
+  const name = p.name || p.fileName || 'programacao.pdf';
+  const url  = p.pdfDownloadUrl || p.downloadUrl || p.pdfViewUrl || p.viewUrl || '';
+  if(!url){ alert('PDF sem link.'); return; }
+  // ✅ aqui a gente força download no MESMO TAB (mais confiável)
+  forceDownloadUrl_(toDirectDownloadUrl_(url), name);
+}
+function encAbrir_(i){
+  const p = enc_lastPdfs[i];
+  if(!p) return;
+  const url = p.pdfViewUrl || p.viewUrl || p.pdfDownloadUrl || p.downloadUrl || '';
+  if(!url){ alert('PDF sem link.'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+function encVoltarInicio_(){
+  // volta para topo (data + carregar)
+  switchScreen('programacao');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function encVoltarProgramacao_(){
+  switchScreen('programacao');
+  // mantém estado atual para ajustes
+}
+
+// =========================
+// ✅ CLIENTES – Registro de Contato
+// =========================
+let cli_part_grao = [];
+let cli_part_cliente = [];
+let cli_inited = false;
+
+function cliInit_(){
+  if(cli_inited) return;
+  cli_inited = true;
+  // preenche data com hoje por padrão
+  try{
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yy = d.getFullYear();
+    const el = document.getElementById('cli_data');
+    if(el && !el.value) el.value = `${dd}/${mm}/${yy}`;
+  }catch(e){}
+
+  // máscaras
+  const elDt = document.getElementById('cli_data');
+  if(elDt){
+    elDt.addEventListener('input', ()=> elDt.value = maskData(elDt.value));
+  }
+}
+
+function cliAddParticipante_(tipo){
+  const isGrao = tipo === 'grao';
+  const inp = document.getElementById(isGrao ? 'cli_add_grao' : 'cli_add_cliente');
+  const val = String(inp?.value||'').trim();
+  if(!val) return;
+  const arr = isGrao ? cli_part_grao : cli_part_cliente;
+  if(!arr.some(x=>normTxt_(x)===normTxt_(val))) arr.push(val);
+  inp.value = '';
+  cliRenderParticipantes_();
+}
+
+function cliRemParticipante_(tipo, idx){
+  const arr = (tipo==='grao') ? cli_part_grao : cli_part_cliente;
+  arr.splice(idx,1);
+  cliRenderParticipantes_();
+}
+
+function cliRenderParticipantes_(){
+  const boxG = document.getElementById('cli_lista_grao');
+  const boxC = document.getElementById('cli_lista_cliente');
+  if(boxG){
+    boxG.style.display = cli_part_grao.length ? 'block' : 'none';
+    boxG.innerHTML = cli_part_grao.map((n,i)=>`<div class="row" style="align-items:center; gap:8px;"><div class="col">• ${esc(n)}</div><div class="col" style="max-width:120px;"><button class="light" type="button" onclick="cliRemParticipante_('grao',${i})">Remover</button></div></div>`).join('');
+  }
+  if(boxC){
+    boxC.style.display = cli_part_cliente.length ? 'block' : 'none';
+    boxC.innerHTML = cli_part_cliente.map((n,i)=>`<div class="row" style="align-items:center; gap:8px;"><div class="col">• ${esc(n)}</div><div class="col" style="max-width:120px;"><button class="light" type="button" onclick="cliRemParticipante_('cliente',${i})">Remover</button></div></div>`).join('');
+  }
+}
+
+function cliLimparForm_(){
+  ['cli_cliente','cli_contato_nome','cli_contato_tel','cli_resumo','cli_providencias','cli_outros_desc'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  ['cli_tipo_visita','cli_tipo_online','cli_tipo_almoco','cli_tipo_outros'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.checked = false;
+  });
+  const f = document.getElementById('cli_fotos');
+  if(f) f.value='';
+  cli_part_grao = []; cli_part_cliente = [];
+  cliRenderParticipantes_();
+  const st = document.getElementById('cliStatus');
+  if(st) st.innerText = '';
+}
+
+function normTxt_(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+}
+
+async function cliSalvarRegistro_(){
+  if(!ctx){ alert('Faça login primeiro.'); return; }
+  const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
+  const data = document.getElementById('cli_data')?.value?.trim() || '';
+  if(!cliente){ alert('Informe o cliente.'); return; }
+  if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
+
+  const payload = {
+    cliente,
+    nomeContato: document.getElementById('cli_contato_nome')?.value?.trim() || '',
+    telefone: document.getElementById('cli_contato_tel')?.value?.trim() || '',
+    data,
+    supervisao: (ctx?.supervisao || ''),
+    tipoInteracao: {
+      visita: !!document.getElementById('cli_tipo_visita')?.checked,
+      online: !!document.getElementById('cli_tipo_online')?.checked,
+      almoco: !!document.getElementById('cli_tipo_almoco')?.checked,
+      outros: !!document.getElementById('cli_tipo_outros')?.checked,
+      outrosDesc: document.getElementById('cli_outros_desc')?.value?.trim() || ''
+    },
+    participantesGrao: cli_part_grao.slice(),
+    participantesCliente: cli_part_cliente.slice(),
+    resumo: document.getElementById('cli_resumo')?.value || '',
+    providencias: document.getElementById('cli_providencias')?.value || ''
+  };
+
+  // fotos -> base64 (limitado)
+  const files = Array.from(document.getElementById('cli_fotos')?.files || []);
+  const photos = [];
+  const maxPhotos = 6; // evita payload gigante
+  for(const f of files.slice(0,maxPhotos)){
+    const b64 = await fileToB64_(f);
+    if(b64) photos.push({ name: f.name, type: f.type, b64 });
+  }
+  payload.fotos = photos;
+
+  const st = document.getElementById('cliStatus');
+  if(st) st.innerText = 'Salvando...';
+  setBusy(true);
+
+  const r = await api('clientes_registroContato', { payload }, { timeoutMs: 180000 });
+
+  setBusy(false);
+  if(!r || !r.ok){
+    const err = r?.error || 'Falha ao salvar.';
+    if(st) st.innerText = err;
+    alert(err);
+    return;
+  }
+
+  if(st) st.innerText = 'Registro salvo ✅';
+
+  // se retornar pdf, manda para encerramento
+  const pdfs = [];
+  const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
+  if(url) pdfs.push({ name: r.name || r.fileName || 'Registro_Contato.pdf', pdfDownloadUrl: url, pdfViewUrl: r.pdfViewUrl || r.viewUrl || '' });
+
+  if(pdfs.length){
+    encRender_(data, pdfs);
+    switchScreen('encerramento');
+  }
+}
+
+function fileToB64_(file){
+  return new Promise((resolve)=>{
+    try{
+      const fr = new FileReader();
+      fr.onload = ()=>{
+        const res = String(fr.result||'');
+        const m = res.split(',');
+        resolve(m.length>1 ? m[1] : '');
+      };
+      fr.onerror = ()=> resolve('');
+      fr.readAsDataURL(file);
+    }catch(e){ resolve(''); }
+  });
+}
 function qByNomeRow_(nome){
   const v = (window.CSS && CSS.escape) ? CSS.escape(String(nome)) : String(nome).replace(/["\\]/g, "\\$&");
   return document.querySelector(`.nomeRow[data-nome="${v}"]`);
@@ -987,21 +1327,15 @@ async function finalizarEtapaEComPdf_(){
     }));
 
   setBusy(true);
-  setDebug("Salvando + gerando PDF...");
+  setDebug("Finalizando... (gerando PDFs)");
 
-  
-  const win = openDownloadWindow_();
-  if (win) win.document.title = "Gerando PDF..."; // ✅ AQUI
-  
-const r = await api(
-  "finalizarEtapaE",
-  { payload: { dataReferencia: dataRef, etapa:"E", registros } },
-  { timeoutMs: 120000 } // 120s
-);
+  const r = await api(
+    "finalizarEtapaE",
+    { payload: { dataReferencia: dataRef, etapa:"E", registros } },
+    { timeoutMs: 180000 }
+  );
 
-  
   setBusy(false);
-
 
   if(!r || !r.ok){
     const err = r?.error || "Erro ao finalizar Etapa E.";
@@ -1011,25 +1345,13 @@ const r = await api(
     return { ok:false };
   }
 
-   const nome = r.pdfFileName || r.fileName || "programacao.pdf";
-  const b64  = r.pdf?.b64 || r.b64 || "";
+  // ✅ Mostra tela de encerramento com lista de PDFs
+  const pdfs = Array.isArray(r.pdfs) ? r.pdfs : [];
+  encRender_(dataRef, pdfs);
+  switchScreen('encerramento');
+  setDebug("Finalizado ✅");
 
-  if(b64){
-    downloadPdfFromB64_(b64, nome);
-    try{ if(win && !win.closed) win.close(); }catch(e){}
-    setDebug("PDF baixado ✅");
-    return { ok:true, pdf:true };
-  }
-
-  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
-  if(url){
-    sendToWindowOrDownload_(win, url, nome);
-    setDebug("PDF gerado ✅ (abrindo download)");
-    return { ok:true, pdf:true };
-  }
-
-  setDebug("Salvo ✅ (não retornou PDF)");
-  return { ok:true, pdf:false };
+  return { ok:true, pdfs: pdfs.length };
 }
 
 /** =========================
@@ -2634,9 +2956,3 @@ window.onload = async () => {
 
 </body>
 </html>
-
-
-
-
-
-
