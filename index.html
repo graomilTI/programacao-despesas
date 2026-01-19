@@ -449,11 +449,6 @@
       </div>
     </div>
 
-  </div>
-</div>
-
-
-
     <!-- TELA: CONFERENCIA (ADMIN) -->
     <div id="screenAdmin" class="screen">
       <div class="card">
@@ -486,6 +481,9 @@
         <div id="adminResultado" style="margin-top:10px;"></div>
       </div>
     </div>
+ </div>
+</div>
+
 <div class="bottomBar" id="bottomBar" style="display:none;">
   <div class="inner">
     <button id="btnVoltar" class="secondary" onclick="voltar()">Voltar</button>
@@ -819,15 +817,16 @@ function setLoginMode(mode){
 }
 
 /** ✅ API */
-async function api(action, args){
- const payload = { action, ...(args||{}) };
+async function api(action, args, opts){
+  const payload = { action, ...(args||{}) };
 
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
     payload.token = token;
   }
 
+  const timeoutMs = Number(opts?.timeoutMs || 20000); // padrão 20s
   const controller = new AbortController();
-  const t = setTimeout(()=> controller.abort(), 20000); // 20s timeout
+  const t = setTimeout(()=> controller.abort(), timeoutMs);
 
   let txt = "";
   try{
@@ -851,6 +850,7 @@ async function api(action, args){
   try { return JSON.parse(txt); }
   catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
 }
+
 
   /** =========================
  * ✅ PDF (FORÇAR DOWNLOAD)
@@ -878,7 +878,7 @@ function forceDownloadUrl_(url, fileName){
   a.href = url;
   a.download = fileName || "programacao.pdf";
   a.rel = "noopener";
-  a.target = "_self";
+  a.target = "_blank";
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -908,24 +908,25 @@ async function baixarPDFProgramacao_(){
     return false;
   }
 
-  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   const nome = r.pdfFileName || r.fileName || "programacao.pdf";
+  const b64  = r.pdf?.b64 || r.b64 || "";
 
-if(url){
-  sendToWindowOrDownload_(win, url, nome);
-  setDebug("PDF gerado ✅ (abrindo download)");
-  return true;
-}
-
-  if(r.b64){
-    downloadPdfFromB64_(r.b64, nome);
+  if(b64){
+    downloadPdfFromB64_(b64, nome);
+    try{ if(win && !win.closed) win.close(); }catch(e){}
     setDebug("PDF baixado ✅");
-    return true;
+    return { ok:true, pdf:true };
   }
 
-  setDebug("PDF não retornou URL nem base64 ❌");
-  alert("PDF não retornou URL nem base64.");
-  return false;
+  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
+  if(url){
+    sendToWindowOrDownload_(win, url, nome);
+    setDebug("PDF gerado ✅ (abrindo download)");
+    return { ok:true, pdf:true };
+  }
+
+  setDebug("Salvo ✅ (não retornou PDF)");
+  return { ok:true, pdf:false };
 }
 
 async function finalizarEtapaEComPdf_(){
@@ -973,19 +974,20 @@ async function finalizarEtapaEComPdf_(){
     return { ok:false };
   }
 
-  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
-  const nome = r.pdfFileName || r.fileName || "programacao.pdf";
+   const nome = r.pdfFileName || r.fileName || "programacao.pdf";
+  const b64  = r.pdf?.b64 || r.b64 || "";
 
-if(url){
-  sendToWindowOrDownload_(win, url, nome);
-  setDebug("PDF gerado ✅ (abrindo download)");
-  return { ok:true, pdf:true };
-}
-
-  const b64 = r.pdf?.b64 || r.b64 || "";
   if(b64){
     downloadPdfFromB64_(b64, nome);
+    try{ if(win && !win.closed) win.close(); }catch(e){}
     setDebug("PDF baixado ✅");
+    return { ok:true, pdf:true };
+  }
+
+  const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
+  if(url){
+    sendToWindowOrDownload_(win, url, nome);
+    setDebug("PDF gerado ✅ (abrindo download)");
     return { ok:true, pdf:true };
   }
 
@@ -2390,68 +2392,83 @@ let registros = [];
 const r = await salvarEtapaPayload_(dataRef, step, registros);
 if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-// ✅ COPIA hotel/aloj/fazenda SÓ DEPOIS DE SALVAR
 if (
   step === "B" &&
   Array.isArray(registros) && registros.length &&
   registros.some(r => ["Hotel","Alojamento","Fazenda"].includes(String(r.estadia_tipo||"").trim()))
 ){
-  const rCopy = await api("copiarEstadiaAgora", { payload: { dataReferencia: dataRef } });
+  // solta um aviso leve e segue
+  setDebug("✅ Etapa B salva. Sincronizando Hotel/Alojamento...");
 
-  if(!rCopy || !rCopy.ok){
-    setDebug("⚠️ Salvou Etapa B, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
-  } else {
-    setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
+  // roda em paralelo, com timeout maior
+  (async ()=>{
+    const rCopy = await api(
+      "copiarEstadiaAgora",
+      { payload: { dataReferencia: dataRef } },
+      { timeoutMs: 90000 } // 90s
+    );
+
+    if(!rCopy || !rCopy.ok){
+      setDebug("⚠️ Etapa B salva, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
+    } else {
+      setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
+    }
+  })();
+}
+
+if(step === "B" && isFriday_(dataRef)){
+  const sab = addDays_(dataRef, 1);
+  const dom = addDays_(dataRef, 2);
+
+  const regsW = namesAll
+    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+    .filter(n => !!form[n].wknd_hosp)
+    .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
+    .map(n => {
+      const tipo = String(form[n].estadia_tipo||"").trim();
+
+      const diasRaw = form[n].hotel_dias;
+      const dias = (diasRaw === "" || diasRaw == null) ? 0 : Number(diasRaw || 0);
+      const hora = String(form[n].hotel_chegada || "").trim();
+
+      if(tipo === "Fazenda"){
+        form[n].estadia_obs = "Pernoite";
+      }
+
+      const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
+
+      return {
+        colaborador: n,
+        coordenacao: form[n].coordenacao,
+        supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
+        estadia_tipo: tipo,
+        estadia_obs: obsNorm,
+        hotel_dias: (tipo==="Hotel" ? (dias>0 ? Math.floor(dias) : "") : ""),
+        hotel_chegada: (tipo==="Hotel" ? hora : "")
+      };
+    });
+
+  if(regsW.length){
+    setDebug("✅ Etapa B salva. Replicando fim de semana...");
+
+    (async ()=>{
+      const rSab = await salvarEtapaPayload_(sab, "B", regsW);
+      if(rSab && rSab.ok) await enfileirarPosProcesso_(sab, "B", regsW);
+
+      const rDom = await salvarEtapaPayload_(dom, "B", regsW);
+      if(rDom && rDom.ok) await enfileirarPosProcesso_(dom, "B", regsW);
+
+      setDebug("✅ Fim de semana replicado (Sáb/Dom).");
+    })();
   }
 }
 
+  await enfileirarPosProcesso_(dataRef, step, registros);
 
-  if(step === "B" && isFriday_(dataRef)){
-    const sab = addDays_(dataRef, 1);
-    const dom = addDays_(dataRef, 2);
-
-    const regsW = namesAll
-      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-      .filter(n => !!form[n].wknd_hosp)
-      .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
-      .map(n => {
-        const tipo = String(form[n].estadia_tipo||"").trim();
-
-        const diasRaw = form[n].hotel_dias;
-        const dias = (diasRaw === "" || diasRaw == null) ? 0 : Number(diasRaw || 0);
-        const hora = String(form[n].hotel_chegada || "").trim();
-
-        if(tipo === "Fazenda"){
-          form[n].estadia_obs = "Pernoite";
-        }
-
-        const obsNorm = normalizeHotelObs_(tipo, form[n].estadia_obs, diasRaw, hora);
-
-        return {
-          colaborador: n,
-          coordenacao: form[n].coordenacao,
-          supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
-          estadia_tipo: tipo,
-          estadia_obs: obsNorm,
-          hotel_dias: (tipo==="Hotel" ? (dias>0 ? Math.floor(dias) : "") : ""),
-          hotel_chegada: (tipo==="Hotel" ? hora : "")
-        };
-      });
-
-    if(regsW.length){
-      const rSab = await salvarEtapaPayload_(sab, "B", regsW);
-      if(!rSab || !rSab.ok){ setBusy(false); return { ok:false }; }
-      await enfileirarPosProcesso_(sab, "B", regsW);
-
-      const rDom = await salvarEtapaPayload_(dom, "B", regsW);
-      if(!rDom || !rDom.ok){ setBusy(false); return { ok:false }; }
-      await enfileirarPosProcesso_(dom, "B", regsW);
-    }
-  }
+  if(dirty[step]) dirty[step].clear();
 
   setBusy(false);
-
-  dirty[step].clear();
+  setDebug("✅ Salvo.");
   return { ok:true };
 }
 
@@ -2580,5 +2597,6 @@ window.onload = async () => {
 
 </body>
 </html>
+
 
 
