@@ -247,6 +247,48 @@
       white-space:nowrap;
       height:fit-content;
     }
+
+    /* ✅ FAB WhatsApp (Suporte Técnico) */
+.waFab{
+  position: fixed;
+  right: 16px;
+  bottom: 86px; /* fica acima da bottomBar */
+  z-index: 99999;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: #25D366;
+  box-shadow: 0 10px 24px rgba(0,0,0,.20);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border: 1px solid rgba(0,0,0,.06);
+}
+.waFab:hover{ filter: brightness(0.98); }
+.waFab svg{ width: 28px; height: 28px; }
+.waFab span{
+  position: absolute;
+  right: 64px;
+  background: #111827;
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: .12s ease;
+  pointer-events: none;
+}
+.waFab:hover span{
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (max-width: 720px){
+  .waFab{ right: 12px; bottom: 78px; }
+  .waFab span{ display:none; }
+}
   </style>
 </head>
 
@@ -2206,7 +2248,48 @@ function voltar(){
   if(step==="E"){ setStep("D"); return; }
 }
 
+  /** ✅ WhatsApp FAB (Suporte Técnico) */
+const SUPORTE_WHATS_E164 = "554598341000"; // +55 45 9834-1000 (sem + e sem espaços)
+
+function buildSuporteMsg_(){
+  // tenta aproveitar contexto carregado, se existir
+  const dataRef = (document.getElementById("dataRef")?.value || "").trim();
+  const perfil = ctx?.isAdmin ? "ADMIN" : "GESTOR";
+  const coord = (ctx?.coordenacoesPermitidas || []).join(", ");
+  const etapa = step || "";
+
+  const parts = [
+    "Olá! Preciso de suporte no Painel Programação – Despesas.",
+    perfil ? `Perfil: ${perfil}` : "",
+    dataRef ? `Data: ${dataRef}` : "",
+    etapa ? `Etapa: ${etapa}` : "",
+    coord ? `Coordenações: ${coord}` : ""
+  ].filter(Boolean);
+
+  return parts.join("\n");
+}
+
+function openWhatsSuporte_(){
+  const msg = encodeURIComponent(buildSuporteMsg_());
+  // api.whatsapp.com funciona bem no desktop e mobile
+  const url = `https://api.whatsapp.com/send?phone=${SUPORTE_WHATS_E164}&text=${msg}`;
+  window.open(url, "_blank", "noopener");
+}
+
+// liga o clique do FAB
+function bindWhatsFab_(){
+  const fab = document.getElementById("waFab");
+  if(!fab || fab._bound) return;
+  fab._bound = true;
+  fab.addEventListener("click", (e)=>{
+    e.preventDefault();
+    openWhatsSuporte_();
+  });
+}
+
+
 window.onload = async () => {
+  bindWhatsFab_();
   setLoginMode(loginMode);
 
   const loginInput = document.getElementById("loginInput");
@@ -2245,8 +2328,16 @@ window.onload = async () => {
   }
 };
 </script>
+
+  <!-- ✅ FAB WhatsApp (Suporte) -->
+<a id="waFab" class="waFab" href="javascript:void(0)" title="Suporte Técnico no WhatsApp" aria-label="Suporte Técnico no WhatsApp">
+  <span>Suporte WhatsApp</span>
+  <!-- ícone WhatsApp (inline SVG) -->
+  <svg viewBox="0 0 32 32" aria-hidden="true">
+    <path fill="#fff" d="M19.11 17.3c-.28-.14-1.64-.81-1.9-.9-.25-.09-.44-.14-.62.14-.18.28-.71.9-.88 1.08-.16.18-.32.2-.6.07-.28-.14-1.16-.43-2.2-1.36-.81-.72-1.35-1.62-1.51-1.9-.16-.28-.02-.43.12-.57.12-.12.28-.32.41-.48.14-.16.18-.28.28-.46.09-.18.05-.35-.02-.48-.07-.14-.62-1.5-.85-2.06-.22-.54-.44-.47-.62-.48h-.53c-.18 0-.48.07-.73.35-.25.28-.96.94-.96 2.3 0 1.36.98 2.67 1.12 2.86.14.18 1.93 2.95 4.67 4.13.65.28 1.16.45 1.56.57.66.21 1.26.18 1.74.11.53-.08 1.64-.67 1.87-1.32.23-.65.23-1.21.16-1.32-.07-.11-.25-.18-.53-.32z"/>
+    <path fill="#fff" d="M16 3C9.38 3 4 8.38 4 15c0 2.16.57 4.19 1.57 5.95L4 29l8.23-1.52A11.92 11.92 0 0 0 16 27c6.62 0 12-5.38 12-12S22.62 3 16 3zm0 21.67c-1.7 0-3.34-.46-4.78-1.33l-.34-.2-4.88.9.92-4.75-.22-.36A9.61 9.61 0 0 1 6.33 15c0-5.34 4.33-9.67 9.67-9.67S25.67 9.66 25.67 15 21.34 24.67 16 24.67z"/>
+  </svg>
+</a>
+
 </body>
 </html>
-
-
-
