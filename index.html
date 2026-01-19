@@ -300,7 +300,30 @@
   .waFab{ right: 12px; bottom: 78px; }
   .waFab span{ display:none; }
 }
-  </style>
+  /* ====== CLIENTES (UI Profissional) ====== */
+.clForm{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; align-items:start; }
+.clSpan2{ grid-column: 1 / -1; }
+.clField label{ display:block; font-size:12px; color:#6b7280; margin:0 0 6px; font-weight:700; letter-spacing:.2px; }
+.clField input[type="text"], .clField input[type="tel"], .clField textarea{
+  width:100%; padding:10px 12px; border-radius:12px; border:1px solid #d1d5db;
+  background:#fff; font-size:14px; outline:none;
+}
+.clField input[type="file"]{ width:100%; padding:10px 12px; border-radius:12px; border:1px dashed #d1d5db; background:#fff; }
+.clField input:focus, .clField textarea:focus{ border-color:#166534; box-shadow:0 0 0 3px rgba(22,101,52,.10); }
+.clChecks{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb; }
+.clChk{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+.clChk input{ margin-top:3px; width:16px; height:16px; accent-color:#166534; }
+.clChk span{ font-size:13px; color:#111827; }
+.clHint{ font-size:12px; color:#6b7280; margin-top:6px; }
+.clActions{ display:flex; gap:10px; flex-wrap:wrap; }
+.clActions .btn{ width:auto !important; padding:10px 14px; border-radius:12px; font-weight:800; }
+.clActions .btn.secondary{ background:#fff; color:#166534; border:1px solid #bbf7d0; }
+.clTitleRow{ display:flex; justify-content:space-between; align-items:flex-end; gap:10px; margin-bottom:10px; }
+.clTitleRow h3{ margin:0; font-size:16px; }
+.clBadge{ font-size:12px; padding:6px 10px; border-radius:999px; background:#ecfdf5; color:#166534; border:1px solid #bbf7d0; font-weight:700; }
+@media(max-width:860px){ .clForm{ grid-template-columns: 1fr; } .clChecks{ grid-template-columns: 1fr; } }
+
+</style>
 </head>
 
 <body>
@@ -453,102 +476,106 @@
     
 
     <!-- ✅ TELA: CLIENTES (NOVO) -->
-    <div id="screenClientes" class="screen">
-      <div class="card">
-        <h3 style="margin-bottom:6px;">👥 Clientes – Registro de Contato</h3>
-        <div class="muted">Preencha o registro. Ao salvar, um PDF será gerado e salvo na pasta definida no GAS.</div>
+    <!-- ✅ TELA: CLIENTES (NOVO) -->
+<div id="screenClientes" class="screen">
+  <div class="card">
+    <div class="clTitleRow">
+      <h3>👥 Clientes – Registro de Contato</h3>
+      <span class="clBadge">Clientes</span>
+    </div>
+    <div class="clHint">Preencha o registro. Ao salvar, um PDF será gerado e salvo na pasta definida no GAS.</div>
 
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Cliente</label>
-            <input id="cli_cliente" placeholder="Nome do cliente" autocomplete="off">
+    <div class="clForm" style="margin-top:10px;">
+      <div class="clField">
+        <label for="cli_cliente">Cliente</label>
+        <input id="cli_cliente" type="text" placeholder="Nome do cliente" autocomplete="off">
+      </div>
+
+      <div class="clField">
+        <label for="cli_data">Data</label>
+        <input id="cli_data" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10" autocomplete="off" oninput="maskDateBR_(this)">
+        <div class="clHint">Digite só números: 15012026 → 15/01/2026</div>
+      </div>
+
+      <div class="clField">
+        <label for="cli_contato">Nome do contato</label>
+        <input id="cli_contato" type="text" placeholder="Nome do contato" autocomplete="off">
+      </div>
+
+      <div class="clField">
+        <label for="cli_tel">Telefone</label>
+        <input id="cli_tel" type="tel" placeholder="Somente números ou (00) 00000-0000" autocomplete="off">
+      </div>
+
+      <div class="clField clSpan2">
+        <label>Tipo de interação</label>
+        <div class="clChecks">
+          <label class="clChk"><input id="cli_tipo_visita" type="checkbox"><span>Visita sede do cliente</span></label>
+          <label class="clChk"><input id="cli_tipo_online" type="checkbox"><span>Reunião online</span></label>
+          <label class="clChk"><input id="cli_tipo_almoco" type="checkbox"><span>Almoço/Jantar</span></label>
+          <label class="clChk"><input id="cli_tipo_outros" type="checkbox" onchange="toggleOutrosCliente_()"><span>Outros</span></label>
+        </div>
+      </div>
+
+      <div id="cli_outros_wrap" class="clField clSpan2" style="display:none;">
+        <label for="cli_outros_desc">Se marcou “Outros”, descreva</label>
+        <input id="cli_outros_desc" type="text" placeholder="Descreva o tipo de interação">
+        <div class="clHint">Obrigatório quando “Outros” estiver marcado.</div>
+      </div>
+
+      <div class="clField clSpan2">
+        <label for="cli_partGrao_inp">Lista de participantes Grão 1000</label>
+        <div class="row">
+          <div class="col" style="min-width:260px;">
+            <input id="cli_partGrao_inp" type="text" placeholder="Digite um nome e clique em Adicionar">
           </div>
-          <div class="col">
-            <label class="muted">Data</label>
-            <input id="cli_data" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          <div class="col" style="flex:0; min-width:auto;">
+            <button class="btn light" type="button" onclick="cliAddPart_('grao')">Adicionar</button>
           </div>
         </div>
+        <div id="cli_partGrao_list" class="list"></div>
+      </div>
 
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Nome do contato</label>
-            <input id="cli_contato_nome" placeholder="Nome" autocomplete="off">
+      <div class="clField clSpan2">
+        <label for="cli_partCli_inp">Lista de participantes cliente</label>
+        <div class="row">
+          <div class="col" style="min-width:260px;">
+            <input id="cli_partCli_inp" type="text" placeholder="Digite um nome e clique em Adicionar">
           </div>
-          <div class="col">
-            <label class="muted">Telefone</label>
-            <input id="cli_contato_tel" placeholder="(xx) xxxxx-xxxx" inputmode="tel" autocomplete="off">
+          <div class="col" style="flex:0; min-width:auto;">
+            <button class="btn light" type="button" onclick="cliAddPart_('cliente')">Adicionar</button>
           </div>
         </div>
+        <div id="cli_partCli_list" class="list"></div>
+      </div>
 
-        <div class="card" style="box-shadow:none; border:1px dashed #d1d5db; margin-top:12px;">
-          <div style="font-weight:700; margin-bottom:6px;">Tipo de interação</div>
-          <div class="toolsRow" style="gap:10px; flex-wrap:wrap;">
-            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_visita"> Visita sede do cliente</label>
-            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_online"> Reunião Online</label>
-            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_almoco"> Almoço/Jantar</label>
-            <label class="muted" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="cli_tipo_outros"> Outros</label>
-          </div>
-          <div class="row" style="margin-top:10px;">
-            <div class="col">
-              <label class="muted">Se "Outros", descreva</label>
-              <input id="cli_outros_desc" placeholder="Descreva..." autocomplete="off">
-            </div>
-          </div>
+      <div class="clField clSpan2">
+        <label for="cli_resumo">Resumo do que foi discutido</label>
+        <textarea id="cli_resumo" rows="4" placeholder="Campo livre"></textarea>
+      </div>
+
+      <div class="clField clSpan2">
+        <label for="cli_providencias">Providências a serem tomadas</label>
+        <textarea id="cli_providencias" rows="3" placeholder="Campo livre"></textarea>
+      </div>
+
+      <div class="clField clSpan2">
+        <label for="cli_fotos">Anexe foto do evento</label>
+        <input id="cli_fotos" type="file" multiple accept="image/*">
+      </div>
+
+      <div class="clField clSpan2">
+        <div class="clActions">
+          <button class="btn" type="button" onclick="cliSalvarContato_()">Gerar PDF e Salvar</button>
+          <button class="btn secondary" type="button" onclick="cliLimpar_()">Limpar</button>
         </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Participantes Grão 1000</label>
-            <div class="row" style="gap:8px;">
-              <div class="col"><input id="cli_add_grao" placeholder="Nome" autocomplete="off"></div>
-              <div class="col" style="max-width:220px;"><button class="light" type="button" onclick="cliAddParticipante_('grao')">+ Adicionar</button></div>
-            </div>
-            <div id="cli_lista_grao" class="listBox" style="display:none; margin-top:8px;"></div>
-          </div>
-          <div class="col">
-            <label class="muted">Participantes do Cliente</label>
-            <div class="row" style="gap:8px;">
-              <div class="col"><input id="cli_add_cliente" placeholder="Nome" autocomplete="off"></div>
-              <div class="col" style="max-width:220px;"><button class="light" type="button" onclick="cliAddParticipante_('cliente')">+ Adicionar</button></div>
-            </div>
-            <div id="cli_lista_cliente" class="listBox" style="display:none; margin-top:8px;"></div>
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Resumo do que foi discutido</label>
-            <textarea id="cli_resumo" style="width:100%; min-height:110px; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px;"></textarea>
-          </div>
-          <div class="col">
-            <label class="muted">Providências a serem tomadas</label>
-            <textarea id="cli_providencias" style="width:100%; min-height:110px; padding:10px; border-radius:12px; border:1px solid #d1d5db; font-size:14px;"></textarea>
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Anexar fotos do evento</label>
-            <input id="cli_fotos" type="file" accept="image/*" multiple>
-            <div class="muted" style="margin-top:6px;">Dica: fotos grandes podem demorar. Se travar, envie menos fotos por vez.</div>
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:12px;">
-          <div class="col" style="min-width:220px;">
-            <button id="btnCliSalvar" onclick="cliSalvarRegistro_()">✅ Salvar e gerar PDF</button>
-          </div>
-          <div class="col">
-            <button class="light" type="button" onclick="cliLimparForm_()">🧹 Limpar</button>
-          </div>
-        </div>
-
-        <div id="cliStatus" class="muted" style="margin-top:8px;"></div>
+        <div id="cli_status" class="clHint" style="margin-top:10px;"></div>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- ✅ TELA: ENCERRAMENTO (NOVO) -->
-    <div id="screenEncerramento" class="screen">
+<div id="screenEncerramento" class="screen">
       <div class="card">
         <h3 style="margin-bottom:6px;">✅ Encerramento</h3>
         <div class="muted">Programação finalizada. Use os botões abaixo para baixar o(s) PDF(s).</div>
@@ -2942,6 +2969,137 @@ window.onload = async () => {
     }
   }
 };
+
+
+/* ====== CLIENTES: UI + validação ====== */
+function maskDateBR_(el){
+  if(!el) return;
+  let v = String(el.value || "").replace(/\D/g,"").slice(0,8);
+  if(v.length >= 5) v = v.replace(/(\d{2})(\d{2})(\d{0,4})/, "$1/$2/$3");
+  else if(v.length >= 3) v = v.replace(/(\d{2})(\d{0,2})/, "$1/$2");
+  el.value = v;
+}
+
+function toggleOutrosCliente_(){
+  const chk = document.getElementById("cli_tipo_outros");
+  const wrap = document.getElementById("cli_outros_wrap");
+  const inp = document.getElementById("cli_outros_desc");
+  const on = !!(chk && chk.checked);
+  if(wrap) wrap.style.display = on ? "block" : "none";
+  if(inp){
+    inp.required = on;
+    if(!on) inp.value = "";
+  }
+}
+
+let cliPartGrao_ = [];
+let cliPartCli_  = [];
+
+function escH_(s){ return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+
+function cliRender_(tipo){
+  const arr = (tipo==="grao") ? cliPartGrao_ : cliPartCli_;
+  const el = document.getElementById(tipo==="grao" ? "cli_partGrao_list" : "cli_partCli_list");
+  if(!el) return;
+  el.innerHTML = "";
+  if(!arr.length){
+    el.innerHTML = '<div class="clHint">Nenhum participante adicionado.</div>';
+    return;
+  }
+  arr.forEach((nome, idx)=>{
+    const row = document.createElement("div");
+    row.className = "item";
+    row.innerHTML = `<div>${escH_(nome)}</div><button class="btn light" type="button">Remover</button>`;
+    row.querySelector("button").onclick = ()=>{
+      arr.splice(idx,1);
+      cliRender_(tipo);
+    };
+    el.appendChild(row);
+  });
+}
+
+function cliAddPart_(tipo){
+  const inp = document.getElementById(tipo==="grao" ? "cli_partGrao_inp" : "cli_partCli_inp");
+  if(!inp) return;
+  const nome = String(inp.value||"").trim();
+  if(!nome) return;
+  const arr = (tipo==="grao") ? cliPartGrao_ : cliPartCli_;
+  if(!arr.some(x=>String(x).toLowerCase()===nome.toLowerCase())) arr.push(nome);
+  inp.value = "";
+  cliRender_(tipo);
+}
+
+function cliLimpar_(){
+  ["cli_cliente","cli_contato","cli_tel","cli_data","cli_outros_desc","cli_resumo","cli_providencias"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+  ["cli_tipo_visita","cli_tipo_online","cli_tipo_almoco","cli_tipo_outros"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.checked = false;
+  });
+  toggleOutrosCliente_();
+  cliPartGrao_ = [];
+  cliPartCli_ = [];
+  cliRender_("grao");
+  cliRender_("cliente");
+  const f = document.getElementById("cli_fotos");
+  if(f) f.value = "";
+  const st = document.getElementById("cli_status");
+  if(st) st.innerText = "";
+}
+
+async function cliSalvarContato_(){
+  const outros = document.getElementById("cli_tipo_outros")?.checked;
+  const outrosDesc = String(document.getElementById("cli_outros_desc")?.value || "").trim();
+  if(outros && !outrosDesc){
+    alert("Informe a descrição em 'Outros'.");
+    document.getElementById("cli_outros_desc")?.focus();
+    return;
+  }
+
+  const payload = {
+    cliente: String(document.getElementById("cli_cliente")?.value || "").trim(),
+    nomeContato: String(document.getElementById("cli_contato")?.value || "").trim(),
+    telefone: String(document.getElementById("cli_tel")?.value || "").trim(),
+    data: String(document.getElementById("cli_data")?.value || "").trim(),
+    tiposInteracao: [
+      ...(document.getElementById("cli_tipo_visita")?.checked ? ["Visita sede do cliente"] : []),
+      ...(document.getElementById("cli_tipo_online")?.checked ? ["Reunião online"] : []),
+      ...(document.getElementById("cli_tipo_almoco")?.checked ? ["Almoço/Jantar"] : []),
+      ...(outros ? ["Outros"] : [])
+    ],
+    outrosDescricao: outrosDesc,
+    participantesGrao1000: (cliPartGrao_||[]).slice(),
+    participantesCliente: (cliPartCli_||[]).slice(),
+    resumo: String(document.getElementById("cli_resumo")?.value || "").trim(),
+    providencias: String(document.getElementById("cli_providencias")?.value || "").trim()
+    // fotos: você liga depois com base64/multipart
+  };
+
+  const st = document.getElementById("cli_status");
+  if(st) st.innerText = "Enviando...";
+
+  try{
+    // 🔌 Integração (quando seu GAS estiver pronto):
+    // const r = await api("cliente_registrarContato", { payload });
+    // if(!r || !r.ok) throw new Error(r?.error || "Falha ao salvar");
+    // if(st) st.innerText = "Salvo ✅ PDF gerado.";
+    // return;
+
+    if(st) st.innerText = "UI OK ✅ (integração com GAS pendente)";
+    alert("UI ajustada ✅ Agora é só ligar no GAS para gerar/salvar o PDF.");
+  }catch(e){
+    if(st) st.innerText = "Erro: " + String(e?.message || e);
+    alert("Erro ao salvar: " + String(e?.message || e));
+  }
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  cliRender_("grao");
+  cliRender_("cliente");
+});
+
 </script>
 
   <!-- ✅ FAB WhatsApp (Suporte) -->
@@ -2956,3 +3114,4 @@ window.onload = async () => {
 
 </body>
 </html>
+
