@@ -878,7 +878,7 @@ function forceDownloadUrl_(url, fileName){
   a.href = url;
   a.download = fileName || "programacao.pdf";
   a.rel = "noopener";
-  a.target = "_blank";
+  a.target = "_self";
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -898,7 +898,11 @@ async function baixarPDFProgramacao_(){
   setBusy(true);
   setDebug("Gerando PDF...");
 
-  const r = await api("gerarPDFProgramacao", { payload: { dataReferencia: dataRef } });
+  const r = await api(
+  "gerarPDFProgramacao",
+  { payload: { dataReferencia: dataRef } },
+  { timeoutMs: 120000 } // 120s
+);
   setBusy(false); // ✅ ADICIONE AQUI (logo após o await)
 
   if(!r || !r.ok){
@@ -959,9 +963,12 @@ async function finalizarEtapaEComPdf_(){
   const win = openDownloadWindow_();
   if (win) win.document.title = "Gerando PDF..."; // ✅ AQUI
   
-  const r = await api("finalizarEtapaE", {
-    payload: { dataReferencia: dataRef, etapa:"E", registros }
-  });
+const r = await api(
+  "finalizarEtapaE",
+  { payload: { dataReferencia: dataRef, etapa:"E", registros } },
+  { timeoutMs: 120000 } // 120s
+);
+
   
   setBusy(false);
 
@@ -2597,6 +2604,7 @@ window.onload = async () => {
 
 </body>
 </html>
+
 
 
 
