@@ -2562,6 +2562,38 @@ function adminGetRowsFromResumo_(tree){
     return rows;
   }
 
+  // ✅ Backend atual (GAS) retorna diretamente: { COORD: { SUP: [cards...] } }
+  // (sem embrulhar em byCoord). Aceita esse formato aqui.
+  if(tree && typeof tree === 'object' && !Array.isArray(tree)){
+    let looksLikeDirect = false;
+    for(const coord in tree){
+      const bySup = tree[coord];
+      if(bySup && typeof bySup === 'object'){
+        // se achar pelo menos um array dentro, consideramos o formato
+        for(const sup in bySup){
+          if(Array.isArray(bySup[sup])){ looksLikeDirect = true; break; }
+        }
+      }
+      if(looksLikeDirect) break;
+    }
+
+    if(looksLikeDirect){
+      for(const coord in tree){
+        const bySup = tree[coord] || {};
+        for(const sup in bySup){
+          const arr = Array.isArray(bySup[sup]) ? bySup[sup] : [];
+          for(const it of arr){
+            const obj = (typeof it === 'object' && it) ? it : { colaborador: String(it||'') };
+            obj.coordenacao = obj.coordenacao || coord;
+            obj.supervisao  = obj.supervisao  || sup;
+            pushFromItem(obj);
+          }
+        }
+      }
+      return rows;
+    }
+  }
+
   const arr = tree.itens || tree.items || tree.rows || tree.liberados || tree.data || (Array.isArray(tree) ? tree : null);
   if(Array.isArray(arr)){
     arr.forEach(pushFromItem);
