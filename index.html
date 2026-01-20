@@ -630,6 +630,29 @@
           </div>
         </div>
 
+        <div class="row" style="margin-top:10px; align-items:flex-end;">
+          <div class="col">
+            <label class="muted">Ordenar</label>
+            <select id="adminSort">
+              <option value="COLAB_AZ">A-Z Colaborador</option>
+              <option value="COLAB_ZA">Z-A Colaborador</option>
+              <option value="COORD_AZ">A-Z Coordenação</option>
+              <option value="COORD_ZA">Z-A Coordenação</option>
+            </select>
+          </div>
+          <div class="col">
+            <label class="muted">Visualização</label>
+            <select id="adminView">
+              <option value="GROUP">Agrupado por Coordenação</option>
+              <option value="LIST">Lista por Colaborador</option>
+            </select>
+          </div>
+          <div class="col" style="min-width:220px;">
+            <label class="muted">&nbsp;</label>
+            <button class="secondary" type="button" onclick="adminAplicarOrdenacao_()">Aplicar</button>
+          </div>
+        </div>
+
         <div id="adminInfo" class="muted" style="margin-top:8px;"></div>
         <div id="adminResultado" style="margin-top:10px;"></div>
       </div>
@@ -713,6 +736,9 @@ const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
 
 /** ✅ estado */
 let token = localStorage.getItem("DESP_TOKEN") || "";
+let isAdminLogin = false;
+let adminResumoTree = null;
+let adminLastPayload = { dataRef: "", conferente: "TODOS", sort: "COLAB_AZ", view: "GROUP" };
 let ctx = null;
 let step = "A";
 let form = {};
@@ -1210,7 +1236,11 @@ function setLoginMode(mode){
   loginMode = mode;
   localStorage.setItem("DESP_LOGIN_MODE", loginMode);
 
-  const title = document.getElementById("loginTitle");
+  // mostra/oculta a aba Conferência já na tela de login (ADMIN)
+  isAdminLogin = (loginMode === "ADMIN");
+  const _ta = document.getElementById("tabAdmin");
+  if(_ta) _ta.style.display = isAdminLogin ? "inline-flex" : "none";
+const title = document.getElementById("loginTitle");
   const hint  = document.getElementById("loginHint");
   const input = document.getElementById("loginInput");
 
@@ -2408,7 +2438,7 @@ async function buscarHistoricoAlojamento(){
 
 // ADMIN: CONFERENCIA (resumo)
 function adminIsOn_(){
-  return !!(ctx && ctx.isAdmin);
+  return !!(isAdminLogin || (ctx && ctx.isAdmin));
 }
 function adminGetConferenteBySup_(sup){
   const m = ctx && (ctx.conferentePorSupervisao || ctx.conferentesPorSupervisao);
@@ -2456,41 +2486,172 @@ function adminRowFromForm_(n){
   return { estLabel, cafe, alm, janta, desl, rec, pas, lav, man };
 }
 
-function renderAdminConferencia_(){
-  if(!adminIsOn_()) return;
-  const tab = document.getElementById('tabAdmin');
-  if(tab) tab.style.display = '';
+function adminNormalizeConf_(s){
+  const t = String(s||'').trim();
+  if(!t) return '';
+  return t.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase();
+}
 
-  const dMain = document.getElementById('dataRef')?.value || '';
-  const dAdm  = document.getElementById('adminDataRef');
-  if(dAdm && !dAdm.value) dAdm.value = dMain;
+function adminGetRowsFromResumo_(tree){
+  // Aceita formatos:
+  // - { byCoord: { COORD: { SUP: [ {colaborador, conferente, despesas:[{tipo,label,valor}]} ] } } }
+  // - { itens: [...] } / { rows: [...] }
+  const rows = [];
+  if(!tree) return rows;
 
-  // conferentes list
-  const sel = document.getElementById('adminConferente');
-  if(sel && !sel._filled){
-    sel._filled = true;
-    const names = ['Todos','Andrea','Taina','Grazi','Renata','Maria'];
-    sel.innerHTML = names.map(x=>`<option value="${x==='Todos'?'':x}">${x}</option>`).join('');
+  const pushFromItem = (it)=>{
+    const nome = String(it.colaborador||it.nome||'').trim();
+    if(!nome) return;
+    const coord = String(it.coordenacao||it.coord||it.regional||'').trim();
+    const sup   = String(it.supervisao||it.sup||'').trim();
+    const conf  = String(it.conferente||it.conf||'').trim();
+
+    const det = { estLabel:'', cafe:false, alm:false, janta:false, desl:'', rec:0, pas:0, lav:0, man:0 };
+    const despesas = Array.isArray(it.despesas) ? it.despesas : [];
+    for(const d of despesas){
+      const tipo = adminNormalizeConf_(d.tipo||d.tipoDespesa||d.key||'');
+      const label = String(d.label||d.nome||d.descricao||'').trim();
+      const val = Number(d.valor||d.value||0) || 0;
+      if(tipo.includes('ESTADIA')) det.estLabel = label || det.estLabel;
+      else if(tipo.includes('CAFE')) det.cafe = true;
+      else if(tipo.includes('ALMO')) det.alm = true;
+      else if(tipo.includes('JANTA')) det.janta = true;
+      else if(tipo.includes('DESLOC')) det.desl = label || det.desl;
+      else if(tipo.includes('RECARG')) det.rec = val || det.rec;
+      else if(tipo.includes('PASSA')) det.pas = val || det.pas;
+      else if(tipo.includes('LAVAG')) det.lav = val || det.lav;
+      else if(tipo.includes('MANUT')) det.man = val || det.man;
+    }
+
+    // Se backend já vier pronto em colunas
+    if(it.estadia && !det.estLabel) det.estLabel = String(it.estadia||'').trim();
+    if(it.cafe) det.cafe = !!it.cafe;
+    if(it.almoco) det.alm = !!it.almoco;
+    if(it.janta) det.janta = !!it.janta;
+    if(it.deslocamento) det.desl = String(it.deslocamento||'').trim();
+    if(it.recarga!=null) det.rec = Number(it.recarga)||det.rec;
+    if(it.passagem!=null) det.pas = Number(it.passagem)||det.pas;
+    if(it.lavagem!=null) det.lav = Number(it.lavagem)||det.lav;
+    if(it.manutencao!=null) det.man = Number(it.manutencao)||det.man;
+
+    rows.push({ n: nome, coord, sup, conf, det });
+  };
+
+  const byCoord = tree.byCoord || tree.porCoordenacao || tree.resumoPorCoordenacao;
+  if(byCoord && typeof byCoord === 'object'){
+    for(const coord in byCoord){
+      const bySup = byCoord[coord] || {};
+      if(Array.isArray(bySup)){
+        for(const it of bySup){
+          const obj = (typeof it === 'object' && it) ? it : { colaborador: String(it||'') };
+          obj.coordenacao = obj.coordenacao || coord;
+          pushFromItem(obj);
+        }
+        continue;
+      }
+      for(const sup in bySup){
+        const arr = Array.isArray(bySup[sup]) ? bySup[sup] : [];
+        for(const it of arr){
+          const obj = (typeof it === 'object' && it) ? it : { colaborador: String(it||'') };
+          obj.coordenacao = obj.coordenacao || coord;
+          obj.supervisao  = obj.supervisao  || sup;
+          pushFromItem(obj);
+        }
+      }
+    }
+    return rows;
   }
 
-  const chosen = (document.getElementById('adminConferente')?.value || '').trim();
+  const arr = tree.itens || tree.items || tree.rows || tree.liberados || tree.data || (Array.isArray(tree) ? tree : null);
+  if(Array.isArray(arr)){
+    arr.forEach(pushFromItem);
+  }
+  return rows;
+}
+
+function adminGetRowsFallbackFromForm_(){
+  const rows = [];
+  (orderedNames||[]).forEach(n=>{
+    const sup = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || '').trim();
+    const conf = adminGetConferenteBySup_(sup);
+    const det = adminRowFromForm_(n);
+    if(!det) return;
+    rows.push({ n, sup, coord: String(form[n]?.coordenacao||''), conf, det });
+  });
+  return rows;
+}
+
+function adminApplySort_(rows, sortKey){
+  const key = String(sortKey||'COLAB_AZ');
+  const dir = key.endsWith('_ZA') ? -1 : 1;
+  const mode = key.startsWith('COORD') ? 'COORD' : 'COLAB';
+  const cmp = (a,b)=>{
+    const aa = (mode==='COORD' ? (a.coord||'') : (a.n||'')).toUpperCase();
+    const bb = (mode==='COORD' ? (b.coord||'') : (b.n||'')).toUpperCase();
+    const c1 = aa.localeCompare(bb,'pt-BR');
+    if(c1) return c1*dir;
+    const c2 = (a.n||'').toUpperCase().localeCompare((b.n||'').toUpperCase(),'pt-BR');
+    if(c2) return c2;
+    const c3 = (a.sup||'').toUpperCase().localeCompare((b.sup||'').toUpperCase(),'pt-BR');
+    return c3;
+  };
+  return rows.slice().sort(cmp);
+}
+
+function adminRender_(rows, view){
   const box = document.getElementById('adminResultado');
   const info = document.getElementById('adminInfo');
   if(!box || !info) return;
 
-  const rows = [];
-  let shown = 0;
-  (orderedNames||[]).forEach(n=>{
-    const sup = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || '').trim();
-    const conf = adminGetConferenteBySup_(sup);
-    if(chosen && conf && conf !== chosen) return;
-    const det = adminRowFromForm_(n);
-    if(!det) return;
-    shown++;
-    rows.push({ n, sup, coord: String(form[n]?.coordenacao||''), conf, det });
-  });
+  const esc = (s)=> String(s||'').replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]||c));
+  const fmtX = (b)=> b ? `<span class="badgeX">X</span>` : `<span class="badgeEmpty">–</span>`;
+  const fmtMoney = (v)=> (Number(v||0)>0) ? String(v) : '–';
 
-  // group by coord->sup
+  const vmode = String(view||'GROUP');
+
+  let html = '';
+
+  if(vmode === 'LIST'){
+    html += `<div class="tblWrap"><table class="tbl"><thead><tr>`+
+      `<th>COLABORADOR</th>`+
+      `<th>COORDENAÇÃO</th>`+
+      `<th>SUPERVISÃO</th>`+
+      `<th>ESTADIA</th>`+
+      `<th class="center">CAFÉ</th>`+
+      `<th class="center">ALMOÇO</th>`+
+      `<th class="center">JANTA</th>`+
+      `<th>DESLOCAMENTO</th>`+
+      `<th class="right">RECARGA</th>`+
+      `<th class="right">PASSAGEM</th>`+
+      `<th class="right">LAVAGEM</th>`+
+      `<th class="right">MANUT.</th>`+
+    `</tr></thead><tbody>`;
+
+    for(const r of rows){
+      html += `<tr>`+
+        `<td><b>${esc(r.n)}</b></td>`+
+        `<td>${esc(r.coord||'')}</td>`+
+        `<td>${esc(r.sup||'')}</td>`+
+        `<td>${esc(r.det?.estLabel || '')}</td>`+
+        `<td class="center">${fmtX(!!r.det?.cafe)}</td>`+
+        `<td class="center">${fmtX(!!r.det?.alm)}</td>`+
+        `<td class="center">${fmtX(!!r.det?.janta)}</td>`+
+        `<td>${esc(r.det?.desl || '')}</td>`+
+        `<td class="right">${esc(fmtMoney(r.det?.rec))}</td>`+
+        `<td class="right">${esc(fmtMoney(r.det?.pas))}</td>`+
+        `<td class="right">${esc(fmtMoney(r.det?.lav))}</td>`+
+        `<td class="right">${esc(fmtMoney(r.det?.man))}</td>`+
+      `</tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+    box.style.display = 'block';
+    box.innerHTML = html || '<div class="muted">Nenhuma despesa liberada para o filtro.</div>';
+    info.innerText = `Mostrando ${rows.length} colaborador(es) com despesas liberadas.`;
+    return;
+  }
+
+  // GROUP (padrão)
   const byC = {};
   for(const r of rows){
     const c = r.coord || 'SEM COORD';
@@ -2500,14 +2661,10 @@ function renderAdminConferencia_(){
     byC[c][s].push(r);
   }
 
-  const esc = (s)=> String(s||'').replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]||c));
-  const fmtX = (b)=> b ? `<span class="badgeX">X</span>` : `<span class="badgeEmpty">–</span>`;
-  const fmtMoney = (v)=> (Number(v||0)>0) ? String(v) : '–';
-  let html = '';
-  const coords = Object.keys(byC).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const coords = Object.keys(byC);
   for(const c of coords){
     html += `<details class="adminBlock" open><summary>${esc(c)}</summary><div class="adminBody">`;
-    const sups = Object.keys(byC[c]).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+    const sups = Object.keys(byC[c]);
     for(const s of sups){
       const confLabel = (byC[c][s] && byC[c][s][0] && byC[c][s][0].conf) ? String(byC[c][s][0].conf) : '';
       html += `<details class="adminBlock" style="margin:10px 0;" open><summary>${esc(s)} ${confLabel?`<span class="smallMuted">• Conferente: ${esc(confLabel)}</span>`:''}</summary><div class="adminBody">`;
@@ -2548,22 +2705,114 @@ function renderAdminConferencia_(){
 
   box.style.display = 'block';
   box.innerHTML = html || '<div class="muted">Nenhuma despesa liberada para o filtro.</div>';
-  info.innerText = `Mostrando ${shown} colaborador(es) com despesas liberadas.`;
+  info.innerText = `Mostrando ${rows.length} colaborador(es) com despesas liberadas.`;
 }
+
+function adminAplicarOrdenacao_(){
+  // só re-renderiza com o que já foi carregado
+  renderAdminConferencia_();
+}
+
+function renderAdminConferencia_(){
+  if(!adminIsOn_()) return;
+
+  const tab = document.getElementById('tabAdmin');
+  if(tab) tab.style.display = '';
+
+  const dMain = document.getElementById('dataRef')?.value || '';
+  const dAdm  = document.getElementById('adminDataRef');
+  if(dAdm && !dAdm.value) dAdm.value = dMain;
+
+  // defaults dos selects
+  const sortSel = document.getElementById('adminSort');
+  const viewSel = document.getElementById('adminView');
+  if(sortSel && !sortSel.value) sortSel.value = adminLastPayload.sort || 'COLAB_AZ';
+  if(viewSel && !viewSel.value) viewSel.value = adminLastPayload.view || 'GROUP';
+
+  // conferentes list
+  const sel = document.getElementById('adminConferente');
+  if(sel && !sel._filled){
+    sel._filled = true;
+    const names = ['Todos','Andrea','Taina','Grazi','Renata','Maria'];
+    sel.innerHTML = names.map(x=>`<option value="${x==='Todos'?'':x}">${x}</option>`).join('');
+  }
+
+  const chosenRaw = (document.getElementById('adminConferente')?.value || '').trim();
+  const chosen = adminNormalizeConf_(chosenRaw);
+
+  let rows = [];
+  if(adminResumoTree){
+    rows = adminGetRowsFromResumo_(adminResumoTree);
+  }else if(ctx && orderedNames && orderedNames.length){
+    rows = adminGetRowsFallbackFromForm_();
+  }
+
+  // filtro por conferente
+  if(chosen){
+    rows = rows.filter(r=>{
+      const c = adminNormalizeConf_(r.conf);
+      return !c || c === chosen;
+    });
+  }
+
+  const sortKey = (document.getElementById('adminSort')?.value || adminLastPayload.sort || 'COLAB_AZ');
+  const view    = (document.getElementById('adminView')?.value || adminLastPayload.view || 'GROUP');
+
+  adminLastPayload.sort = sortKey;
+  adminLastPayload.view = view;
+
+  const sorted = adminApplySort_(rows, sortKey);
+  adminRender_(sorted, view);
+}
+
 async function adminCarregar_(){
   try{
     const d = String(document.getElementById('adminDataRef')?.value||'').trim();
     if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
-    document.getElementById('dataRef').value = d;
-    await carregar();
-    // se estiver na tela admin, re-renderiza
-    const scrAdm = document.getElementById('screenAdmin');
-    if(scrAdm && scrAdm.classList.contains('active')) renderAdminConferencia_();
+
+    const chosenRaw = (document.getElementById('adminConferente')?.value || '').trim();
+    const sortKey = (document.getElementById('adminSort')?.value || 'COLAB_AZ');
+    const view    = (document.getElementById('adminView')?.value || 'GROUP');
+
+    adminLastPayload = { dataRef: d, conferente: chosenRaw || 'TODOS', sort: sortKey, view: view };
+
+    setBusy(true);
+    setDebug('Carregando conferência...');
+
+    let r;
+    try{
+      r = await api('adm_getResumoConferencia', { dataRef: d, conferente: chosenRaw });
+    }catch(e){
+      setBusy(false);
+      console.error(e);
+      alert('❌ Falha ao chamar o servidor (adm_getResumoConferencia). Veja o console (F12).');
+      setDebug('Falha ao chamar o servidor.');
+      return;
+    }
+
+    setBusy(false);
+
+    if(!r || !r.ok){
+      const err = r?.error || 'Erro ao carregar conferência.';
+      if(isAuthError_(err)) { logoutForcado(err); return; }
+      alert(err);
+      setDebug(err);
+      return;
+    }
+
+    adminResumoTree = r.tree || r.byCoord || r.resumo || r.data || r;
+
+    // Mantém dataRef sincronizada (opcional)
+    const dr = document.getElementById('dataRef');
+    if(dr) dr.value = d;
+
+    renderAdminConferencia_();
   }catch(e){
     console.error(e);
     alert('Erro ao carregar (console).');
   }
 }
+
 
 /** ======================
  * ✅ CARREGAR CONTEXTO
@@ -2617,7 +2866,7 @@ async function carregar(){
   // ADMIN UI
   (function(){
     var tA=document.getElementById("tabAdmin");
-    if(tA){ tA.style.display = (ctx && ctx.isAdmin)?"inline-block":"none"; }
+    if(tA){ tA.style.display = ((ctx && ctx.isAdmin) || isAdminLogin)?"inline-block":"none"; }
   })();
 
   const permit = res.janela?.permitidas || [];
