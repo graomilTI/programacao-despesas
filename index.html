@@ -678,35 +678,37 @@
         <div id="adminInfo" class="muted" style="margin-top:8px;"></div>
         <div id="adminResultado" style="margin-top:10px;"></div>
 
-        <details class="adminBlock" style="margin-top:12px;">
-          <summary>📅 Histórico por colaborador</summary>
-          <div class="adminBody">
-            <div class="muted">Digite o nome do colaborador e, se quiser, um período. Retorna as despesas por <b>data</b> no mesmo padrão de tabela.</div>
+        <details class="adminBlock" style="margin-top:12px;" open>
+  <summary>📅 Histórico por período</summary>
+  <div class="adminBody">
+    <div class="muted">Selecione um <b>período</b> e clique em <b>Carregar</b>. Retorna todos os colaboradores com despesas liberadas no período. Clique no nome para expandir (por data) no mesmo padrão de tabela.</div>
 
-            <div class="row" style="margin-top:10px; align-items:flex-end;">
-              <div class="col" style="min-width:260px;">
-                <label class="muted">Colaborador</label>
-                <input id="adminHistNome" list="adminHistNomes" placeholder="Ex.: JOÃO SILVA" autocomplete="off">
-                <datalist id="adminHistNomes"></datalist>
-              </div>
-              <div class="col">
-                <label class="muted">Data inicial</label>
-                <input id="adminHistDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-              </div>
-              <div class="col">
-                <label class="muted">Data final</label>
-                <input id="adminHistDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-              </div>
-              <div class="col" style="min-width:220px;">
-                <label class="muted">&nbsp;</label>
-                <button class="secondary" type="button" onclick="adminHistCarregar_()">Carregar histórico</button>
-              </div>
-            </div>
+    <div class="row" style="margin-top:10px; align-items:flex-end;">
+      <div class="col">
+        <label class="muted">Data inicial</label>
+        <input id="adminHistDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="col">
+        <label class="muted">Data final</label>
+        <input id="adminHistDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="col">
+        <label class="muted">Visualização</label>
+        <select id="adminHistView">
+          <option value="LIST">Lista geral</option>
+          <option value="GROUP">Agrupar por Coordenação</option>
+        </select>
+      </div>
+      <div class="col" style="min-width:220px;">
+        <label class="muted">&nbsp;</label>
+        <button class="secondary" type="button" onclick="adminHistPeriodoCarregar_()">Carregar</button>
+      </div>
+    </div>
 
-            <div id="adminHistInfo" class="muted" style="margin-top:8px;"></div>
-            <div id="adminHistResultado" style="margin-top:10px;"></div>
-          </div>
-        </details>
+    <div id="adminHistInfo" class="muted" style="margin-top:8px;"></div>
+    <div id="adminHistResultado" style="margin-top:10px;"></div>
+  </div>
+</details>
 
       </div>
     </div>
@@ -2581,7 +2583,11 @@ function adminGetRowsFromResumo_(tree){
       else if(tipo.includes('RECARG')) det.rec = val || det.rec;
       else if(tipo.includes('PASSA')) det.pas = val || det.pas;
       else if(tipo.includes('LAVAG')) det.lav = val || det.lav;
-      else if(tipo.includes('MANUT')) det.man = val || det.man;
+      else if(tipo.includes('MANUT')){ det.man = val || det.man; if(label && !det.outrosTxt) det.outrosTxt = String(d.detalhe||d.obs||d.descricao||label||'').trim(); }
+    else if(tipo.includes('EXTRA')){
+      const txt = String(d.detalhe||d.obs||d.descricao||label||'').trim();
+      if(txt) det.outrosTxt = det.outrosTxt ? (det.outrosTxt + ' | ' + txt) : txt;
+    }
     }
 
     // Se backend já vier pronto em colunas
@@ -3499,7 +3505,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
 
 function adminFillHistDatalist_(){
-  const dl = document.getElementById('adminHistNomes');
+  const dl = document.getElementById('adminHistNome_REMOVIDOs');
   if(!dl) return;
 
   const set = new Set();
@@ -3513,7 +3519,8 @@ function adminFillHistDatalist_(){
 }
 
 function adminBuildDetFromDespesas_(despesas){
-  const det = { estLabel:'', cafe:false, alm:false, janta:false, desl:'', rec:0, pas:0, lav:0, man:0 };
+  const det = { estLabel:'', cafe:false, alm:false, janta:false, desl:'', rec:0, pas:0, lav:0, man:0   outrosTxt: ""
+  };
   const arr = Array.isArray(despesas) ? despesas : [];
 
   for(const d of arr){
@@ -3538,114 +3545,194 @@ function adminBuildDetFromDespesas_(despesas){
     else if(tipo.includes('RECARG')) det.rec = val || det.rec;
     else if(tipo.includes('PASSA')) det.pas = val || det.pas;
     else if(tipo.includes('LAVAG')) det.lav = val || det.lav;
-    else if(tipo.includes('MANUT')) det.man = val || det.man;
+    else if(tipo.includes('MANUT')){ det.man = val || det.man; if(label && !det.outrosTxt) det.outrosTxt = String(d.detalhe||d.obs||d.descricao||label||'').trim(); }
+    else if(tipo.includes('EXTRA')){
+      const txt = String(d.detalhe||d.obs||d.descricao||label||'').trim();
+      if(txt) det.outrosTxt = det.outrosTxt ? (det.outrosTxt + ' | ' + txt) : txt;
+    }
   }
   return det;
 }
 
-async function adminHistCarregar_(){
+async function adminHistPeriodoCarregar_(){
   if(!adminIsOn_()) return;
-
-  const nome = String(document.getElementById('adminHistNome')?.value||'').trim();
-  if(!nome){ alert('Informe o nome do colaborador.'); return; }
 
   const dtIni = String(document.getElementById('adminHistDtIni')?.value||'').trim();
   const dtFim = String(document.getElementById('adminHistDtFim')?.value||'').trim();
-  if(dtIni && !parseDMY_(dtIni)){ alert('Data inicial inválida (dd/mm/aaaa).'); return; }
-  if(dtFim && !parseDMY_(dtFim)){ alert('Data final inválida (dd/mm/aaaa).'); return; }
+  if(!dtIni || !parseDMY_(dtIni)){ alert('Informe uma Data inicial válida (dd/mm/aaaa).'); return; }
+  if(!dtFim || !parseDMY_(dtFim)){ alert('Informe uma Data final válida (dd/mm/aaaa).'); return; }
 
   const chosenRaw = (document.getElementById('adminConferente')?.value || '').trim();
-  const conferente = adminNormalizeConf_(chosenRaw) || "TODOS";
+  const conferente = adminNormalizeConf_(chosenRaw) || 'TODOS';
 
   const info = document.getElementById('adminHistInfo');
   const box  = document.getElementById('adminHistResultado');
   if(info) info.innerText = 'Carregando histórico...';
   if(box) box.innerHTML = '';
 
-  const r = await api_('adm_getHistoricoColaborador', { token, nome, dtIni, dtFim, conferente });
+  const r = await api_('adm_getHistoricoPeriodo', { token, dtIni, dtFim, conferente });
   if(!r || !r.ok){
     if(info) info.innerText = (r && (r.error||r.msg)) ? (r.error||r.msg) : 'Falha ao carregar.';
     return;
   }
 
-  renderAdminHistoricoColab_(r);
+  // guarda dados brutos para aplicar view/ordenação sem nova chamada
+  window.__admHistPeriodoRaw = r;
+  renderAdminHistoricoPeriodo_();
 }
 
-function renderAdminHistoricoColab_(resp){
+function renderAdminHistoricoPeriodo_(){
+  const resp = window.__admHistPeriodoRaw || {};
   const info = document.getElementById('adminHistInfo');
   const box  = document.getElementById('adminHistResultado');
   if(!box) return;
 
-  const esc = (s)=> String(s||'').replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]||c));
+  const esc = (s)=> String(s||'').replace(/[&<>\"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;' }[c]||c));
   const fmtX = (b)=> b ? `<span class="badgeX">X</span>` : `<span class="badgeEmpty">–</span>`;
   const fmtMoney = (v)=> (Number(v||0)>0) ? String(v) : '–';
 
-  const byDate = resp.byDate || {};
-  const datas = Object.keys(byDate || {});
-  let total = 0;
-  datas.forEach(d=> total += (byDate[d]||[]).length);
+  const items = Array.isArray(resp.items) ? resp.items : [];
+  const dtIni = resp.dtIni || '';
+  const dtFim = resp.dtFim || '';
 
-  if(info) info.innerText = `Histórico: ${resp.nome || ''} | ${datas.length} dia(s) | ${total} registro(s).`;
-
-  if(!datas.length){
+  if(info) info.innerText = `Histórico: ${dtIni} → ${dtFim} | ${items.length} registro(s).`;
+  if(!items.length){
     box.innerHTML = '<div class="muted">Nenhum registro encontrado para o período.</div>';
     return;
   }
 
-  // ordena datas (mais recente primeiro)
-  datas.sort((a,b)=>{
-    const da = parseDMY_(a), db = parseDMY_(b);
-    return (db?db.getTime():0) - (da?da.getTime():0);
-  });
+  // Agrupa por colaborador
+  const byColab = new Map();
+  for(const it of items){
+    const nome = String(it.colaborador||'').trim();
+    if(!nome) continue;
+    if(!byColab.has(nome)) byColab.set(nome, []);
+    byColab.get(nome).push(it);
+  }
+
+  // View
+  const view = String(document.getElementById('adminHistView')?.value||'LIST');
+
+  // helper: render tabela por data
+  function renderTabelaPorData(rows){
+    const byDate = {};
+    for(const r of rows){
+      const d = String(r.dataRef||'').trim();
+      if(!d) continue;
+      (byDate[d] ||= []).append(r) if False else None
+    }
+    # can't do python here; will do JS below
+  }
+
+  // Ordena colaboradores A-Z
+  const colabs = Array.from(byColab.keys()).sort((a,b)=>String(a).localeCompare(String(b),'pt-BR'));
 
   let html = '';
-  for(const d of datas){
-    const items = byDate[d] || [];
-    html += `<div class="groupCoord" style="margin-top:12px;">`;
-    html += `<div class="groupCoordTitle">${esc(d)}</div>`;
-    html += `<div class="tblWrap"><table class="tbl"><thead><tr>`+
-      `<th>COLABORADOR</th>`+
-      `<th>COORDENAÇÃO</th>`+
-      `<th>SUPERVISÃO</th>`+
-      `<th>ESTADIA</th>`+
-      `<th class="center">CAFÉ</th>`+
-      `<th class="center">ALMOÇO</th>`+
-      `<th class="center">JANTA</th>`+
-      `<th>DESLOCAMENTO</th>`+
-      `<th class="right">RECARGA</th>`+
-      `<th class="right">PASSAGEM</th>`+
-      `<th class="right">LAVAGEM</th>`+
-      `<th class="right">MANUT.</th>`+
-    `</tr></thead><tbody>`;
 
-    for(const it of items){
-      const nome = String(it.colaborador||it.nome||'').trim();
-      const coord = String(it.coordenacao||it.coord||it.regional||'').trim();
-      const sup   = String(it.supervisao||it.sup||'').trim();
-      const det = adminBuildDetFromDespesas_(it.despesas);
+  function buildOutros_(det){
+    const parts = [];
+    if(Number(det.rec||0)>0) parts.push(`Recarga: ${fmtMoney(det.rec)}`);
+    if(Number(det.pas||0)>0) parts.push(`Passagem: ${fmtMoney(det.pas)}`);
+    if(Number(det.lav||0)>0) parts.push(`Lavagem: ${fmtMoney(det.lav)}`);
+    if(Number(det.man||0)>0) parts.push(`Manut.: ${fmtMoney(det.man)}`);
+    if(det.outrosTxt) parts.push(det.outrosTxt);
+    return parts.join(' | ');
+  }
 
-      html += `<tr>`+
-        `<td><b>${esc(nome)}</b></td>`+
-        `<td>${esc(coord)}</td>`+
-        `<td>${esc(sup)}</td>`+
-        `<td>${esc(det.estLabel || '')}</td>`+
-        `<td class="center">${fmtX(!!det.cafe)}</td>`+
-        `<td class="center">${fmtX(!!det.alm)}</td>`+
-        `<td class="center">${fmtX(!!det.janta)}</td>`+
-        `<td>${esc(det.desl || '')}</td>`+
-        `<td class="right">${esc(fmtMoney(det.rec))}</td>`+
-        `<td class="right">${esc(fmtMoney(det.pas))}</td>`+
-        `<td class="right">${esc(fmtMoney(det.lav))}</td>`+
-        `<td class="right">${esc(fmtMoney(det.man))}</td>`+
-      `</tr>`;
+  function renderColabBlock(nome, rows){
+    // pega coord/sup mais frequentes (fallback visual)
+    const coord = String((rows[0]||{}).coordenacao||'');
+
+    // agrupa por data
+    const byDate = {};
+    for(const r of rows){
+      const d = String(r.dataRef||'').trim();
+      if(!d) continue;
+      if(!byDate[d]) byDate[d] = [];
+      byDate[d].push(r);
+    }
+    const datas = Object.keys(byDate).sort((a,b)=>{
+      const da = parseDMY_(a), db = parseDMY_(b);
+      return (db?db.getTime():0) - (da?da.getTime():0);
+    });
+
+    let inner = '';
+    for(const d of datas){
+      const lines = byDate[d];
+      // por dia, pode haver mais de um registro (raro) → renderiza linhas
+      inner += `<div class="groupCoord" style="margin-top:12px;">`;
+      inner += `<div class="groupCoordTitle">${esc(d)}</div>`;
+      inner += `<div class="tblWrap"><table class="tbl"><thead><tr>`+
+        `<th>COORDENAÇÃO</th>`+
+        `<th>SUPERVISÃO</th>`+
+        `<th>ESTADIA</th>`+
+        `<th class="center">CAFÉ</th>`+
+        `<th class="center">ALMOÇO</th>`+
+        `<th class="center">JANTA</th>`+
+        `<th>DESLOCAMENTO</th>`+
+        `<th>OUTROS</th>`+
+      `</tr></thead><tbody>`;
+
+      for(const it of lines){
+        const coord = String(it.coordenacao||it.coord||it.regional||'').trim();
+        const sup   = String(it.supervisao||it.sup||'').trim();
+        const det = adminBuildDetFromDespesas_(it.despesas);
+        const outros = buildOutros_(det);
+
+        inner += `<tr>`+
+          `<td>${esc(coord)}</td>`+
+          `<td>${esc(sup)}</td>`+
+          `<td>${esc(det.estLabel || '')}</td>`+
+          `<td class="center">${fmtX(!!det.cafe)}</td>`+
+          `<td class="center">${fmtX(!!det.alm)}</td>`+
+          `<td class="center">${fmtX(!!det.janta)}</td>`+
+          `<td>${esc(det.desl || '')}</td>`+
+          `<td>${esc(outros)}</td>`+
+        `</tr>`;
+      }
+
+      inner += `</tbody></table></div></div>`;
     }
 
-    html += `</tbody></table></div></div>`;
+    // header do accordion
+    const header = (view==='GROUP')
+      ? `<b>${esc(nome)}</b>`
+      : `<b>${esc(nome)}</b> <span class="muted" style="font-weight:400;">— ${esc(coord)}</span>`;
+
+    return `<details class="adminBlock" style="margin-top:10px;">`+
+      `<summary>👤 ${header}</summary>`+
+      `<div class="adminBody">${inner || '<div class="muted">Sem itens.</div>'}</div>`+
+    `</details>`;
+  }
+
+  if(view === 'GROUP'){
+    // agrupa colaboradores por coordenação
+    const byCoord = new Map();
+    for(const nome of colabs){
+      const rows = byColab.get(nome) || [];
+      const coord = String((rows[0]||{}).coordenacao||'SEM COORDENAÇÃO').trim() || 'SEM COORDENAÇÃO';
+      if(!byCoord.has(coord)) byCoord.set(coord, []);
+      byCoord.get(coord).push(nome);
+    }
+
+    const coords = Array.from(byCoord.keys()).sort((a,b)=>String(a).localeCompare(String(b),'pt-BR'));
+    for(const coord of coords){
+      html += `<div class="groupCoord" style="margin-top:12px;">`;
+      html += `<div class="groupCoordTitle">${esc(coord)}</div>`;
+      const nomes = byCoord.get(coord) || [];
+      for(const nome of nomes){
+        html += renderColabBlock(nome, byColab.get(nome)||[]);
+      }
+      html += `</div>`;
+    }
+  } else {
+    for(const nome of colabs){
+      html += renderColabBlock(nome, byColab.get(nome)||[]);
+    }
   }
 
   box.innerHTML = html;
 }
-
 
 
 (function initAdmDatePicker_(){
