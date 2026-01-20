@@ -629,6 +629,28 @@
             <button id="btnAdminCarregar" onclick="adminCarregar_()">Carregar</button>
           </div>
         </div>
+<div class="card" style="margin-top:10px;">
+  <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="min-width:140px; flex:1;">
+      <label class="muted">Ano</label>
+      <select id="admAno">
+        <option>2026</option><option>2027</option><option>2028</option><option>2029</option><option>2030</option>
+      </select>
+    </div>
+    <div style="min-width:160px; flex:1;">
+      <label class="muted">Mês</label>
+      <select id="admMes"></select>
+    </div>
+    <div style="min-width:110px;">
+      <label class="muted">Dia</label>
+      <select id="admDia"></select>
+    </div>
+    <div style="min-width:170px;">
+      <button class="secondary" type="button" onclick="admAplicarDataRapida_()">Aplicar data</button>
+    </div>
+  </div>
+</div>
+
 
         <div class="row" style="margin-top:10px; align-items:flex-end;">
           <div class="col">
@@ -3622,6 +3644,67 @@ function renderAdminHistoricoColab_(resp){
   }
 
   box.innerHTML = html;
+}
+
+
+
+(function initAdmDatePicker_(){
+  const mesSel = document.getElementById('admMes');
+  const diaSel = document.getElementById('admDia');
+  if(!mesSel || !diaSel) return;
+
+  const meses = [
+    ['01','Janeiro'],['02','Fevereiro'],['03','Março'],['04','Abril'],['05','Maio'],['06','Junho'],
+    ['07','Julho'],['08','Agosto'],['09','Setembro'],['10','Outubro'],['11','Novembro'],['12','Dezembro']
+  ];
+  mesSel.innerHTML = meses.map(m=>`<option value="${m[0]}">${m[1]}</option>`).join('');
+
+  function diasNoMes(ano, mes){
+    return new Date(Number(ano), Number(mes), 0).getDate();
+  }
+  function refillDias(){
+    const ano = (document.getElementById('admAno')?.value || '2026');
+    const mes = (mesSel.value || '01');
+    const n = diasNoMes(ano, mes);
+    const cur = diaSel.value;
+    diaSel.innerHTML = Array.from({length:n}, (_,i)=>{
+      const d = String(i+1).padStart(2,'0');
+      return `<option value="${d}">${d}</option>`;
+    }).join('');
+    if(cur) diaSel.value = cur;
+  }
+
+  mesSel.addEventListener('change', refillDias);
+  document.getElementById('admAno')?.addEventListener('change', refillDias);
+  refillDias();
+
+  // sincroniza com o input de data já existente
+  const inp = document.getElementById('adminData') || document.querySelector('input[data-admin-date]');
+  if(inp && inp.value && String(inp.value).includes('/')){
+    const parts = String(inp.value).split('/');
+    if(parts.length === 3){
+      const dd = parts[0].padStart(2,'0');
+      const mm = parts[1].padStart(2,'0');
+      const yyyy = parts[2];
+      const anoSel = document.getElementById('admAno');
+      if(anoSel) anoSel.value = yyyy;
+      mesSel.value = mm;
+      refillDias();
+      diaSel.value = dd;
+    }
+  }
+})();
+
+function admAplicarDataRapida_(){
+  const ano = document.getElementById('admAno')?.value || '2026';
+  const mes = document.getElementById('admMes')?.value || '01';
+  const dia = document.getElementById('admDia')?.value || '01';
+  const dt = `${dia}/${mes}/${ano}`;
+  const inp = document.getElementById('adminData') || document.querySelector('input[data-admin-date]');
+  if(inp){
+    inp.value = dt;
+    inp.dispatchEvent(new Event('change'));
+  }
 }
 
 </script>
