@@ -1034,7 +1034,7 @@ function normTxt_(s){
 }
 
 async function cliSalvarRegistro_(){
-  if(!ctx){ alert('Faça login primeiro.'); return; }
+  if(!token){ alert('Faça login primeiro.'); return; }
   const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   const data = document.getElementById('cli_data')?.value?.trim() || '';
   if(!cliente){ alert('Informe o cliente.'); return; }
@@ -1108,13 +1108,12 @@ function fileToDataUrl_(file){
     try{
       const fr = new FileReader();
       fr.onload = ()=>{
-        const res = String(fr.result||'');
-        const m = res.split(',');
-        resolve(m.length>1 ? m[1] : '');
+        // retorna o DataURL COMPLETO (ex: data:image/jpeg;base64,....)
+        resolve(String(fr.result||""));
       };
-      fr.onerror = ()=> resolve('');
+      fr.onerror = ()=> resolve("");
       fr.readAsDataURL(file);
-    }catch(e){ resolve(''); }
+    }catch(e){ resolve(""); }
   });
 }
 function qByNomeRow_(nome){
@@ -3079,3 +3078,6 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
 </body>
 </html>
+
+
+
