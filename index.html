@@ -1685,6 +1685,26 @@ function chunkArray(arr, size){
 }
 
 async function salvarEtapaPayload_(dataRef, etapa, registros){
+  // ✅ Etapa B pode ter MUITAS linhas → não travar o usuário.
+  // Em vez de salvar em chunks (vários POSTs), a gente ENFILEIRA 1 job no GAS.
+  if(String(etapa||"").trim().toUpperCase() === "B"){
+    const rQ = await api("salvarEtapaAsync", {
+      payload: { dataReferencia: dataRef, etapa: "B", registros: Array.isArray(registros)?registros:[] }
+    }, { timeoutMs: 8000 });
+
+    if(!rQ || !rQ.ok){
+      const err = rQ?.error || "Erro ao enfileirar salvamento da etapa B";
+      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
+      alert(err);
+      return { ok:false };
+    }
+
+    // rQ.ticket opcional
+    setDebug("✅ Painel B enfileirado" + (rQ.ticket ? (". Ticket: " + rQ.ticket) : "."));
+    return { ok:true, queued:true, ticket: rQ.ticket || "" };
+  }
+
+  // ✅ Demais etapas: mantém salvamento direto (rápido)
   const parts = chunkArray(registros || [], 500);
   for (let i=0;i<parts.length;i++){
     const r = await api("salvarEtapa", {
@@ -3222,29 +3242,14 @@ let registros = [];
 const r = await salvarEtapaPayload_(dataRef, step, registros);
 if(!r || !r.ok){ setBusy(false); return { ok:false }; }
 
-if (
-  step === "B" &&
-  Array.isArray(registros) && registros.length &&
-  registros.some(r => ["Hotel","Alojamento","Fazenda"].includes(String(r.estadia_tipo||"").trim()))
-){
-  // solta um aviso leve e segue
-  setDebug("✅ Etapa B salva. Sincronizando Hotel/Alojamento...");
-
-  // roda em paralelo, com timeout maior
-  (async ()=>{
-    const rCopy = await api(
-      "copiarEstadiaAgora",
-      { payload: { dataReferencia: dataRef } },
-      { timeoutMs: 90000 } // 90s
-    );
-
-    if(!rCopy || !rCopy.ok){
-      setDebug("⚠️ Etapa B salva, mas falhou a cópia Hotel/Alojamento: " + (rCopy?.error || "erro"));
-    } else {
-      setDebug(`✅ Copiado: Hotel ${rCopy.updatedHotel||0}+${rCopy.hotel||0} | Aloj ${rCopy.updatedAloj||0}+${rCopy.alojamento||0}`);
-    }
-  })();
+// ✅ Se a etapa B foi ENFILEIRADA (async), não roda pós-processo/cópias aqui (evita duplicar e travar UI).
+if(step === "B" && r.queued){
+  if(dirty[step]) dirty[step].clear();
+  setBusy(false);
+  setDebug("✅ Painel B enviado para fila. Você pode continuar sem travar.");
+  return { ok:true, queued:true, ticket: r.ticket||"" };
 }
+
 
 if(step === "B" && isFriday_(dataRef)){
   const sab = addDays_(dataRef, 1);
