@@ -608,7 +608,29 @@
         <h3 style="margin-bottom:6px;">Conferencia diaria</h3>
         <div class="muted">Resumo por Coordenacao / Supervisao / Colaborador. Apenas despesas marcadas pelo gestor aparecem.</div>
 
+        
         <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label class="muted">Modo</label>
+            <select id="adminModo" onchange="adminToggleModo_()">
+              <option value="DATA">Conferência por data</option>
+              <option value="COLAB">Histórico por colaborador</option>
+            </select>
+          </div>
+          <div class="col" id="colabNomeWrap" style="display:none;">
+            <label class="muted">Colaborador</label>
+            <input id="adminColabNome" placeholder="Digite o nome exato" autocomplete="off">
+          </div>
+          <div class="col" id="colabDtIniWrap" style="display:none;">
+            <label class="muted">Data inicial</label>
+            <input id="adminColabDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="col" id="colabDtFimWrap" style="display:none;">
+            <label class="muted">Data final</label>
+            <input id="adminColabDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+<div class="row" style="margin-top:10px;">
           <div class="col">
             <label class="muted">Data</label>
             <input id="adminDataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
@@ -2766,6 +2788,9 @@ function renderAdminConferencia_(){
 }
 
 async function adminCarregar_(){
+  const modo = (document.getElementById("adminModo")?.value || "DATA");
+  if(modo === "COLAB") return adminBuscarHistorico_();
+
   try{
     const d = String(document.getElementById('adminDataRef')?.value||'').trim();
     if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
@@ -3396,6 +3421,119 @@ document.addEventListener("DOMContentLoaded", ()=>{
   cliRender_("grao");
   cliRender_("cliente");
 });
+
+
+function adminToggleModo_(){
+  const modo = (document.getElementById("adminModo")?.value || "DATA");
+  const showColab = (modo === "COLAB");
+  ["colabNomeWrap","colabDtIniWrap","colabDtFimWrap"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = showColab ? "" : "none";
+  });
+  const dataInp = document.getElementById("adminDataRef");
+  if(dataInp){
+    const row = dataInp.closest(".row");
+    if(row) row.style.display = showColab ? "none" : "";
+  }
+}
+
+async function adminBuscarHistorico_(){
+  const nome = (document.getElementById("adminColabNome")?.value || "").trim();
+  const dtIni = (document.getElementById("adminColabDtIni")?.value || "").trim();
+  const dtFim = (document.getElementById("adminColabDtFim")?.value || "").trim();
+  const conferente = (document.getElementById("adminConferente")?.value || "TODOS").trim() || "TODOS";
+
+  const info = document.getElementById("adminInfo");
+  const out = document.getElementById("adminResultado");
+  if(info) info.textContent = "Carregando histórico...";
+  if(out) out.innerHTML = "";
+
+  const resp = await api_("adm_getHistoricoColaborador", { token, nome, dtIni, dtFim, conferente });
+  if(!resp?.ok){
+    if(info) info.textContent = resp?.error || "Falha ao carregar histórico.";
+    return;
+  }
+  renderAdminHistoricoColaborador_(resp);
+}
+
+function renderAdminHistoricoColaborador_(resp){
+  const info = document.getElementById("adminInfo");
+  const out = document.getElementById("adminResultado");
+  const nome = (resp?.nome || "").trim();
+  const byDate = resp?.byDate || {};
+  const datas = Object.keys(byDate || {});
+  let total = 0;
+  datas.forEach(d=> total += (byDate[d]||[]).length);
+
+  if(info){
+    info.textContent = `Histórico: ${nome} — ${datas.length} dia(s) — ${total} registro(s).`;
+  }
+  if(!out) return;
+
+  if(!datas.length){
+    out.innerHTML = "<div class='muted'>Nenhum registro encontrado para o período.</div>";
+    return;
+  }
+
+  const badge = (b)=> b ? "<span class='badgeX'>X</span>" : "<span class='badgeEmpty'>-</span>";
+  const money = (v)=> (Number(v||0)>0) ? String(Number(v||0).toFixed(2)).replace(".",",") : "-";
+
+  let html = "";
+  datas.forEach(d=>{
+    const rows = byDate[d] || [];
+    html += `<div class="groupCoord" style="margin-top:12px;">`;
+    html += `<div class="groupCoordTitle">${esc(d)}</div>`;
+    html += `<div class="tblWrap"><table class="tbl"><thead><tr>
+      <th>COLABORADOR</th><th>COORDENAÇÃO</th><th>SUPERVISÃO</th>
+      <th class="center">ESTADIA</th><th class="center">CAFÉ</th><th class="center">ALMOÇO</th><th class="center">JANTA</th>
+      <th>DESLOCAMENTO</th><th class="right">RECARGA</th><th class="right">PASSAGEM</th><th class="right">LAVAGEM</th><th>MANUT.</th>
+    </tr></thead><tbody>`;
+
+    rows.forEach(it=>{
+      let estadia = "", desloc = "", manut = "";
+      let cafe=false, alm=false, janta=false;
+      let rec=0, pas=0, lav=0;
+
+      (it.despesas||[]).forEach(dsp=>{
+        const t = String(dsp.tipo||"").toUpperCase();
+        if(t==="ESTADIA") estadia = (dsp.label||"") + (dsp.detalhe ? ` — ${dsp.detalhe}` : "");
+        if(t==="REFEICAO"){
+          const lab = String(dsp.label||"").toUpperCase();
+          if(lab==="CAFÉ" || lab==="CAFE") cafe=true;
+          if(lab==="ALMOÇO" || lab==="ALMOCO") alm=true;
+          if(lab==="JANTA") janta=true;
+        }
+        if(t==="DESLOCAMENTO") desloc = (dsp.label||"") + (dsp.detalhe ? ` — ${dsp.detalhe}` : "");
+        if(t==="EXTRA"){
+          const lab = String(dsp.label||"").toUpperCase();
+          if(lab==="RECARGA") rec += Number(dsp.valor||0)||0;
+          if(lab==="PASSAGEM") pas += Number(dsp.valor||0)||0;
+          if(lab==="LAVAGEM") lav += Number(dsp.valor||0)||0;
+        }
+        if(t==="MANUT") manut = dsp.detalhe || dsp.label || "";
+      });
+
+      html += `<tr>
+        <td>${esc(it.colaborador||"")}</td>
+        <td>${esc(it.coordenacao||"")}</td>
+        <td>${esc(it.supervisao||"")}</td>
+        <td>${esc(estadia)}</td>
+        <td class="center">${badge(cafe)}</td>
+        <td class="center">${badge(alm)}</td>
+        <td class="center">${badge(janta)}</td>
+        <td>${esc(desloc)}</td>
+        <td class="right">${money(rec)}</td>
+        <td class="right">${money(pas)}</td>
+        <td class="right">${money(lav)}</td>
+        <td>${esc(manut)}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+  });
+
+  out.innerHTML = html;
+}
 
 </script>
 
