@@ -3519,7 +3519,7 @@ function adminFillHistDatalist_(){
 }
 
 function adminBuildDetFromDespesas_(despesas){
-  const det = { estLabel:'', cafe:false, alm:false, janta:false, desl:'', rec:0, pas:0, lav:0, man:0   outrosTxt: ""
+  const det = { estLabel:'', cafe:false, alm:false, janta:false, desl:'', rec:0, pas:0, lav:0, man:0, outrosTxt: ""
   };
   const arr = Array.isArray(despesas) ? despesas : [];
 
@@ -3612,18 +3612,18 @@ function renderAdminHistoricoPeriodo_(){
 
   // View
   const view = String(document.getElementById('adminHistView')?.value||'LIST');
-
-  // helper: render tabela por data
+  // helper (não usado aqui, mas mantido válido)
   function renderTabelaPorData(rows){
     const byDate = {};
-    for(const r of rows){
-      const d = String(r.dataRef||'').trim();
+    const arr = Array.isArray(rows) ? rows : [];
+    for(const r of arr){
+      const d = String(r?.dataRef || '').trim();
       if(!d) continue;
-      (byDate[d] ||= []).append(r) if False else None
+      if(!byDate[d]) byDate[d] = [];
+      byDate[d].push(r);
     }
-    # can't do python here; will do JS below
+    return byDate;
   }
-
   // Ordena colaboradores A-Z
   const colabs = Array.from(byColab.keys()).sort((a,b)=>String(a).localeCompare(String(b),'pt-BR'));
 
@@ -3808,4 +3808,3 @@ function admAplicarDataRapida_(){
 
 </body>
 </html>
-
