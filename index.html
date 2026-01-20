@@ -3612,18 +3612,17 @@ function renderAdminHistoricoPeriodo_(){
 
   // View
   const view = String(document.getElementById('adminHistView')?.value||'LIST');
-  // helper (não usado aqui, mas mantido válido)
+
+  // helper: render tabela por data
   function renderTabelaPorData(rows){
     const byDate = {};
-    const arr = Array.isArray(rows) ? rows : [];
-    for(const r of arr){
-      const d = String(r?.dataRef || '').trim();
+    for(const r of rows){
+      const d = String(r.dataRef||'').trim();
       if(!d) continue;
-      if(!byDate[d]) byDate[d] = [];
-      byDate[d].push(r);
+      (byDate[d] ||= []).push(r);
     }
-    return byDate;
   }
+
   // Ordena colaboradores A-Z
   const colabs = Array.from(byColab.keys()).sort((a,b)=>String(a).localeCompare(String(b),'pt-BR'));
 
@@ -3808,3 +3807,4 @@ function admAplicarDataRapida_(){
 
 </body>
 </html>
+
