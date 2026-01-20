@@ -862,7 +862,7 @@ document.addEventListener("keydown", (e)=>{
 
 function setBusy(v){
   busy = !!v;
-  ["btnProximo","btnVoltar","btnCarregar","btnLogin","btnAlojBuscar"].forEach(id=>{
+  ["btnProximo","btnVoltar","btnCarregar","btnLogin","btnAlojBuscar","btnAdminCarregar"].forEach(id=>{
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
@@ -2550,11 +2550,19 @@ function renderAdminConferencia_(){
   box.innerHTML = html || '<div class="muted">Nenhuma despesa liberada para o filtro.</div>';
   info.innerText = `Mostrando ${shown} colaborador(es) com despesas liberadas.`;
 }
-function adminCarregar_(){
-  const d = String(document.getElementById('adminDataRef')?.value||'').trim();
-  if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
-  document.getElementById('dataRef').value = d;
-  carregar();
+async function adminCarregar_(){
+  try{
+    const d = String(document.getElementById('adminDataRef')?.value||'').trim();
+    if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
+    document.getElementById('dataRef').value = d;
+    await carregar();
+    // se estiver na tela admin, re-renderiza
+    const scrAdm = document.getElementById('screenAdmin');
+    if(scrAdm && scrAdm.classList.contains('active')) renderAdminConferencia_();
+  }catch(e){
+    console.error(e);
+    alert('Erro ao carregar (console).');
+  }
 }
 
 /** ======================
@@ -2571,7 +2579,16 @@ async function carregar(){
   setDebug("Carregando...");
   hide("bottomBar");
 
-  const res = await api("carregarContexto", { dataRef: dStr });
+  let res;
+  try{
+    res = await api("carregarContexto", { dataRef: dStr });
+  }catch(e){
+    setBusy(false);
+    console.error(e);
+    alert("❌ Falha ao chamar o servidor. Veja o console (F12).");
+    setDebug("Falha ao chamar o servidor.");
+    return;
+  }
 
   setBusy(false);
 
