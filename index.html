@@ -323,6 +323,20 @@
 .clBadge{ font-size:12px; padding:6px 10px; border-radius:999px; background:#ecfdf5; color:#166534; border:1px solid #bbf7d0; font-weight:700; }
 @media(max-width:860px){ .clForm{ grid-template-columns: 1fr; } .clChecks{ grid-template-columns: 1fr; } }
 
+
+
+/* ✅ Tabela estilo planilha (Conferência/Admin) */
+.tblWrap{ border:1px solid #e5e7eb; border-radius:14px; overflow:auto; background:#fff; }
+.tbl{ width:100%; border-collapse:separate; border-spacing:0; min-width:980px; font-size:12px; }
+.tbl thead th{ position:sticky; top:0; z-index:2; background:#0b3d1a; color:#fff; text-align:left; padding:10px 10px; white-space:nowrap; border-bottom:1px solid rgba(255,255,255,.20); }
+.tbl tbody td{ padding:9px 10px; border-bottom:1px solid #f1f5f9; vertical-align:top; white-space:nowrap; }
+.tbl tbody tr:nth-child(even){ background:#f8fafc; }
+.tbl td.center{ text-align:center; }
+.tbl td.right{ text-align:right; }
+.badgeX{ display:inline-block; min-width:18px; text-align:center; font-weight:900; border-radius:999px; padding:2px 8px; background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+.badgeEmpty{ display:inline-block; min-width:18px; text-align:center; border-radius:999px; padding:2px 8px; background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; }
+.smallMuted{ color:#6b7280; font-size:11px; }
+
 </style>
 </head>
 
@@ -2418,6 +2432,30 @@ function adminGetLiberadas_(n){
   if(Number(f.manut_veic_valor||0)>0) out.push('Manut');
   return out;
 }
+
+function adminRowFromForm_(n){
+  const f = form[n] || {};
+  if(!PROSSEGUIR(f.disponibilidade_status)) return null;
+
+  const est = String(f.estadia_tipo || '').trim();
+  const estLabel = (est && est !== 'Casa') ? est : '';
+
+  const cafe  = !!isSim_(f.cafe_valor);
+  const alm   = !!isSim_(f.almoco_valor);
+  const janta = !!isSim_(f.janta_valor);
+
+  const desl  = String(f.deslocamento_tipo || '').trim();
+  const rec   = Number(f.extras_recarga_valor || 0) || 0;
+  const pas   = Number(f.extras_passagem_valor || 0) || 0;
+  const lav   = Number(f.extras_lavagem_valor || 0) || 0;
+  const man   = Number(f.manut_veic_valor || 0) || 0;
+
+  // só aparece se tiver algo marcado
+  if(!(estLabel || cafe || alm || janta || desl || rec>0 || pas>0 || lav>0 || man>0)) return null;
+
+  return { estLabel, cafe, alm, janta, desl, rec, pas, lav, man };
+}
+
 function renderAdminConferencia_(){
   if(!adminIsOn_()) return;
   const tab = document.getElementById('tabAdmin');
@@ -2446,10 +2484,10 @@ function renderAdminConferencia_(){
     const sup = String(supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || '').trim();
     const conf = adminGetConferenteBySup_(sup);
     if(chosen && conf && conf !== chosen) return;
-    const itens = adminGetLiberadas_(n);
-    if(!itens.length) return;
+    const det = adminRowFromForm_(n);
+    if(!det) return;
     shown++;
-    rows.push({ n, sup, coord: String(form[n]?.coordenacao||''), conf, itens });
+    rows.push({ n, sup, coord: String(form[n]?.coordenacao||''), conf, det });
   });
 
   // group by coord->sup
@@ -2463,17 +2501,46 @@ function renderAdminConferencia_(){
   }
 
   const esc = (s)=> String(s||'').replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]||c));
+  const fmtX = (b)=> b ? `<span class="badgeX">X</span>` : `<span class="badgeEmpty">–</span>`;
+  const fmtMoney = (v)=> (Number(v||0)>0) ? String(v) : '–';
   let html = '';
   const coords = Object.keys(byC).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   for(const c of coords){
     html += `<details class="adminBlock" open><summary>${esc(c)}</summary><div class="adminBody">`;
     const sups = Object.keys(byC[c]).sort((a,b)=>a.localeCompare(b,'pt-BR'));
     for(const s of sups){
-      html += `<details class="adminBlock" style="margin:10px 0;"><summary>${esc(s)}</summary><div class="adminBody">`;
+      const confLabel = (byC[c][s] && byC[c][s][0] && byC[c][s][0].conf) ? String(byC[c][s][0].conf) : '';
+      html += `<details class="adminBlock" style="margin:10px 0;" open><summary>${esc(s)} ${confLabel?`<span class="smallMuted">• Conferente: ${esc(confLabel)}</span>`:''}</summary><div class="adminBody">`;
+
+      html += `<div class="tblWrap"><table class="tbl"><thead><tr>`+
+        `<th>COLABORADOR</th>`+
+        `<th>ESTADIA</th>`+
+        `<th class="center">CAFÉ</th>`+
+        `<th class="center">ALMOÇO</th>`+
+        `<th class="center">JANTA</th>`+
+        `<th>DESLOCAMENTO</th>`+
+        `<th class="right">RECARGA</th>`+
+        `<th class="right">PASSAGEM</th>`+
+        `<th class="right">LAVAGEM</th>`+
+        `<th class="right">MANUT.</th>`+
+      `</tr></thead><tbody>`;
+
       for(const r of byC[c][s]){
-        const tag = (r.conf?`<span class="tag">${esc(r.conf)}</span>`:'');
-        html += `<div class="adminNameRow"><div><div class="adminName">${esc(r.n)}</div><div class="adminBadges">${r.itens.map(x=>`<span class="adminBadge">${esc(x)}</span>`).join('')}</div></div>${tag}</div>`;
+        html += `<tr>`+
+          `<td><b>${esc(r.n)}</b></td>`+
+          `<td>${esc(r.det?.estLabel || '')}</td>`+
+          `<td class="center">${fmtX(!!r.det?.cafe)}</td>`+
+          `<td class="center">${fmtX(!!r.det?.alm)}</td>`+
+          `<td class="center">${fmtX(!!r.det?.janta)}</td>`+
+          `<td>${esc(r.det?.desl || '')}</td>`+
+          `<td class="right">${esc(fmtMoney(r.det?.rec))}</td>`+
+          `<td class="right">${esc(fmtMoney(r.det?.pas))}</td>`+
+          `<td class="right">${esc(fmtMoney(r.det?.lav))}</td>`+
+          `<td class="right">${esc(fmtMoney(r.det?.man))}</td>`+
+        `</tr>`;
       }
+
+      html += `</tbody></table></div>`;
       html += `</div></details>`;
     }
     html += `</div></details>`;
@@ -3078,6 +3145,4 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
 </body>
 </html>
-
-
 
