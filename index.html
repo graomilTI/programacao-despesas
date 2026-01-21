@@ -1295,8 +1295,8 @@ const title = document.getElementById("loginTitle");
 }
 
 /** ✅ API */
-async function api(action, args, opts){
-  const payload = { action, ...(args||{}) };
+async function api(act, args, opts){
+  const payload = { action: act, ...(args||{}) };
 
   if(token && !payload.token && action !== "loginPIN" && action !== "loginAdminCPF"){
     payload.token = token;
