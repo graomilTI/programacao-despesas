@@ -752,6 +752,10 @@
 </div>
 
 <script>
+
+  // FIX: evita ReferenceError caso algum trecho ainda use lastRow/lastCol
+  window.lastRow = 0;
+  window.lastCol = 0;
 /** ✅ Worker */
 const API_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
 
