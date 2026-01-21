@@ -1121,7 +1121,7 @@ function normTxt_(s){
 }
 
 async function cliSalvarRegistro_(){
-  if(!token){ alert('Faça login primeiro.'); return; }
+  if(!token){ logoutForcado('Faça login primeiro.'); return; }
   const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   const data = document.getElementById('cli_data')?.value?.trim() || '';
   if(!cliente){ alert('Informe o cliente.'); return; }
@@ -3864,7 +3864,7 @@ async function fileToDataUrl_(file){
 
 // OVERRIDE: salvar clientes corretamente
 async function cliSalvarRegistro_(){
-  if(!window.token){ alert('Faça login primeiro.'); return; }
+  if(!window.token){ logoutForcado('Faça login primeiro.'); return; }
 
   const cliente = (document.getElementById('cli_cliente')?.value || '').trim();
   const data    = (document.getElementById('cli_data')?.value || '').trim();
