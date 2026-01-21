@@ -610,46 +610,24 @@
 
         <div class="row" style="margin-top:10px;">
           <div class="col">
-            <label class="muted">Data</label>
-            <input id="adminDataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
+            <label class="muted">Data inicial</label>
+            <input id="adminDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off" oninput="maskDMY_(this)">
+          </div>
+          <div class="col">
+            <label class="muted">Data final</label>
+            <input id="adminDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off" oninput="maskDMY_(this)">
           </div>
           <div class="col">
             <label class="muted">Conferente</label>
             <select id="adminConferente">
               <option value="">Todos</option>
-              <option value="ANDREA">Andrea</option>
-              <option value="TAINA">Taina</option>
-              <option value="GRAZI">Grazi</option>
-              <option value="RENATA">Renata</option>
-              <option value="MARIA">Maria</option>
             </select>
           </div>
-          <div class="col" style="min-width:220px;">
+          <div class="col">
             <label class="muted">&nbsp;</label>
-            <button id="btnAdminCarregar" onclick="adminCarregar_()">Carregar</button>
+            <button class="btn primary" id="btnAdminCarregar">Carregar</button>
           </div>
         </div>
-<div class="card" style="margin-top:10px;">
-  <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-    <div style="min-width:140px; flex:1;">
-      <label class="muted">Ano</label>
-      <select id="admAno">
-        <option>2026</option><option>2027</option><option>2028</option><option>2029</option><option>2030</option>
-      </select>
-    </div>
-    <div style="min-width:160px; flex:1;">
-      <label class="muted">Mês</label>
-      <select id="admMes"></select>
-    </div>
-    <div style="min-width:110px;">
-      <label class="muted">Dia</label>
-      <select id="admDia"></select>
-    </div>
-    <div style="min-width:170px;">
-      <button class="secondary" type="button" onclick="admAplicarDataRapida_()">Aplicar data</button>
-    </div>
-  </div>
-</div>
 
 
         <div class="row" style="margin-top:10px; align-items:flex-end;">
@@ -678,37 +656,7 @@
         <div id="adminInfo" class="muted" style="margin-top:8px;"></div>
         <div id="adminResultado" style="margin-top:10px;"></div>
 
-        <details class="adminBlock" style="margin-top:12px;" open>
-  <summary>📅 Histórico por período</summary>
-  <div class="adminBody">
-    <div class="muted">Selecione um <b>período</b> e clique em <b>Carregar</b>. Retorna todos os colaboradores com despesas liberadas no período. Clique no nome para expandir (por data) no mesmo padrão de tabela.</div>
-
-    <div class="row" style="margin-top:10px; align-items:flex-end;">
-      <div class="col">
-        <label class="muted">Data inicial</label>
-        <input id="adminHistDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-      </div>
-      <div class="col">
-        <label class="muted">Data final</label>
-        <input id="adminHistDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-      </div>
-      <div class="col">
-        <label class="muted">Visualização</label>
-        <select id="adminHistView">
-          <option value="LIST">Lista geral</option>
-          <option value="GROUP">Agrupar por Coordenação</option>
-        </select>
-      </div>
-      <div class="col" style="min-width:220px;">
-        <label class="muted">&nbsp;</label>
-        <button class="secondary" type="button" onclick="adminHistPeriodoCarregar_()">Carregar</button>
-      </div>
-    </div>
-
-    <div id="adminHistInfo" class="muted" style="margin-top:8px;"></div>
-    <div id="adminHistResultado" style="margin-top:10px;"></div>
-  </div>
-</details>
+        
 
       </div>
     </div>
@@ -876,39 +824,33 @@ function toDirectDownloadUrl_(url){
   return url;
 }
 
-function sendToWindowOrDownload_(url, fileName){
-  if(!url) return false;
+function sendToWindowOrDownload_(rawUrl, filename){
+    const url = forceDownloadUrl_(rawUrl);
+    const safeName = (filename || "programacao.pdf").replace(/[\\/:*?"<>|]+/g, "_");
 
-  // 1) tenta abrir uma janela com auto-click (boa taxa de sucesso)
-  let win = null;
-  try{
-    win = window.open("", "_blank");
-  }catch(_e){ win = null; }
-
-  if(win){
+    // 1) tenta download "de verdade" via link (não depende de popup)
     try{
-      const safeName = (fileName || "programacao.pdf").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      const safeUrl  = String(url).replace(/</g,"%3C").replace(/>/g,"%3E");
-      win.document.write(`
-        <html><head><title>Baixando...</title></head>
-        <body style="font-family:Arial; padding:20px;">
-          <p>Baixando: <b>${safeName}</b></p>
-          <p>Se não iniciar automaticamente, clique: <a id="dl" href="${safeUrl}" download="${safeName}">Download</a></p>
-          <script>
-            try{ document.getElementById('dl').click(); }catch(e){}
-            setTimeout(()=>{ try{ window.close(); }catch(e){} }, 1500);
-          </script>
-        </body></html>
-      `);
-      win.document.close();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeName;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>a.remove(), 50);
+    }catch(e){ /* ignore */ }
 
-      // ✅ também tenta disparar no tab atual (fallback)
-      setTimeout(()=>{ try{ forceDownloadUrl_(url, fileName); }catch(_e){} }, 600);
-      return true;
-    }catch(_e){
-      try{ win.close(); }catch(__){}
-      // cai pro fallback abaixo
-    }
+    // 2) fallback: navega para a URL (força download quando o servidor manda Content-Disposition)
+    setTimeout(()=>{
+      try{ window.location.href = url; }catch(e){}
+    }, 100);
+
+    // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
+    setTimeout(()=>{
+      try{ window.open(url, "_blank", "noopener"); }catch(e){}
+    }, 200);
+  }
+
   }
 
   // 2) fallback: tenta no mesmo tab via iframe/<a>
@@ -2868,8 +2810,10 @@ function renderAdminConferencia_(){
   if(tab) tab.style.display = '';
 
   const dMain = document.getElementById('dataRef')?.value || '';
-  const dAdm  = document.getElementById('adminDataRef');
-  if(dAdm && !dAdm.value) dAdm.value = dMain;
+  const dAdmIni = document.getElementById('adminDtIni');
+  const dAdmFim = document.getElementById('adminDtFim');
+  if(dAdmIni && !dAdmIni.value) dAdmIni.value = dMain;
+  if(dAdmFim && !dAdmFim.value) dAdmFim.value = dMain;
 
   // defaults dos selects
   const sortSel = document.getElementById('adminSort');
@@ -2913,59 +2857,90 @@ function renderAdminConferencia_(){
   adminRender_(sorted, view);
 }
 
-async function adminCarregar_(){
-  try{
-    const d = String(document.getElementById('adminDataRef')?.value||'').trim();
-    if(!parseDMY_(d)) { alert('Data invalida. Use dd/mm/aaaa.'); return; }
 
-    const chosenRaw = (document.getElementById('adminConferente')?.value || '').trim();
-  
-  adminLastRows = rows.slice();
-  adminFillHistDatalist_();
-  const sortKey = (document.getElementById('adminSort')?.value || 'COLAB_AZ');
-    const view    = (document.getElementById('adminView')?.value || 'GROUP');
 
-    adminLastPayload = { dataRef: d, conferente: chosenRaw || 'TODOS', sort: sortKey, view: view };
+  function renderAdminPeriodo_(res){
+    const box = el("adminResultados");
+    if(!box) return;
 
-    setBusy(true);
-    setDebug('Carregando conferência...');
+    const itens = (res && res.itens) ? res.itens : (Array.isArray(res) ? res : []);
+    const dtIni = (res && res.dtIni) ? res.dtIni : (el("adminDtIni")?.value || "");
+    const dtFim = (res && res.dtFim) ? res.dtFim : (el("adminDtFim")?.value || "");
 
-    let r;
-    try{
-      r = await api('adm_getResumoConferencia', { dataRef: d, conferente: chosenRaw });
-    }catch(e){
-      setBusy(false);
-      console.error(e);
-      alert('❌ Falha ao chamar o servidor (adm_getResumoConferencia). Veja o console (F12).');
-      setDebug('Falha ao chamar o servidor.');
+    if(!itens.length){
+      box.innerHTML = `<div class="muted">Nenhuma despesa liberada para o período ${esc_(dtIni)} – ${esc_(dtFim)}.</div>`;
       return;
     }
 
-    setBusy(false);
+    // Tabela simples
+    let html = `<div class="muted">Mostrando ${itens.length} registro(s) no período ${esc_(dtIni)} – ${esc_(dtFim)}.</div>`;
+    html += `<div style="overflow:auto; margin-top:10px;">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Coordenação</th>
+            <th>Supervisão</th>
+            <th>Colaborador</th>
+            <th>Tipo</th>
+            <th>Qtde</th>
+            <th>Valor</th>
+            <th>Obs</th>
+            <th>Conferente</th>
+          </tr>
+        </thead>
+        <tbody>`;
 
-    if(!r || !r.ok){
-      const err = r?.error || 'Erro ao carregar conferência.';
-      if(isAuthError_(err)) { logoutForcado(err); return; }
-      alert(err);
-      setDebug(err);
-      return;
-    }
+    itens.forEach(r=>{
+      html += `<tr>
+        <td>${esc_(r.data||"")}</td>
+        <td>${esc_(r.coordenacao||"")}</td>
+        <td>${esc_(r.supervisao||"")}</td>
+        <td>${esc_(r.colaborador||"")}</td>
+        <td>${esc_(r.tipo||"")}</td>
+        <td style="text-align:right;">${esc_(r.qtd||"")}</td>
+        <td style="text-align:right;">${esc_(r.valor||"")}</td>
+        <td>${esc_(r.obs||"")}</td>
+        <td>${esc_(r.conferente||"")}</td>
+      </tr>`;
+    });
 
-    const payload = (r && r.data && typeof r.data === "object") ? r.data : r;
-    adminResumoTree = payload.tree || payload.byCoord || payload.resumo || payload;
-    adminResumoMeta = { total: payload.total || 0, dataRef: payload.dataRef || d, conferente: payload.conferente || (chosenRaw||"TODOS") };
-
-
-    // Mantém dataRef sincronizada (opcional)
-    const dr = document.getElementById('dataRef');
-    if(dr) dr.value = d;
-
-    renderAdminConferencia_();
-  }catch(e){
-    console.error(e);
-    alert('Erro ao carregar (console).');
+    html += `</tbody></table></div>`;
+    box.innerHTML = html;
   }
-}
+async function adminCarregar_(){
+    try{
+      const dtIni = (el("adminDtIni")?.value || "").trim();
+      const dtFim = (el("adminDtFim")?.value || "").trim();
+      const conferente = (el("adminConferente")?.value || "").trim();
+
+      const dIni = parseDMY_(dtIni);
+      const dFim = parseDMY_(dtFim || dtIni);
+
+      if(!dIni) return toast_("Informe a data inicial.");
+      if(!dFim) return toast_("Informe a data final.");
+
+      setLoading_(true);
+
+      // Se for período (dtFim != dtIni) usa endpoint de período; senão, resumo diário
+      const isPeriodo = fmtDMY_(dIni) !== fmtDMY_(dFim);
+
+      let res;
+      if(isPeriodo){
+        res = await api_("adm_getHistoricoPeriodo", { dtIni: fmtDMY_(dIni), dtFim: fmtDMY_(dFim), conferente });
+        renderAdminPeriodo_(res);
+      }else{
+        res = await api_("adm_getResumoConferencia", { dataRef: fmtDMY_(dIni), conferente });
+        renderAdminConferencia_(res);
+      }
+
+      setLoading_(false);
+    }catch(err){
+      setLoading_(false);
+      console.error(err);
+      alert("Erro ao carregar (console).");
+    }
+  }
 
 
 /** ======================
