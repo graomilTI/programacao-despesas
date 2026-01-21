@@ -1,21 +1,57 @@
 <!DOCTYPE html>
+
 <html lang="pt-BR">
-<head>
+<head><script>(function(){
+  // 🔥 Evita cache antigo (GitHub Pages + Service Worker de versões anteriores)
+  try{
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        regs.forEach(function(r){ r.unregister(); });
+      });
+    }
+    if(window.caches && caches.keys){
+      caches.keys().then(function(keys){
+        keys.forEach(function(k){ caches.delete(k); });
+      });
+    }
+  }catch(e){ /* noop */ }
+
+  // Helpers globais mínimos (usados por funções espalhadas no arquivo)
+  if(typeof window.lastRow === 'undefined') window.lastRow = 0;
+
+  window.setBusy_ = window.setBusy_ || function(on, msg){
+    try{
+      var el = document.getElementById('busyOverlay');
+      if(!el){
+        el = document.createElement('div');
+        el.id = 'busyOverlay';
+        el.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:99999;';
+        el.innerHTML = '<div style="background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:14px 16px;max-width:420px;width:calc(100% - 24px);font-family:Arial,sans-serif;">'
+                     + '<div id="busyText" style="font-weight:700;margin-bottom:8px;color:#0f172a;">Carregando…</div>'
+                     + '<div style="font-size:12px;color:#6b7280;">Aguarde um instante.</div>'
+                     + '</div>';
+        document.body.appendChild(el);
+      }
+      var txt = document.getElementById('busyText');
+      if(txt) txt.textContent = msg || (on ? 'Carregando…' : '');
+      el.style.display = on ? 'flex' : 'none';
+    }catch(e){ /* noop */ }
+  };
+})();</script><link href="data:," rel="icon"/>
 <script>
 /* 🔧 Hotfix: remove Service Worker cache (GitHub Pages) to ensure latest index.js is loaded */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(()=>{});
 }
 </script>
-
-  <meta charset="UTF-8" />
-  <title>Programação – Despesas</title>
-  <link rel="icon" href="data:,">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <style>
+<meta charset="utf-8"/>
+<title>Programação – Despesas</title>
+<link href="data:," rel="icon"/>
+<meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
+<meta content="no-cache" http-equiv="Pragma"/>
+<meta content="0" http-equiv="Expires"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<style>
     body{ margin:0; font-family:Arial,sans-serif; background:#f5f6f7; }
     .wrap{ max-width:1200px; margin:auto; padding:14px 14px 120px; }
     .card{ background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
@@ -350,418 +386,363 @@ if ('serviceWorker' in navigator) {
 
 </style>
 </head>
-
 <body>
 <div class="wrap">
-
-  <!-- LOGIN -->
-  <div id="loginCard" class="card">
-    <div class="loginTopRow">
-      <div>
-        <h2 id="loginTitle">Login do Gestor</h2>
-        <div id="loginHint" class="muted">Informe seu <b>PIN (4 dígitos)</b>.</div>
-      </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-        <button class="light" id="btnModePin" onclick="setLoginMode('PIN')" type="button">Gestor (PIN)</button>
-        <button class="light" id="btnModeAdmin" onclick="setLoginMode('ADMIN')" type="button">Admin (CPF)</button>
-      </div>
-    </div>
-
-    <div class="row" style="margin-top:10px;">
-      <div class="col">
-        <input id="loginInput" placeholder="PIN" inputmode="numeric" maxlength="4" autocomplete="off">
-      </div>
-      <div class="col">
-        <button id="btnLogin" onclick="login()" type="button">Entrar</button>
-      </div>
-    </div>
-
-    <div id="loginStatus" class="muted" style="margin-top:8px;"></div>
-  </div>
-
-  <!-- APP -->
-  <div id="app" style="display:none;">
-    <div class="card">
-      <div class="topbar">
-        <div>
-          <h3 style="margin:0;">Painel</h3>
-          <div id="topInfo" class="muted" style="margin-top:4px;"></div>
-          <div id="janelaInfo" class="muted"></div>
-
-          <!-- ✅ NOVO: Tabs -->
-          <div class="menuTabs">
-            <button id="tabProgramacao" class="tabBtn active" type="button" onclick="switchScreen('programacao')">📋 Programação</button>
-            <button id="tabAloj" class="tabBtn" type="button" onclick="switchScreen('aloj')">🏠 Alojamentos</button>
-            <button id="tabClientes" class="tabBtn" type="button" onclick="switchScreen('clientes')">👥 Clientes</button>
-            <button id="tabAdmin" class="tabBtn" type="button" onclick="switchScreen('admin')" style="display:none;">Conferencia</button>
-          </div>
+<!-- LOGIN -->
+<div class="card" id="loginCard">
+<div class="loginTopRow">
+<div>
+<h2 id="loginTitle">Login do Gestor</h2>
+<div class="muted" id="loginHint">Informe seu <b>PIN (4 dígitos)</b>.</div>
+</div>
+<div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+<button class="light" id="btnModePin" onclick="setLoginMode('PIN')" type="button">Gestor (PIN)</button>
+<button class="light" id="btnModeAdmin" onclick="setLoginMode('ADMIN')" type="button">Admin (CPF)</button>
+</div>
+</div>
+<div class="row" style="margin-top:10px;">
+<div class="col">
+<input autocomplete="off" id="loginInput" inputmode="numeric" maxlength="4" placeholder="PIN"/>
+</div>
+<div class="col">
+<button id="btnLogin" onclick="login()" type="button">Entrar</button>
+</div>
+</div>
+<div class="muted" id="loginStatus" style="margin-top:8px;"></div>
+</div>
+<!-- APP -->
+<div id="app" style="display:none;">
+<div class="card">
+<div class="topbar">
+<div>
+<h3 style="margin:0;">Painel</h3>
+<div class="muted" id="topInfo" style="margin-top:4px;"></div>
+<div class="muted" id="janelaInfo"></div>
+<!-- ✅ NOVO: Tabs -->
+<div class="menuTabs">
+<button class="tabBtn active" id="tabProgramacao" onclick="switchScreen('programacao')" type="button">📋 Programação</button>
+<button class="tabBtn" id="tabAloj" onclick="switchScreen('aloj')" type="button">🏠 Alojamentos</button>
+<button class="tabBtn" id="tabClientes" onclick="switchScreen('clientes')" type="button">👥 Clientes</button>
+<button class="tabBtn" id="tabAdmin" onclick="switchScreen('admin')" style="display:none;" type="button">Conferencia</button>
+</div>
+</div>
+<div class="right">
+<button class="helpBtn" onclick="openHelpModal()" title="Ajuda" type="button">❓ Ajuda</button>
+<button class="logoutBtn" onclick="logout()" type="button">Logout</button>
+</div>
+</div>
+</div>
+<!-- ✅ TELA: PROGRAMAÇÃO (SEU ORIGINAL) -->
+<div class="screen active" id="screenProgramacao">
+<div class="card">
+<div class="row" style="margin-top:10px;">
+<div class="col">
+<label class="muted">Data</label>
+<input autocomplete="off" id="dataRef" inputmode="numeric" placeholder="dd/mm/aaaa"/>
+</div>
+<div class="col">
+<label class="muted"> </label>
+<button id="btnCarregar" onclick="carregar()" type="button">Carregar</button>
+</div>
+</div>
+<div class="muted" id="debugInfo" style="margin-top:6px;"></div>
+</div>
+<div class="card step" id="stepA">
+<h3>Painel A – Disponibilidade</h3>
+<div class="muted">Somente <b>OK</b> segue para os próximos painéis.</div>
+<div id="listaA"></div>
+</div>
+<div class="card step" id="stepB">
+<h3>Painel B – Estadia</h3>
+<div class="muted">
+          Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br/>
+<b>Hotel</b>: consulta D-1 e exige <b>Cidade</b> no Obs (formato: <b>Cidade:</b>).<br/>
+<b>Alojamento</b>: consulta D-1 e exige <b>Alojamento</b> no Obs (formato: <b>Alojamento:</b>).<br/>
+<b>Fazenda</b>: força <b>Pernoite</b>.
         </div>
-        <div class="right">
-          <button class="helpBtn" type="button" onclick="openHelpModal()" title="Ajuda">❓ Ajuda</button>
-          <button class="logoutBtn" onclick="logout()" type="button">Logout</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ✅ TELA: PROGRAMAÇÃO (SEU ORIGINAL) -->
-    <div id="screenProgramacao" class="screen active">
-
-      <div class="card">
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Data</label>
-            <input id="dataRef" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-          </div>
-          <div class="col">
-            <label class="muted">&nbsp;</label>
-            <button id="btnCarregar" onclick="carregar()" type="button">Carregar</button>
-          </div>
-        </div>
-
-        <div id="debugInfo" class="muted" style="margin-top:6px;"></div>
-      </div>
-
-      <div id="stepA" class="card step">
-        <h3>Painel A – Disponibilidade</h3>
-        <div class="muted">Somente <b>OK</b> segue para os próximos painéis.</div>
-        <div id="listaA"></div>
-      </div>
-
-      <div id="stepB" class="card step">
-        <h3>Painel B – Estadia</h3>
-        <div class="muted">
-          Padrão: <b>Casa</b>. Opções: Casa / Hotel / Alojamento / Fazenda.<br>
-          <b>Hotel</b>: consulta D-1 e exige <b>Cidade</b> no Obs (formato: <b>Cidade:</b>).<br>
-          <b>Alojamento</b>: consulta D-1 e exige <b>Alojamento</b> no Obs (formato: <b>Alojamento:</b>).<br>
-          <b>Fazenda</b>: força <b>Pernoite</b>.
-        </div>
-        <div id="listaB"></div>
-      </div>
-
-      <div id="stepC" class="card step">
-        <h3>Painel C – Alimentação</h3>
-        <div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = vazio.</div>
-        <div class="toolsRow">
-          <button class="light" onclick="toggleAllAlmoco(true)" type="button">Todos Almoço</button>
-          <button class="light" onclick="toggleAllAlmoco(false)" type="button">Limpar Almoço</button>
-        </div>
-        <div id="listaC"></div>
-      </div>
-
-      <div id="stepD" class="card step">
-        <h3>Painel D – Deslocamento</h3>
-        <div id="listaD"></div>
-      </div>
-  
-  <div id="stepE" class="card step">
-    <div class="topbar" style="margin-bottom:6px;">
-      <h3 style="margin:0;">Painel E – Extras</h3>
-    </div>
-  
-    <div class="muted">
+<div id="listaB"></div>
+</div>
+<div class="card step" id="stepC">
+<h3>Painel C – Alimentação</h3>
+<div class="muted">Checkbox marcado = <b>SIM</b> / desmarcado = vazio.</div>
+<div class="toolsRow">
+<button class="light" onclick="toggleAllAlmoco(true)" type="button">Todos Almoço</button>
+<button class="light" onclick="toggleAllAlmoco(false)" type="button">Limpar Almoço</button>
+</div>
+<div id="listaC"></div>
+</div>
+<div class="card step" id="stepD">
+<h3>Painel D – Deslocamento</h3>
+<div id="listaD"></div>
+</div>
+<div class="card step" id="stepE">
+<div class="topbar" style="margin-bottom:6px;">
+<h3 style="margin:0;">Painel E – Extras</h3>
+</div>
+<div class="muted">
       Padrão = 0. Ao marcar, abre campo para valor e salva o valor.
     </div>
-  
-    <div id="listaE"></div>
-    <div id="saveStatus" class="muted" style="margin-top:8px;"></div>
-  </div>
-
-    </div>
-
-    <!-- ✅ TELA: ALOJAMENTOS (NOVO) -->
-    <div id="screenAloj" class="screen">
-  <!-- ADMIN: Resumo Alojamentos -->
-  <div id="cardAdminAlojResumo" class="card" style="display:none;">
-    <h2>Resumo de alojamentos (Admin)</h2>
-    <div class="muted">Selecione um período e clique em <b>Carregar</b>.</div>
-    <div class="grid2" style="margin-top:10px;">
-      <div>
-        <label>Data inicial</label>
-        <input id="admAlojIni" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" />
-      </div>
-      <div>
-        <label>Data final</label>
-        <input id="admAlojFim" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" />
-      </div>
-    </div>
-    <button id="btnAdmAlojResumo" class="btnPrimary" style="margin-top:10px;" type="button">Carregar</button>
-    <div id="admAlojResumoOut" style="margin-top:12px;"></div>
-  </div>
-
-      <div class="card">
-        <h3 style="margin-bottom:6px;">🏠 Consulta – Histórico do Alojamento</h3>
-        <div class="muted">Selecione o alojamento e o período para ver os hospedados (aba Relatórios).</div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Alojamento</label>
-            <select id="alojSelect"></select>
-          </div>
-          <div class="col">
-            <label class="muted">Data inicial</label>
-            <input id="alojDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-          </div>
-          <div class="col">
-            <label class="muted">Data final</label>
-            <input id="alojDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off">
-          </div>
-          <div class="col" style="min-width:220px;">
-            <label class="muted">&nbsp;</label>
-            <button id="btnAlojBuscar" onclick="buscarHistoricoAlojamento()" type="button">🔎 Buscar</button>
-          </div>
-        </div>
-
-        <div id="alojInfo" class="muted" style="margin-top:8px;"></div>
-        <div id="alojResultado" class="listBox" style="display:none;"></div>
-      </div>
-    </div>
-
-    
-
-    <!-- ✅ TELA: CLIENTES (NOVO) -->
-    <!-- ✅ TELA: CLIENTES (NOVO) -->
-<div id="screenClientes" class="screen">
-  <div class="card">
-    <div class="clTitleRow">
-      <h3>👥 Clientes – Registro de Contato</h3>
-      <span class="clBadge">Clientes</span>
-    </div>
-    <div class="clHint">Preencha o registro. Ao salvar, um PDF será gerado e salvo na pasta definida no GAS.</div>
-
-    <div class="clForm" style="margin-top:10px;">
-      <div class="clField">
-        <label for="cli_cliente">Cliente</label>
-        <input id="cli_cliente" type="text" placeholder="Nome do cliente" autocomplete="off">
-      </div>
-
-      <div class="clField">
-        <label for="cli_data">Data</label>
-        <input id="cli_data" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10" autocomplete="off" oninput="maskDateBR_(this)">
-        <div class="clHint">Digite só números: 15012026 → 15/01/2026</div>
-      </div>
-
-      <div class="clField">
-        <label for="cli_contato">Nome do contato</label>
-        <input id="cli_contato" type="text" placeholder="Nome do contato" autocomplete="off">
-      </div>
-
-      <div class="clField">
-        <label for="cli_tel">Telefone</label>
-        <input id="cli_tel" type="tel" placeholder="Somente números ou (00) 00000-0000" autocomplete="off">
-      </div>
-
-      <div class="clField clSpan2">
-        <label>Tipo de interação</label>
-        <div class="clChecks">
-          <label class="clChk"><input id="cli_tipo_visita" type="checkbox"><span>Visita sede do cliente</span></label>
-          <label class="clChk"><input id="cli_tipo_online" type="checkbox"><span>Reunião online</span></label>
-          <label class="clChk"><input id="cli_tipo_almoco" type="checkbox"><span>Almoço/Jantar</span></label>
-          <label class="clChk"><input id="cli_tipo_outros" type="checkbox" onchange="toggleOutrosCliente_()"><span>Outros</span></label>
-        </div>
-      </div>
-
-      <div id="cli_outros_wrap" class="clField clSpan2" style="display:none;">
-        <label for="cli_outros_desc">Se marcou “Outros”, descreva</label>
-        <input id="cli_outros_desc" type="text" placeholder="Descreva o tipo de interação">
-        <div class="clHint">Obrigatório quando “Outros” estiver marcado.</div>
-      </div>
-
-      <div class="clField clSpan2">
-        <label for="cli_partGrao_inp">Lista de participantes Grão 1000</label>
-        <div class="row">
-          <div class="col" style="min-width:260px;">
-            <input id="cli_partGrao_inp" type="text" placeholder="Digite um nome e clique em Adicionar">
-          </div>
-          <div class="col" style="flex:0; min-width:auto;">
-            <button class="btn light" type="button" onclick="cliAddPart_('grao')">Adicionar</button>
-          </div>
-        </div>
-        <div id="cli_partGrao_list" class="list"></div>
-      </div>
-
-      <div class="clField clSpan2">
-        <label for="cli_partCli_inp">Lista de participantes cliente</label>
-        <div class="row">
-          <div class="col" style="min-width:260px;">
-            <input id="cli_partCli_inp" type="text" placeholder="Digite um nome e clique em Adicionar">
-          </div>
-          <div class="col" style="flex:0; min-width:auto;">
-            <button class="btn light" type="button" onclick="cliAddPart_('cliente')">Adicionar</button>
-          </div>
-        </div>
-        <div id="cli_partCli_list" class="list"></div>
-      </div>
-
-      <div class="clField clSpan2">
-        <label for="cli_resumo">Resumo do que foi discutido</label>
-        <textarea id="cli_resumo" rows="4" placeholder="Campo livre"></textarea>
-      </div>
-
-      <div class="clField clSpan2">
-        <label for="cli_providencias">Providências a serem tomadas</label>
-        <textarea id="cli_providencias" rows="3" placeholder="Campo livre"></textarea>
-      </div>
-
-      <div class="clField clSpan2">
-        <label for="cli_fotos">Anexe foto do evento</label>
-        <input id="cli_fotos" type="file" multiple accept="image/*">
-      </div>
-
-      <div class="clField clSpan2">
-        <div class="clActions">
-          <button class="btn" type="button" onclick="cliSalvarRegistro_()">Gerar PDF e Salvar</button>
-          <button class="btn secondary" type="button" onclick="cliLimpar_()">Limpar</button>
-        </div>
-        <div id="cli_status" class="clHint" style="margin-top:10px;"></div>
-      </div>
-    </div>
-  </div>
+<div id="listaE"></div>
+<div class="muted" id="saveStatus" style="margin-top:8px;"></div>
 </div>
-
-<div id="screenEncerramento" class="screen">
-      <div class="card">
-        <h3 style="margin-bottom:6px;">✅ Encerramento</h3>
-        <div class="muted">Programação finalizada. Use os botões abaixo para baixar o(s) PDF(s).</div>
-        <div id="encInfo" class="muted" style="margin-top:8px;"></div>
-        <div id="encLista" style="margin-top:10px;"></div>
-        <div class="toolsRow" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
-          <button class="light" type="button" onclick="encVoltarInicio_()">🏠 Voltar para início</button>
-          <button type="button" onclick="encVoltarProgramacao_()">📋 Voltar para programação</button>
-        </div>
-      </div>
-    </div>
-
+</div>
+<!-- ✅ TELA: ALOJAMENTOS (NOVO) -->
+<div class="screen" id="screenAloj">
+<!-- ADMIN: Resumo Alojamentos -->
+<div class="card" id="cardAdminAlojResumo" style="display:none;">
+<h2>Resumo de alojamentos (Admin)</h2>
+<div class="muted">Selecione um período e clique em <b>Carregar</b>.</div>
+<div class="grid2" style="margin-top:10px;">
+<div>
+<label>Data inicial</label>
+<input id="admAlojIni" inputmode="numeric" placeholder="dd/mm/aaaa" type="text"/>
+</div>
+<div>
+<label>Data final</label>
+<input id="admAlojFim" inputmode="numeric" placeholder="dd/mm/aaaa" type="text"/>
+</div>
+</div>
+<button class="btnPrimary" id="btnAdmAlojResumo" style="margin-top:10px;" type="button">Carregar</button>
+<div id="admAlojResumoOut" style="margin-top:12px;"></div>
+</div>
+<div class="card">
+<h3 style="margin-bottom:6px;">🏠 Consulta – Histórico do Alojamento</h3>
+<div class="muted">Selecione o alojamento e o período para ver os hospedados (aba Relatórios).</div>
+<div class="row" style="margin-top:10px;">
+<div class="col">
+<label class="muted">Alojamento</label>
+<select id="alojSelect"></select>
+</div>
+<div class="col">
+<label class="muted">Data inicial</label>
+<input autocomplete="off" id="alojDtIni" inputmode="numeric" placeholder="dd/mm/aaaa"/>
+</div>
+<div class="col">
+<label class="muted">Data final</label>
+<input autocomplete="off" id="alojDtFim" inputmode="numeric" placeholder="dd/mm/aaaa"/>
+</div>
+<div class="col" style="min-width:220px;">
+<label class="muted"> </label>
+<button id="btnAlojBuscar" onclick="buscarHistoricoAlojamento()" type="button">🔎 Buscar</button>
+</div>
+</div>
+<div class="muted" id="alojInfo" style="margin-top:8px;"></div>
+<div class="listBox" id="alojResultado" style="display:none;"></div>
+</div>
+</div>
+<!-- ✅ TELA: CLIENTES (NOVO) -->
+<!-- ✅ TELA: CLIENTES (NOVO) -->
+<div class="screen" id="screenClientes">
+<div class="card">
+<div class="clTitleRow">
+<h3>👥 Clientes – Registro de Contato</h3>
+<span class="clBadge">Clientes</span>
+</div>
+<div class="clHint">Preencha o registro. Ao salvar, um PDF será gerado e salvo na pasta definida no GAS.</div>
+<div class="clForm" style="margin-top:10px;">
+<div class="clField">
+<label for="cli_cliente">Cliente</label>
+<input autocomplete="off" id="cli_cliente" placeholder="Nome do cliente" type="text"/>
+</div>
+<div class="clField">
+<label for="cli_data">Data</label>
+<input autocomplete="off" id="cli_data" inputmode="numeric" maxlength="10" oninput="maskDateBR_(this)" placeholder="dd/mm/aaaa" type="text"/>
+<div class="clHint">Digite só números: 15012026 → 15/01/2026</div>
+</div>
+<div class="clField">
+<label for="cli_contato">Nome do contato</label>
+<input autocomplete="off" id="cli_contato" placeholder="Nome do contato" type="text"/>
+</div>
+<div class="clField">
+<label for="cli_tel">Telefone</label>
+<input autocomplete="off" id="cli_tel" placeholder="Somente números ou (00) 00000-0000" type="tel"/>
+</div>
+<div class="clField clSpan2">
+<label>Tipo de interação</label>
+<div class="clChecks">
+<label class="clChk"><input id="cli_tipo_visita" type="checkbox"/><span>Visita sede do cliente</span></label>
+<label class="clChk"><input id="cli_tipo_online" type="checkbox"/><span>Reunião online</span></label>
+<label class="clChk"><input id="cli_tipo_almoco" type="checkbox"/><span>Almoço/Jantar</span></label>
+<label class="clChk"><input id="cli_tipo_outros" onchange="toggleOutrosCliente_()" type="checkbox"/><span>Outros</span></label>
+</div>
+</div>
+<div class="clField clSpan2" id="cli_outros_wrap" style="display:none;">
+<label for="cli_outros_desc">Se marcou “Outros”, descreva</label>
+<input id="cli_outros_desc" placeholder="Descreva o tipo de interação" type="text"/>
+<div class="clHint">Obrigatório quando “Outros” estiver marcado.</div>
+</div>
+<div class="clField clSpan2">
+<label for="cli_partGrao_inp">Lista de participantes Grão 1000</label>
+<div class="row">
+<div class="col" style="min-width:260px;">
+<input id="cli_partGrao_inp" placeholder="Digite um nome e clique em Adicionar" type="text"/>
+</div>
+<div class="col" style="flex:0; min-width:auto;">
+<button class="btn light" onclick="cliAddPart_('grao')" type="button">Adicionar</button>
+</div>
+</div>
+<div class="list" id="cli_partGrao_list"></div>
+</div>
+<div class="clField clSpan2">
+<label for="cli_partCli_inp">Lista de participantes cliente</label>
+<div class="row">
+<div class="col" style="min-width:260px;">
+<input id="cli_partCli_inp" placeholder="Digite um nome e clique em Adicionar" type="text"/>
+</div>
+<div class="col" style="flex:0; min-width:auto;">
+<button class="btn light" onclick="cliAddPart_('cliente')" type="button">Adicionar</button>
+</div>
+</div>
+<div class="list" id="cli_partCli_list"></div>
+</div>
+<div class="clField clSpan2">
+<label for="cli_resumo">Resumo do que foi discutido</label>
+<textarea id="cli_resumo" placeholder="Campo livre" rows="4"></textarea>
+</div>
+<div class="clField clSpan2">
+<label for="cli_providencias">Providências a serem tomadas</label>
+<textarea id="cli_providencias" placeholder="Campo livre" rows="3"></textarea>
+</div>
+<div class="clField clSpan2">
+<label for="cli_fotos">Anexe foto do evento</label>
+<input accept="image/*" id="cli_fotos" multiple="" type="file"/>
+</div>
+<div class="clField clSpan2">
+<div class="clActions">
+<button class="btn" onclick="cliSalvarRegistro_()" type="button">Gerar PDF e Salvar</button>
+<button class="btn secondary" onclick="cliLimpar_()" type="button">Limpar</button>
+</div>
+<div class="clHint" id="cli_status" style="margin-top:10px;"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="screen" id="screenEncerramento">
+<div class="card">
+<h3 style="margin-bottom:6px;">✅ Encerramento</h3>
+<div class="muted">Programação finalizada. Use os botões abaixo para baixar o(s) PDF(s).</div>
+<div class="muted" id="encInfo" style="margin-top:8px;"></div>
+<div id="encLista" style="margin-top:10px;"></div>
+<div class="toolsRow" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+<button class="light" onclick="encVoltarInicio_()" type="button">🏠 Voltar para início</button>
+<button onclick="encVoltarProgramacao_()" type="button">📋 Voltar para programação</button>
+</div>
+</div>
+</div>
 <!-- TELA: CONFERENCIA (ADMIN) -->
-    <div id="screenAdmin" class="screen">
-      <div class="card">
-        <h3 style="margin-bottom:6px;">Conferencia diaria</h3>
-        <div class="muted">Resumo por Coordenacao / Supervisao / Colaborador. Apenas despesas marcadas pelo gestor aparecem.</div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="col">
-            <label class="muted">Data inicial</label>
-            <input id="adminDtIni" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off" oninput="maskDMY_(this)">
-          </div>
-          <div class="col">
-            <label class="muted">Data final</label>
-            <input id="adminDtFim" placeholder="dd/mm/aaaa" inputmode="numeric" autocomplete="off" oninput="maskDMY_(this)">
-          </div>
-          <div class="col">
-            <label class="muted">Conferente</label>
-            <select id="adminConferente">
-              <option value="">Todos</option>
-            </select>
-          </div>
-          <div class="col">
-            <label class="muted">&nbsp;</label>
-            <button class="btn primary" id="btnAdminCarregar" type="button">Carregar</button>
-          </div>
-        </div>
-
-
-        <div class="row" style="margin-top:10px; align-items:flex-end;">
-          <div class="col">
-            <label class="muted">Ordenar</label>
-            <select id="adminSort">
-              <option value="COLAB_AZ">A-Z Colaborador</option>
-              <option value="COLAB_ZA">Z-A Colaborador</option>
-              <option value="COORD_AZ">A-Z Coordenação</option>
-              <option value="COORD_ZA">Z-A Coordenação</option>
-            </select>
-          </div>
-          <div class="col">
-            <label class="muted">Visualização</label>
-            <select id="adminView">
-              <option value="GROUP">Agrupado por Coordenação</option>
-              <option value="LIST">Lista por Colaborador</option>
-            </select>
-          </div>
-          <div class="col" style="min-width:220px;">
-            <label class="muted">&nbsp;</label>
-            <button class="secondary" type="button" onclick="adminAplicarOrdenacao_()">Aplicar</button>
-          </div>
-        </div>
-
-        <div id="adminInfo" class="muted" style="margin-top:8px;"></div>
-        <div id="adminResultado" style="margin-top:10px;"></div>
-
-        
-
-      </div>
-    </div>
- </div>
+<div class="screen" id="screenAdmin">
+<div class="card">
+<h3 style="margin-bottom:6px;">Conferencia diaria</h3>
+<div class="muted">Resumo por Coordenacao / Supervisao / Colaborador. Apenas despesas marcadas pelo gestor aparecem.</div>
+<div class="row" style="margin-top:10px;">
+<div class="col">
+<label class="muted">Data inicial</label>
+<input autocomplete="off" id="adminDtIni" inputmode="numeric" oninput="maskDMY_(this)" placeholder="dd/mm/aaaa"/>
 </div>
-
+<div class="col">
+<label class="muted">Data final</label>
+<input autocomplete="off" id="adminDtFim" inputmode="numeric" oninput="maskDMY_(this)" placeholder="dd/mm/aaaa"/>
+</div>
+<div class="col">
+<label class="muted">Conferente</label>
+<select id="adminConferente">
+<option value="">Todos</option>
+</select>
+</div>
+<div class="col">
+<label class="muted"> </label>
+<button class="btn primary" id="btnAdminCarregar" type="button">Carregar</button>
+</div>
+</div>
+<div class="row" style="margin-top:10px; align-items:flex-end;">
+<div class="col">
+<label class="muted">Ordenar</label>
+<select id="adminSort">
+<option value="COLAB_AZ">A-Z Colaborador</option>
+<option value="COLAB_ZA">Z-A Colaborador</option>
+<option value="COORD_AZ">A-Z Coordenação</option>
+<option value="COORD_ZA">Z-A Coordenação</option>
+</select>
+</div>
+<div class="col">
+<label class="muted">Visualização</label>
+<select id="adminView">
+<option value="GROUP">Agrupado por Coordenação</option>
+<option value="LIST">Lista por Colaborador</option>
+</select>
+</div>
+<div class="col" style="min-width:220px;">
+<label class="muted"> </label>
+<button class="secondary" onclick="adminAplicarOrdenacao_()" type="button">Aplicar</button>
+</div>
+</div>
+<div class="muted" id="adminInfo" style="margin-top:8px;"></div>
+<div id="adminResultado" style="margin-top:10px;"></div>
+</div>
+</div>
+</div>
+</div>
 <div class="bottomBar" id="bottomBar" style="display:none;">
-  <div class="inner">
-    <button id="btnVoltar" class="secondary" onclick="voltar()" type="button">Voltar</button>
-    <button id="btnProximo" onclick="avancar()" type="button">Próximo</button>
-  </div>
+<div class="inner">
+<button class="secondary" id="btnVoltar" onclick="voltar()" type="button">Voltar</button>
+<button id="btnProximo" onclick="avancar()" type="button">Próximo</button>
 </div>
-
+</div>
 <!-- MODAL AJUDA (SEU ORIGINAL) -->
-<div id="helpModal" class="helpModal" aria-hidden="true">
-  <div class="helpBackdrop" onclick="closeHelpModal()"></div>
-
-  <div class="helpPanel" role="dialog" aria-modal="true">
-    <div class="helpTop">
-      <div>
-        <div class="helpTitle">Programação de Despesas – Guia Rápido</div>
-        <div class="helpSub">Uso do painel web (sem planilhas)</div>
-      </div>
-      <button class="helpClose" type="button" onclick="closeHelpModal()" aria-label="Fechar">✕</button>
-    </div>
-
-    <div class="helpGrid">
-      <div class="helpCard">
-        <h4>📅 1) Data e Colaborador</h4>
-        <p><b>Data</b> é extraída automaticamente pelo sistema.</p>
-        <p class="muted">Colaboradores são gerados automaticamente (férias/atestado não aparecem).</p>
-      </div>
-
-      <div class="helpCard warn">
-        <h4>✅ 2) Disponibilidade</h4>
-        <ul>
-          <li><b>OK:</b> disponível.</li>
-          <li><b>Atestado / Férias / Folga / Falta:</b> informar observação.</li>
-          <li><b>Inativo:</b> colaborador não segue.</li>
-          <li><b>Transferir:</b> informar supervisão destino (não segue).</li>
-        </ul>
-      </div>
-
-      <div class="helpCard">
-        <h4>🏨 3) Estadia</h4>
-        <ul>
-          <li><b>Casa:</b> padrão.</li>
-          <li><b>Hotel:</b> tenta preencher via D-1; se não achar, pede cidade/UF (e Obs deve conter <b>Cidade:</b>).</li>
-          <li><b>Alojamento:</b> tenta preencher via D-1; se não achar, pede nome (e Obs deve conter <b>Alojamento:</b>).</li>
-          <li><b>Fazenda:</b> preenche pernoite automático.</li>
-        </ul>
-      </div>
-
-      <div class="helpCard">
-        <h4>🍽️ 4) Alimentação</h4>
-        <p>Opções: <b>Café</b>, <b>Almoço</b> e <b>Janta</b>.</p>
-        <p class="muted">Marque ☑ somente se precisar da despesa.</p>
-      </div>
-
-      <div class="helpCard">
-        <h4>🚗 5) Deslocamento</h4>
-        <ul>
-          <li><b>Empresa</b>, <b>Veículo próprio</b>, <b>Frota</b>, <b>Carona</b>, <b>Uber</b>, <b>Km</b>, <b>Manutenção</b>.</li>
-          <li class="muted">Use Obs quando necessário.</li>
-        </ul>
-      </div>
-
-      <div class="helpCard">
-        <h4>➕ 6) Extras</h4>
-        <p>Inserir despesas extras do dia.</p>
-        <p class="muted">Ao marcar, informe um valor &gt; 0 (Recarga, Passagem, Lavagem, Manutenção Veículo).</p>
-      </div>
-    </div>
-  </div>
+<div aria-hidden="true" class="helpModal" id="helpModal">
+<div class="helpBackdrop" onclick="closeHelpModal()"></div>
+<div aria-modal="true" class="helpPanel" role="dialog">
+<div class="helpTop">
+<div>
+<div class="helpTitle">Programação de Despesas – Guia Rápido</div>
+<div class="helpSub">Uso do painel web (sem planilhas)</div>
 </div>
-
+<button aria-label="Fechar" class="helpClose" onclick="closeHelpModal()" type="button">✕</button>
+</div>
+<div class="helpGrid">
+<div class="helpCard">
+<h4>📅 1) Data e Colaborador</h4>
+<p><b>Data</b> é extraída automaticamente pelo sistema.</p>
+<p class="muted">Colaboradores são gerados automaticamente (férias/atestado não aparecem).</p>
+</div>
+<div class="helpCard warn">
+<h4>✅ 2) Disponibilidade</h4>
+<ul>
+<li><b>OK:</b> disponível.</li>
+<li><b>Atestado / Férias / Folga / Falta:</b> informar observação.</li>
+<li><b>Inativo:</b> colaborador não segue.</li>
+<li><b>Transferir:</b> informar supervisão destino (não segue).</li>
+</ul>
+</div>
+<div class="helpCard">
+<h4>🏨 3) Estadia</h4>
+<ul>
+<li><b>Casa:</b> padrão.</li>
+<li><b>Hotel:</b> tenta preencher via D-1; se não achar, pede cidade/UF (e Obs deve conter <b>Cidade:</b>).</li>
+<li><b>Alojamento:</b> tenta preencher via D-1; se não achar, pede nome (e Obs deve conter <b>Alojamento:</b>).</li>
+<li><b>Fazenda:</b> preenche pernoite automático.</li>
+</ul>
+</div>
+<div class="helpCard">
+<h4>🍽️ 4) Alimentação</h4>
+<p>Opções: <b>Café</b>, <b>Almoço</b> e <b>Janta</b>.</p>
+<p class="muted">Marque ☑ somente se precisar da despesa.</p>
+</div>
+<div class="helpCard">
+<h4>🚗 5) Deslocamento</h4>
+<ul>
+<li><b>Empresa</b>, <b>Veículo próprio</b>, <b>Frota</b>, <b>Carona</b>, <b>Uber</b>, <b>Km</b>, <b>Manutenção</b>.</li>
+<li class="muted">Use Obs quando necessário.</li>
+</ul>
+</div>
+<div class="helpCard">
+<h4>➕ 6) Extras</h4>
+<p>Inserir despesas extras do dia.</p>
+<p class="muted">Ao marcar, informe um valor &gt; 0 (Recarga, Passagem, Lavagem, Manutenção Veículo).</p>
+</div>
+</div>
+</div>
+</div>
 <script>
   // Compat global: evita ReferenceError em usos legados
   var lastRow = 0;
@@ -3839,18 +3820,15 @@ function admAplicarDataRapida_(){
 }
 
 </script>
-
-  <!-- ✅ FAB WhatsApp (Suporte) -->
-<a id="waFab" class="waFab" href="https://wa.me/554598341000?text=Ola%20FAB%21%20Preciso%20de%20suporte%20no%20Painel%20Programacao%20-%20Despesas." target="_blank" rel="noopener" title="Suporte Técnico no WhatsApp" aria-label="Suporte Técnico no WhatsApp">
-  <span>Suporte WhatsApp</span>
-  <!-- ícone WhatsApp (inline SVG) -->
-  <svg viewBox="0 0 32 32" aria-hidden="true">
-    <path fill="#fff" d="M19.11 17.3c-.28-.14-1.64-.81-1.9-.9-.25-.09-.44-.14-.62.14-.18.28-.71.9-.88 1.08-.16.18-.32.2-.6.07-.28-.14-1.16-.43-2.2-1.36-.81-.72-1.35-1.62-1.51-1.9-.16-.28-.02-.43.12-.57.12-.12.28-.32.41-.48.14-.16.18-.28.28-.46.09-.18.05-.35-.02-.48-.07-.14-.62-1.5-.85-2.06-.22-.54-.44-.47-.62-.48h-.53c-.18 0-.48.07-.73.35-.25.28-.96.94-.96 2.3 0 1.36.98 2.67 1.12 2.86.14.18 1.93 2.95 4.67 4.13.65.28 1.16.45 1.56.57.66.21 1.26.18 1.74.11.53-.08 1.64-.67 1.87-1.32.23-.65.23-1.21.16-1.32-.07-.11-.25-.18-.53-.32z"/>
-    <path fill="#fff" d="M16 3C9.38 3 4 8.38 4 15c0 2.16.57 4.19 1.57 5.95L4 29l8.23-1.52A11.92 11.92 0 0 0 16 27c6.62 0 12-5.38 12-12S22.62 3 16 3zm0 21.67c-1.7 0-3.34-.46-4.78-1.33l-.34-.2-4.88.9.92-4.75-.22-.36A9.61 9.61 0 0 1 6.33 15c0-5.34 4.33-9.67 9.67-9.67S25.67 9.66 25.67 15 21.34 24.67 16 24.67z"/>
-  </svg>
+<!-- ✅ FAB WhatsApp (Suporte) -->
+<a aria-label="Suporte Técnico no WhatsApp" class="waFab" href="https://wa.me/554598341000?text=Ola%20FAB%21%20Preciso%20de%20suporte%20no%20Painel%20Programacao%20-%20Despesas." id="waFab" rel="noopener" target="_blank" title="Suporte Técnico no WhatsApp">
+<span>Suporte WhatsApp</span>
+<!-- ícone WhatsApp (inline SVG) -->
+<svg aria-hidden="true" viewbox="0 0 32 32">
+<path d="M19.11 17.3c-.28-.14-1.64-.81-1.9-.9-.25-.09-.44-.14-.62.14-.18.28-.71.9-.88 1.08-.16.18-.32.2-.6.07-.28-.14-1.16-.43-2.2-1.36-.81-.72-1.35-1.62-1.51-1.9-.16-.28-.02-.43.12-.57.12-.12.28-.32.41-.48.14-.16.18-.28.28-.46.09-.18.05-.35-.02-.48-.07-.14-.62-1.5-.85-2.06-.22-.54-.44-.47-.62-.48h-.53c-.18 0-.48.07-.73.35-.25.28-.96.94-.96 2.3 0 1.36.98 2.67 1.12 2.86.14.18 1.93 2.95 4.67 4.13.65.28 1.16.45 1.56.57.66.21 1.26.18 1.74.11.53-.08 1.64-.67 1.87-1.32.23-.65.23-1.21.16-1.32-.07-.11-.25-.18-.53-.32z" fill="#fff"></path>
+<path d="M16 3C9.38 3 4 8.38 4 15c0 2.16.57 4.19 1.57 5.95L4 29l8.23-1.52A11.92 11.92 0 0 0 16 27c6.62 0 12-5.38 12-12S22.62 3 16 3zm0 21.67c-1.7 0-3.34-.46-4.78-1.33l-.34-.2-4.88.9.92-4.75-.22-.36A9.61 9.61 0 0 1 6.33 15c0-5.34 4.33-9.67 9.67-9.67S25.67 9.66 25.67 15 21.34 24.67 16 24.67z" fill="#fff"></path>
+</svg>
 </a>
-
-
 <!-- =========================
      PATCH CLIENTES (OVERRIDE)
      Corrige:
@@ -4084,6 +4062,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
-
 </body>
 </html>
