@@ -459,6 +459,24 @@
 
     <!-- ✅ TELA: ALOJAMENTOS (NOVO) -->
     <div id="screenAloj" class="screen">
+  <!-- ADMIN: Resumo Alojamentos -->
+  <div id="cardAdminAlojResumo" class="card" style="display:none;">
+    <h2>Resumo de alojamentos (Admin)</h2>
+    <div class="muted">Selecione um período e clique em <b>Carregar</b>.</div>
+    <div class="grid2" style="margin-top:10px;">
+      <div>
+        <label>Data inicial</label>
+        <input id="admAlojIni" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" />
+      </div>
+      <div>
+        <label>Data final</label>
+        <input id="admAlojFim" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" />
+      </div>
+    </div>
+    <button id="btnAdmAlojResumo" class="btnPrimary" style="margin-top:10px;">Carregar</button>
+    <div id="admAlojResumoOut" style="margin-top:12px;"></div>
+  </div>
+
       <div class="card">
         <h3 style="margin-bottom:6px;">🏠 Consulta – Histórico do Alojamento</h3>
         <div class="muted">Selecione o alojamento e o período para ver os hospedados (aba Relatórios).</div>
@@ -809,62 +827,54 @@ function openDownloadWindow_(){
 }
 
 function toDirectDownloadUrl_(url){
-  // tenta transformar url do drive em download direto (uc?export=download&id=...)
-  if(!url) return "";
-  try{
-    const u = String(url);
-    // já vem pronto?
-    if(u.includes("uc?export=download&id=")) return u;
+  url = String(url||"");
 
-    // file/d/<id>/
-    let m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if(m && m[1]) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+  // file/d/<id>/view
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(m1) return `https://drive.google.com/uc?export=download&id=${m1[1]}`;
 
-    // open?id=<id>
-    m = u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if(m && m[1]) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
-
-    return u;
-  }catch(_){
-    return String(url);
+  // open?id=<id> ou ?id=<id>
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if(m2 && url.includes("drive.google.com")){
+    return `https://drive.google.com/uc?export=download&id=${m2[1]}`;
   }
-}
-function forceDownloadUrl_(url){ return toDirectDownloadUrl_(url); }
 
-function tryAutoDownloadPdf_(pdfInfo){
-  // pdfInfo: { pdfDownloadUrl, downloadUrl, pdfViewUrl, viewUrl }
-  const raw = (pdfInfo && (pdfInfo.pdfDownloadUrl || pdfInfo.downloadUrl || "")) ||
-              (pdfInfo && (pdfInfo.pdfViewUrl || pdfInfo.viewUrl || "")) ||
-              "";
-  const url = forceDownloadUrl_(raw);
-  if(!url) return false;
-
-  // tenta abrir em nova aba (mais confiável em browsers)
-  try{
-    const w = window.open(url, "_blank");
-    if(w) return true;
-  }catch(_){}
-
-  // fallback: cria <a download>
-  try{
-    const a = document.createElement("a");
-    a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.download = "programacao.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    return true;
-  }catch(_){}
-
-  return false;
+  return url;
 }
 
-function sendToWindowOrDownload_(pdfInfo){
-  // retorna true se conseguiu disparar algo no browser
-  return tryAutoDownloadPdf_(pdfInfo);
+function sendToWindowOrDownload_(rawUrl, filename){
+    const url = forceDownloadUrl_(rawUrl);
+    const safeName = (filename || "programacao.pdf").replace(/[\\/:*?"<>|]+/g, "_");
+
+    // 1) tenta download "de verdade" via link (não depende de popup)
+    try{
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeName;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>a.remove(), 50);
+    }catch(e){ /* ignore */ }
+
+    // 2) fallback: navega para a URL (força download quando o servidor manda Content-Disposition)
+    setTimeout(()=>{
+      try{ window.location.href = url; }catch(e){}
+    }, 100);
+
+    // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
+    setTimeout(()=>{
+      try{ window.open(url, "_blank", "noopener"); }catch(e){}
+    }, 200);
+  }
+
+  }
+
+  // 2) fallback: tenta no mesmo tab via iframe/<a>
+  return forceDownloadUrl_(url, fileName);
 }
+
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
@@ -1175,10 +1185,15 @@ function qByNomeRow_(nome){
   return document.querySelector(`.nomeRow[data-nome="${v}"]`);
 }
 function setRowLoading_(nome, on){
-  const row = qByNomeRow_(nome);
-  if(!row) return;
-  row.style.opacity = on ? "0.6" : (PROSSEGUIR(form[nome]?.disponibilidade_status) ? "1" : "0.55");
-  row.style.pointerEvents = on ? "none" : "auto";
+  const row = document.querySelector(`[data-row="${nome}"]`);
+  if (!row) return;
+  if (on){
+    row.classList.add('loading');
+    row.style.opacity = "0.6";
+  } else {
+    row.classList.remove('loading');
+    row.style.opacity = "1";
+  }
 }
 
 function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
@@ -1403,7 +1418,7 @@ async function baixarPDFProgramacao_(){
 
   const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   if(url){
-    sendToWindowOrDownload_({ pdfDownloadUrl: url, pdfFileName: nome });
+    sendToWindowOrDownload_(win, url, nome);
     setDebug("PDF gerado ✅ (abrindo download)");
     return { ok:true, pdf:true };
   }
@@ -3950,6 +3965,108 @@ async function cliSalvarRegistro_(){
     if(typeof switchScreen === 'function') switchScreen('encerramento');
   }
 }
+
+/* ====== FIXES (Admin Conferência + Admin Aloj Resumo + Máscara Data) ====== */
+function maskDMYInput_(el){
+  if (!el) return;
+  el.addEventListener('input', () => {
+    let v = (el.value || '').replace(/\D/g,'').slice(0,8);
+    if (v.length >= 5) el.value = v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4);
+    else if (v.length >= 3) el.value = v.slice(0,2)+'/'+v.slice(2);
+    else el.value = v;
+  });
+}
+
+async function adminCarregarConferencia_(){
+  try{
+    const ini = (document.getElementById('adminDtIni')||{}).value || '';
+    const fim = (document.getElementById('adminDtFim')||{}).value || '';
+    const conferente = (document.getElementById('adminConferente')||{}).value || 'Todos';
+
+    if (!ini || !fim) { alert('Informe data inicial e final.'); return; }
+
+    setBusy_(true);
+    const r = await api('adm_conferencia_periodo', { dataIni: ini, dataFim: fim, conferente });
+    if (!r.ok) throw new Error(r.error || 'Falha ao carregar conferência.');
+
+    // Render simples: lista de registros (data/coord/gestor) e total.
+    const out = document.getElementById('adminResultado');
+    if (out){
+      const itens = r.itens || [];
+      let html = `<div class="muted">Registros: <b>${itens.length}</b></div>`;
+      html += `<div class="tableWrap" style="margin-top:10px;"><table class="tbl"><thead><tr>
+        <th>Data</th><th>Coordenação</th><th>Gestor</th><th>Etapas/Itens</th>
+      </tr></thead><tbody>`;
+      for (const it of itens){
+        const qtd = Array.isArray(it.payload) ? it.payload.length : 0;
+        html += `<tr><td>${esc_(it.data||'')}</td><td>${esc_(it.coordenacao||'')}</td><td>${esc_(it.gestor||'')}</td><td>${qtd}</td></tr>`;
+      }
+      html += `</tbody></table></div>`;
+      out.innerHTML = html;
+    }
+  }catch(err){
+    console.error(err);
+    alert('Erro ao carregar (console).');
+  }finally{
+    setBusy_(false);
+  }
+}
+
+async function adminCarregarResumoAloj_(){
+  try{
+    const ini = (document.getElementById('admAlojIni')||{}).value || '';
+    const fim = (document.getElementById('admAlojFim')||{}).value || '';
+    if (!ini || !fim) { alert('Informe data inicial e final.'); return; }
+
+    setBusy_(true);
+    const r = await api('adm_aloj_resumo_periodo', { dataIni: ini, dataFim: fim });
+    if (!r.ok) throw new Error(r.error || 'Falha ao carregar resumo.');
+
+    const out = document.getElementById('admAlojResumoOut');
+    if (out){
+      const itens = r.resumo || [];
+      let html = `<div class="muted">Alojamentos encontrados: <b>${itens.length}</b></div>`;
+      html += `<div class="tableWrap" style="margin-top:10px;"><table class="tbl"><thead><tr>
+        <th>Alojamento</th><th>Pessoas</th><th>Dias</th>
+      </tr></thead><tbody>`;
+      for (const it of itens){
+        html += `<tr><td>${esc_(it.alojamento||'')}</td><td>${Number(it.pessoas||0)}</td><td>${Number(it.dias||0)}</td></tr>`;
+      }
+      html += `</tbody></table></div>`;
+      out.innerHTML = html;
+    }
+  }catch(err){
+    console.error(err);
+    alert('Erro ao carregar (console).');
+  }finally{
+    setBusy_(false);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Máscara de datas (Admin Conferência)
+  maskDMYInput_(document.getElementById('adminDtIni'));
+  maskDMYInput_(document.getElementById('adminDtFim'));
+
+  // Botão Admin Conferência
+  const btnConf = document.getElementById('btnAdminCarregar');
+  if (btnConf) btnConf.addEventListener('click', adminCarregarConferencia_);
+
+  // Admin Aloj Resumo
+  maskDMYInput_(document.getElementById('admAlojIni'));
+  maskDMYInput_(document.getElementById('admAlojFim'));
+  const btnA = document.getElementById('btnAdmAlojResumo');
+  if (btnA) btnA.addEventListener('click', adminCarregarResumoAloj_);
+
+  // Mostrar card somente no admin
+  try{
+    if (window && window.state && window.state.perfil === 'admin'){
+      const c = document.getElementById('cardAdminAlojResumo');
+      if (c) c.style.display = '';
+    }
+  }catch(e){}
+});
+
 </script>
 
 </body>
