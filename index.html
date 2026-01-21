@@ -876,33 +876,45 @@ function toDirectDownloadUrl_(url){
   return url;
 }
 
-function sendToWindowOrDownload_(win, url, fileName){
-  url = toDirectDownloadUrl_(url);
-  const safeUrl  = String(url).replace(/"/g, "%22");
-  const safeName = String(fileName || "programacao.pdf").replace(/"/g, "");
+function sendToWindowOrDownload_(url, fileName){
+  if(!url) return false;
 
-  // ✅ Se abriu janela, força um clique lá dentro e tenta fechar
-  if(win && !win.closed){
+  // 1) tenta abrir uma janela com auto-click (boa taxa de sucesso)
+  let win = null;
+  try{
+    win = window.open("", "_blank");
+  }catch(_e){ win = null; }
+
+  if(win){
     try{
-      win.document.open();
-      win.document.write(
-        '<!doctype html><html><head><title>Baixando...</title></head>' +
-        '<body style="font-family:Arial;padding:12px">' +
-          '<p>Baixando PDF...</p>' +
-          '<a id="dl" href="' + safeUrl + '" download="' + safeName + '">Clique aqui se não baixar</a>' +
-          '<script>(function(){var a=document.getElementById("dl");try{a.click();}catch(e){};setTimeout(function(){try{window.close();}catch(e){}},1800);})();<\/script>' +
-        '</body></html>'
-      );
+      const safeName = (fileName || "programacao.pdf").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const safeUrl  = String(url).replace(/</g,"%3C").replace(/>/g,"%3E");
+      win.document.write(`
+        <html><head><title>Baixando...</title></head>
+        <body style="font-family:Arial; padding:20px;">
+          <p>Baixando: <b>${safeName}</b></p>
+          <p>Se não iniciar automaticamente, clique: <a id="dl" href="${safeUrl}" download="${safeName}">Download</a></p>
+          <script>
+            try{ document.getElementById('dl').click(); }catch(e){}
+            setTimeout(()=>{ try{ window.close(); }catch(e){} }, 1500);
+          </script>
+        </body></html>
+      `);
       win.document.close();
+
+      // ✅ também tenta disparar no tab atual (fallback)
+      setTimeout(()=>{ try{ forceDownloadUrl_(url, fileName); }catch(_e){} }, 600);
       return true;
-    }catch(e){
+    }catch(_e){
+      try{ win.close(); }catch(__){}
       // cai pro fallback abaixo
     }
   }
 
-  // ✅ fallback: tenta no mesmo tab via <a>
+  // 2) fallback: tenta no mesmo tab via iframe/<a>
   return forceDownloadUrl_(url, fileName);
 }
+
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
@@ -1373,16 +1385,34 @@ function downloadPdfFromB64_(b64, fileName){
 }
 function forceDownloadUrl_(url, fileName){
   if(!url) return false;
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName || "programacao.pdf";
-  a.rel = "noopener";
-  a.target = "_self";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+
+  // 1) tenta iframe (não muda a página e costuma disparar download)
+  try{
+    const ifr = document.createElement("iframe");
+    ifr.style.display = "none";
+    ifr.src = url;
+    document.body.appendChild(ifr);
+    setTimeout(()=>{ try{ ifr.remove(); }catch(_e){} }, 8000);
+  }catch(_e){}
+
+  // 2) tenta <a download> (nem sempre funciona em domínios diferentes)
+  try{
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName || "programacao.pdf";
+    a.rel = "noopener";
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  }catch(_e){}
+
+  // 3) fallback: abre em nova aba
+  try{ window.open(url, "_blank", "noopener"); }catch(_e){}
   return true;
 }
+
 async function baixarPDFProgramacao_(){
   const dataRef = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dataRef)){
@@ -1681,41 +1711,44 @@ function chunkArray(arr, size){
 }
 
 async function salvarEtapaPayload_(dataRef, etapa, registros){
-  // ✅ Etapa B pode ter MUITAS linhas → não travar o usuário.
-  // Em vez de salvar em chunks (vários POSTs), a gente ENFILEIRA 1 job no GAS.
-  if(String(etapa||"").trim().toUpperCase() === "B"){
-    const rQ = await api("salvarEtapaAsync", {
-      payload: { dataReferencia: dataRef, etapa: "B", registros: Array.isArray(registros)?registros:[] }
-    }, { timeoutMs: 8000 });
+  dataRef = (dataRef || "").trim();
+  etapa = String(etapa || "").trim().toUpperCase();
+  registros = Array.isArray(registros) ? registros : [];
 
-    if(!rQ || !rQ.ok){
-      const err = rQ?.error || "Erro ao enfileirar salvamento da etapa B";
-      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
-      alert(err);
-      return { ok:false };
-    }
+  if(!dataRef) return { ok:false, error:"dataReferencia obrigatória" };
+  if(!etapa || !"ABCDE".includes(etapa)) return { ok:false, error:"etapa inválida" };
 
-    // rQ.ticket opcional
-    setDebug("✅ Painel B enfileirado" + (rQ.ticket ? (". Ticket: " + rQ.ticket) : "."));
-    return { ok:true, queued:true, ticket: rQ.ticket || "" };
+  // ✅ Etapa E: precisa finalizar + retornar PDFs
+  if(etapa === "E"){
+    const payload = { dataReferencia: dataRef, etapa: "E", registros };
+    return await api("finalizarEtapaE", { payload }, { timeoutMs: 120000 });
   }
 
-  // ✅ Demais etapas: mantém salvamento direto (rápido)
-  const parts = chunkArray(registros || [], 500);
-  for (let i=0;i<parts.length;i++){
-    const r = await api("salvarEtapa", {
-      payload: { dataReferencia: dataRef, etapa: etapa, registros: parts[i] }
-    });
+  // ✅ A-D: enfileira e NÃO bloqueia a navegação (processa no gatilho 1min)
+  const CHUNK = 900; // evita payloads muito grandes
+  const tickets = [];
 
+  if(!registros.length){
+    // ainda assim enfileira (ex: limpar etapa)
+    const payload = { dataReferencia: dataRef, etapa, registros: [] };
+    const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
+    if(r?.ok && r.ticket) tickets.push(r.ticket);
+    return { ok: !!r?.ok, queued: true, tickets, raw: r };
+  }
+
+  for(let i=0;i<registros.length;i+=CHUNK){
+    const slice = registros.slice(i, i+CHUNK);
+    const payload = { dataReferencia: dataRef, etapa, registros: slice };
+    const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
     if(!r || !r.ok){
-      const err = r?.error || "Erro ao salvar etapa";
-      if(isAuthError_(err)) { logoutForcado(err); return { ok:false }; }
-      alert(err);
-      return { ok:false };
+      return r || { ok:false, error:"Falha ao enfileirar salvarEtapaAsync" };
     }
+    if(r.ticket) tickets.push(r.ticket);
   }
-  return { ok:true };
+
+  return { ok:true, queued:true, tickets };
 }
+
 
 async function enfileirarPosProcesso_(dataRef, etapa, registros){
   try{
