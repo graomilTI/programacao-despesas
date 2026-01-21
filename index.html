@@ -899,7 +899,137 @@ win.document.write(`
           setTimeout(function(){ try{ window.close(); }catch(e){} }, 1800);
         })();
       <\/script>
-    </body>
+    
+<!-- =========================
+     PATCH CLIENTES (OVERRIDE)
+     Corrige:
+     - Arrays corretos: cliPartGrao_ / cliPartCli_
+     - IDs corretos: cli_contato / cli_tel
+     - Envio de fotos em dataUrl
+     ========================= -->
+<script>
+// Arrays únicos usados pela UI
+window.cliPartGrao_ = window.cliPartGrao_ || [];
+window.cliPartCli_  = window.cliPartCli_  || [];
+
+function cliAddPart_(tipo){
+  const isGrao = tipo === 'grao';
+  const inp = document.getElementById(isGrao ? 'cli_partGrao_inp' : 'cli_partCli_inp');
+  const val = String(inp?.value||'').trim();
+  if(!val) return;
+  const arr = isGrao ? window.cliPartGrao_ : window.cliPartCli_;
+  const norm = s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+  if(!arr.some(x=>norm(x)===norm(val))) arr.push(val);
+  inp.value='';
+  cliRenderParts_();
+}
+function cliRemPart_(tipo, idx){
+  const arr = (tipo==='grao') ? window.cliPartGrao_ : window.cliPartCli_;
+  arr.splice(idx,1);
+  cliRenderParts_();
+}
+function cliRenderParts_(){
+  const g = document.getElementById('cli_partGrao_list');
+  const c = document.getElementById('cli_partCli_list');
+  if(g) g.innerHTML = window.cliPartGrao_.map((n,i)=>`
+    <div class="row" style="align-items:center;gap:8px">
+      <div class="col">• ${n}</div>
+      <div class="col" style="max-width:120px"><button class="light" type="button" onclick="cliRemPart_('grao',${i})">Remover</button></div>
+    </div>`).join('');
+  if(c) c.innerHTML = window.cliPartCli_.map((n,i)=>`
+    <div class="row" style="align-items:center;gap:8px">
+      <div class="col">• ${n}</div>
+      <div class="col" style="max-width:120px"><button class="light" type="button" onclick="cliRemPart_('cliente',${i})">Remover</button></div>
+    </div>`).join('');
+}
+
+function toggleOutrosCliente_(){
+  const ck = document.getElementById('cli_tipo_outros');
+  const w  = document.getElementById('cli_outros_wrap');
+  if(w) w.style.display = ck && ck.checked ? 'block' : 'none';
+}
+
+async function fileToDataUrl_(file){
+  return new Promise((resolve)=>{
+    try{
+      const fr = new FileReader();
+      fr.onload = ()=> resolve(String(fr.result||""));
+      fr.onerror = ()=> resolve("");
+      fr.readAsDataURL(file);
+    }catch(e){ resolve(""); }
+  });
+}
+
+// OVERRIDE: salvar clientes corretamente
+async function cliSalvarRegistro_(){
+  if(!window.token){ alert('Faça login primeiro.'); return; }
+
+  const cliente = (document.getElementById('cli_cliente')?.value || '').trim();
+  const data    = (document.getElementById('cli_data')?.value || '').trim();
+  if(!cliente){ alert('Informe o cliente.'); return; }
+  if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
+
+  const payload = {
+    cliente,
+    contato_nome: (document.getElementById('cli_contato')?.value || '').trim(),
+    telefone:     (document.getElementById('cli_tel')?.value || '').trim(),
+    data,
+    supervisao:   (window.ctx?.supervisao || ''),
+    coordenacao:  (window.ctx?.coordenacao || ''),
+    gestorNome:   (window.ctx?.nome || window.ctx?.gestorNome || ''),
+    interacoes: {
+      visita: !!document.getElementById('cli_tipo_visita')?.checked,
+      online: !!document.getElementById('cli_tipo_online')?.checked,
+      almoco: !!document.getElementById('cli_tipo_almoco')?.checked,
+      outros: !!document.getElementById('cli_tipo_outros')?.checked
+    },
+    outros_desc: (document.getElementById('cli_outros_desc')?.value || '').trim(),
+    participantes_grao:   window.cliPartGrao_.slice(),
+    participantes_cliente:window.cliPartCli_.slice(),
+    resumo:       (document.getElementById('cli_resumo')?.value || ''),
+    providencias: (document.getElementById('cli_providencias')?.value || '')
+  };
+
+  if(payload.interacoes.outros && !payload.outros_desc){
+    alert('Descreva o campo "Outros" (obrigatório quando selecionado).');
+    return;
+  }
+
+  const files = Array.from(document.getElementById('cli_fotos')?.files || []);
+  const photos = [];
+  for(const f of files.slice(0,6)){
+    const dataUrl = await fileToDataUrl_(f);
+    if(dataUrl) photos.push({ name:f.name, mimeType:f.type, dataUrl });
+  }
+  payload.fotos = photos;
+
+  const st = document.getElementById('cli_status');
+  if(st) st.innerText = 'Salvando...';
+  if(typeof setBusy === 'function') setBusy(true);
+
+  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
+
+  if(typeof setBusy === 'function') setBusy(false);
+  if(!r || !r.ok){
+    const err = r?.error || 'Falha ao salvar.';
+    if(st) st.innerText = err;
+    alert(err);
+    return;
+  }
+
+  if(st) st.innerText = 'Registro salvo ✅';
+
+  const pdfs = [];
+  const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
+  if(url) pdfs.push({ name: r.pdfName || 'Registro_Contato.pdf', pdfDownloadUrl: url, pdfViewUrl: r.pdfViewUrl || r.viewUrl || '' });
+  if(pdfs.length && typeof encRender_ === 'function'){
+    encRender_(data, pdfs);
+    if(typeof switchScreen === 'function') switchScreen('encerramento');
+  }
+}
+</script>
+
+</body>
   </html>
 `);
       win.document.close();
@@ -3810,6 +3940,135 @@ function admAplicarDataRapida_(){
   </svg>
 </a>
 
+
+<!-- =========================
+     PATCH CLIENTES (OVERRIDE)
+     Corrige:
+     - Arrays corretos: cliPartGrao_ / cliPartCli_
+     - IDs corretos: cli_contato / cli_tel
+     - Envio de fotos em dataUrl
+     ========================= -->
+<script>
+// Arrays únicos usados pela UI
+window.cliPartGrao_ = window.cliPartGrao_ || [];
+window.cliPartCli_  = window.cliPartCli_  || [];
+
+function cliAddPart_(tipo){
+  const isGrao = tipo === 'grao';
+  const inp = document.getElementById(isGrao ? 'cli_partGrao_inp' : 'cli_partCli_inp');
+  const val = String(inp?.value||'').trim();
+  if(!val) return;
+  const arr = isGrao ? window.cliPartGrao_ : window.cliPartCli_;
+  const norm = s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+  if(!arr.some(x=>norm(x)===norm(val))) arr.push(val);
+  inp.value='';
+  cliRenderParts_();
+}
+function cliRemPart_(tipo, idx){
+  const arr = (tipo==='grao') ? window.cliPartGrao_ : window.cliPartCli_;
+  arr.splice(idx,1);
+  cliRenderParts_();
+}
+function cliRenderParts_(){
+  const g = document.getElementById('cli_partGrao_list');
+  const c = document.getElementById('cli_partCli_list');
+  if(g) g.innerHTML = window.cliPartGrao_.map((n,i)=>`
+    <div class="row" style="align-items:center;gap:8px">
+      <div class="col">• ${n}</div>
+      <div class="col" style="max-width:120px"><button class="light" type="button" onclick="cliRemPart_('grao',${i})">Remover</button></div>
+    </div>`).join('');
+  if(c) c.innerHTML = window.cliPartCli_.map((n,i)=>`
+    <div class="row" style="align-items:center;gap:8px">
+      <div class="col">• ${n}</div>
+      <div class="col" style="max-width:120px"><button class="light" type="button" onclick="cliRemPart_('cliente',${i})">Remover</button></div>
+    </div>`).join('');
+}
+
+function toggleOutrosCliente_(){
+  const ck = document.getElementById('cli_tipo_outros');
+  const w  = document.getElementById('cli_outros_wrap');
+  if(w) w.style.display = ck && ck.checked ? 'block' : 'none';
+}
+
+async function fileToDataUrl_(file){
+  return new Promise((resolve)=>{
+    try{
+      const fr = new FileReader();
+      fr.onload = ()=> resolve(String(fr.result||""));
+      fr.onerror = ()=> resolve("");
+      fr.readAsDataURL(file);
+    }catch(e){ resolve(""); }
+  });
+}
+
+// OVERRIDE: salvar clientes corretamente
+async function cliSalvarRegistro_(){
+  if(!window.token){ alert('Faça login primeiro.'); return; }
+
+  const cliente = (document.getElementById('cli_cliente')?.value || '').trim();
+  const data    = (document.getElementById('cli_data')?.value || '').trim();
+  if(!cliente){ alert('Informe o cliente.'); return; }
+  if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
+
+  const payload = {
+    cliente,
+    contato_nome: (document.getElementById('cli_contato')?.value || '').trim(),
+    telefone:     (document.getElementById('cli_tel')?.value || '').trim(),
+    data,
+    supervisao:   (window.ctx?.supervisao || ''),
+    coordenacao:  (window.ctx?.coordenacao || ''),
+    gestorNome:   (window.ctx?.nome || window.ctx?.gestorNome || ''),
+    interacoes: {
+      visita: !!document.getElementById('cli_tipo_visita')?.checked,
+      online: !!document.getElementById('cli_tipo_online')?.checked,
+      almoco: !!document.getElementById('cli_tipo_almoco')?.checked,
+      outros: !!document.getElementById('cli_tipo_outros')?.checked
+    },
+    outros_desc: (document.getElementById('cli_outros_desc')?.value || '').trim(),
+    participantes_grao:   window.cliPartGrao_.slice(),
+    participantes_cliente:window.cliPartCli_.slice(),
+    resumo:       (document.getElementById('cli_resumo')?.value || ''),
+    providencias: (document.getElementById('cli_providencias')?.value || '')
+  };
+
+  if(payload.interacoes.outros && !payload.outros_desc){
+    alert('Descreva o campo "Outros" (obrigatório quando selecionado).');
+    return;
+  }
+
+  const files = Array.from(document.getElementById('cli_fotos')?.files || []);
+  const photos = [];
+  for(const f of files.slice(0,6)){
+    const dataUrl = await fileToDataUrl_(f);
+    if(dataUrl) photos.push({ name:f.name, mimeType:f.type, dataUrl });
+  }
+  payload.fotos = photos;
+
+  const st = document.getElementById('cli_status');
+  if(st) st.innerText = 'Salvando...';
+  if(typeof setBusy === 'function') setBusy(true);
+
+  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
+
+  if(typeof setBusy === 'function') setBusy(false);
+  if(!r || !r.ok){
+    const err = r?.error || 'Falha ao salvar.';
+    if(st) st.innerText = err;
+    alert(err);
+    return;
+  }
+
+  if(st) st.innerText = 'Registro salvo ✅';
+
+  const pdfs = [];
+  const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
+  if(url) pdfs.push({ name: r.pdfName || 'Registro_Contato.pdf', pdfDownloadUrl: url, pdfViewUrl: r.pdfViewUrl || r.viewUrl || '' });
+  if(pdfs.length && typeof encRender_ === 'function'){
+    encRender_(data, pdfs);
+    if(typeof switchScreen === 'function') switchScreen('encerramento');
+  }
+}
+</script>
+
 </body>
 </html>
-
