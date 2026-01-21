@@ -809,54 +809,62 @@ function openDownloadWindow_(){
 }
 
 function toDirectDownloadUrl_(url){
-  url = String(url||"");
+  // tenta transformar url do drive em download direto (uc?export=download&id=...)
+  if(!url) return "";
+  try{
+    const u = String(url);
+    // já vem pronto?
+    if(u.includes("uc?export=download&id=")) return u;
 
-  // file/d/<id>/view
-  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if(m1) return `https://drive.google.com/uc?export=download&id=${m1[1]}`;
+    // file/d/<id>/
+    let m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if(m && m[1]) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
 
-  // open?id=<id> ou ?id=<id>
-  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if(m2 && url.includes("drive.google.com")){
-    return `https://drive.google.com/uc?export=download&id=${m2[1]}`;
+    // open?id=<id>
+    m = u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if(m && m[1]) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+
+    return u;
+  }catch(_){
+    return String(url);
   }
+}
+function forceDownloadUrl_(url){ return toDirectDownloadUrl_(url); }
 
-  return url;
+function tryAutoDownloadPdf_(pdfInfo){
+  // pdfInfo: { pdfDownloadUrl, downloadUrl, pdfViewUrl, viewUrl }
+  const raw = (pdfInfo && (pdfInfo.pdfDownloadUrl || pdfInfo.downloadUrl || "")) ||
+              (pdfInfo && (pdfInfo.pdfViewUrl || pdfInfo.viewUrl || "")) ||
+              "";
+  const url = forceDownloadUrl_(raw);
+  if(!url) return false;
+
+  // tenta abrir em nova aba (mais confiável em browsers)
+  try{
+    const w = window.open(url, "_blank");
+    if(w) return true;
+  }catch(_){}
+
+  // fallback: cria <a download>
+  try{
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.download = "programacao.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  }catch(_){}
+
+  return false;
 }
 
-function sendToWindowOrDownload_(rawUrl, filename){
-    const url = forceDownloadUrl_(rawUrl);
-    const safeName = (filename || "programacao.pdf").replace(/[\\/:*?"<>|]+/g, "_");
-
-    // 1) tenta download "de verdade" via link (não depende de popup)
-    try{
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = safeName;
-      a.rel = "noopener";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>a.remove(), 50);
-    }catch(e){ /* ignore */ }
-
-    // 2) fallback: navega para a URL (força download quando o servidor manda Content-Disposition)
-    setTimeout(()=>{
-      try{ window.location.href = url; }catch(e){}
-    }, 100);
-
-    // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
-    setTimeout(()=>{
-      try{ window.open(url, "_blank", "noopener"); }catch(e){}
-    }, 200);
-  }
-
-  }
-
-  // 2) fallback: tenta no mesmo tab via iframe/<a>
-  return forceDownloadUrl_(url, fileName);
+function sendToWindowOrDownload_(pdfInfo){
+  // retorna true se conseguiu disparar algo no browser
+  return tryAutoDownloadPdf_(pdfInfo);
 }
-
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
@@ -1395,7 +1403,7 @@ async function baixarPDFProgramacao_(){
 
   const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   if(url){
-    sendToWindowOrDownload_(win, url, nome);
+    sendToWindowOrDownload_({ pdfDownloadUrl: url, pdfFileName: nome });
     setDebug("PDF gerado ✅ (abrindo download)");
     return { ok:true, pdf:true };
   }
