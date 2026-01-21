@@ -862,10 +862,10 @@ function sendToWindowOrDownload_(rawUrl, filename){
       setTimeout(()=>a.remove(), 50);
     }catch(e){ /* ignore */ }
 
-    // 2) fallback: navega para a URL (força download quando o servidor manda Content-Disposition)
+    // 2) fallback: abre em nova aba (sem navegar a página atual)
     setTimeout(()=>{
-      try{ window.location.href = url; }catch(e){}
-    }, 100);
+      try{ window.open(url, "_blank", "noopener"); }catch(e){}
+    }, 120);
 
     // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
     setTimeout(()=>{
@@ -2949,10 +2949,10 @@ async function adminCarregar_(){
 
       let res;
       if(isPeriodo){
-        res = await api_("adm_getHistoricoPeriodo", { dtIni: fmtDMY_(dIni), dtFim: fmtDMY_(dFim), conferente });
+        res = await api("adm_getHistoricoPeriodo", { dtIni: fmtDMY_(dIni), dtFim: fmtDMY_(dFim), conferente });
         renderAdminPeriodo_(res);
       }else{
-        res = await api_("adm_getResumoConferencia", { dataRef: fmtDMY_(dIni), conferente });
+        res = await api("adm_getResumoConferencia", { dataRef: fmtDMY_(dIni), conferente });
         renderAdminConferencia_(res);
       }
 
@@ -3601,7 +3601,7 @@ async function adminHistPeriodoCarregar_(){
   if(info) info.innerText = 'Carregando histórico...';
   if(box) box.innerHTML = '';
 
-  const r = await api_('adm_getHistoricoPeriodo', { token, dtIni, dtFim, conferente });
+  const r = await api('adm_getHistoricoPeriodo', { token, dtIni, dtFim, conferente });
   if(!r || !r.ok){
     if(info) info.innerText = (r && (r.error||r.msg)) ? (r.error||r.msg) : 'Falha ao carregar.';
     return;
