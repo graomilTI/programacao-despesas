@@ -752,6 +752,9 @@
 </div>
 
 <script>
+  // Compat global: evita ReferenceError em usos legados
+  var lastRow = 0;
+
 
   // FIX: evita ReferenceError caso algum trecho ainda use lastRow/lastCol
   window.lastRow = 0;
