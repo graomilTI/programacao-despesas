@@ -1121,8 +1121,13 @@ function normTxt_(s){
 }
 
 async function cliSalvarRegistro_(){
-  if(!token){ logoutForcado('Faça login primeiro.'); return; }
-  const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
+  // não apaga o formulário: apenas pede login
+  if(!token){
+    alert("Faça login primeiro.");
+    try{ show("loginCard"); hide("app"); }catch(_){ }
+    return;
+  }
+const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   const data = document.getElementById('cli_data')?.value?.trim() || '';
   if(!cliente){ alert('Informe o cliente.'); return; }
   if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
