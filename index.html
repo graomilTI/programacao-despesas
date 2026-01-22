@@ -3071,7 +3071,7 @@ async function carregar(){
 
   let res;
   try{
-    res = await api("carregarContexto", { dataRef: dStr });
+    res = await api("carregarContexto", { dataRef: dStr, dataReferencia: dStr });
   }catch(e){
     setBusy(false);
     console.error(e);
