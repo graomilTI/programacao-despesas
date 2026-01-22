@@ -3377,7 +3377,13 @@ let registros = [];
  setBusy(true);
 
 const r = await salvarEtapaPayload_(dataRef, step, registros);
-if(!r || !r.ok){ setBusy(false); return { ok:false }; }
+if(!r || !r.ok){
+  setBusy(false);
+  const msg = (r && (r.error || r.message)) ? (r.error || r.message) : "Falha ao salvar/enfileirar.";
+  alert("❌ " + msg);
+  setDebug("❌ Falha ao salvar: " + msg);
+  return { ok:false, error: msg };
+}
 
 // ✅ Se a etapa B foi ENFILEIRADA (async), não roda pós-processo/cópias aqui (evita duplicar e travar UI).
 if(step === "B" && r.queued){
@@ -3491,7 +3497,12 @@ function avancar(){
 
     if(r && typeof r.then === "function"){
       r.then(function(res){
-        if(!res || res.ok === false) return;
+        if(!res || res.ok === false){
+          const msg = (res && (res.error || res.message)) ? (res.error || res.message) : "Falha ao salvar/enfileirar.";
+          alert("❌ " + msg);
+          setDebug("❌ Falha ao salvar: " + msg);
+          return;
+        }
         _next_();
       }).catch(function(err){
         console.error(err);
@@ -3500,7 +3511,12 @@ function avancar(){
       return;
     }
 
-    if(!r || r.ok === false) return;
+    if(!r || r.ok === false){
+      const msg = (r && (r.error || r.message)) ? (r.error || r.message) : "Falha ao salvar/enfileirar.";
+      alert("❌ " + msg);
+      setDebug("❌ Falha ao salvar: " + msg);
+      return;
+    }
     _next_();
   }catch(err){
     console.error(err);
