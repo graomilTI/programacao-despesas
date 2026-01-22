@@ -841,34 +841,44 @@ function toDirectDownloadUrl_(url){
   return url;
 }
 
-function sendToWindowOrDownload_(rawUrl, filename){
-    const url = forceDownloadUrl_(rawUrl);
-    const safeName = (filename || "programacao.pdf").replace(/[\\/:*?"<>|]+/g, "_");
+function sendToWindowOrDownload_(winOrUrl, urlMaybe, filenameMaybe){
+  // ✅ Compat: aceita chamada antiga (win, url, name) e nova (url, name)
+  let win = null, url = "", filename = "";
 
-    // 1) tenta download "de verdade" via link (não depende de popup)
-    try{
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = safeName;
-      a.rel = "noopener";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>a.remove(), 50);
-    }catch(e){ /* ignore */ }
+  if(typeof winOrUrl === "string"){
+    url = winOrUrl;
+    filename = urlMaybe || "";
+  }else{
+    win = winOrUrl || null;
+    url = urlMaybe || "";
+    filename = filenameMaybe || "";
+  }
 
-    // 2) fallback: abre em nova aba (sem navegar a página atual)
-    setTimeout(()=>{
-      try{ window.open(url, "_blank", "noopener"); }catch(e){}
-    }, 120);
+  url = String(url||"").trim();
+  if(!url) return false;
 
-    // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
-    setTimeout(()=>{
-      try{ window.open(url, "_blank", "noopener"); }catch(e){}
-    }, 200);
+  const direct = toDirectDownloadUrl_(url);
+  const safeName = (filename || "programacao.pdf").replace(/[\/:*?"<>|]+/g, "_");
 
+  // 0) se abriu a janela de download, tenta usá-la (não derruba o app)
+  try{
+    if(win && !win.closed){
+      win.location.href = direct;
+      // fecha depois de um tempo (melhor UX)
+      setTimeout(()=>{ try{ win.close(); }catch(_e){} }, 2500);
+    }
+  }catch(_e){}
+
+  // 1) tenta disparar download sem navegar a página atual
+  try{
+    forceDownloadUrl_(direct, safeName); // já tenta iframe + <a> + window.open
+    return true;
+  }catch(_e){}
+
+  // 2) fallback: nova aba
+  try{ window.open(direct, "_blank", "noopener"); }catch(_e){}
+  return true;
 }
-
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
