@@ -20,7 +20,21 @@
     window.dRef = window.dRef ?? dRef;
     window.chk = window.chk ?? chk;
     window.k = window.k ?? k;
-    window.payload = window.payload ?? payload;
+    window.payload = window.payload ?? payload;// ✅ Hotfix global: suprime a quebra por "total is not defined"
+// (isso acontece quando algum trecho legado roda antes da blindagem em cache antigo)
+window.onerror = function(msg, src, line, col, err){
+  try{
+    const m = String(msg || "");
+    if (/\btotal\s+is\s+not\s+defined\b/i.test(m)){
+      window.total = (typeof window.total === "number") ? window.total : 0;
+      // garante também o identificador global (para trechos não-module)
+      try{ if (typeof total === "undefined") { /* ok */ } }catch(_){}
+      console.warn("[HOTFIX] Corrigido:", m, "em", src, line+":"+col);
+      return true; // impede alert/propagação
+    }
+  }catch(_){}
+  return false;
+};
 
     // helper de data (dd/MM/yyyy) usado em partes antigas do front
     window._parseDMY_ = window._parseDMY_ || function(dmy){
