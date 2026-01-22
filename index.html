@@ -1615,6 +1615,8 @@ async function login(){
 
   await carregarDataPadrao();
 }
+window.login = login;
+
 
 async function carregarDataPadrao(){
   const res = await api("getDataPadrao", {});
