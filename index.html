@@ -1241,6 +1241,24 @@ function isFriday_(dataRef){
   return d.getDay() === 5;
 }
 
+// ✅ Regra de data por horário: até 18h = hoje | depois = amanhã
+function getDataPorHorario_(){
+  const now = new Date();
+  const limite = new Date(now);
+  limite.setHours(18,0,0,0);
+  const d = new Date(now);
+  if(now > limite) d.setDate(d.getDate()+1);
+  d.setHours(0,0,0,0);
+  return formatDMY_(d);
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  const el = document.getElementById("dataRef");
+  if(el && !String(el.value||"").trim()){
+    el.value = getDataPorHorario_();
+  }
+});
+
 function isAuthError_(text){
   const t = String(text||"").toLowerCase();
   return t.includes("sessão expirada") || t.includes("sessao expirada") || t.includes("faça login") || t.includes("faca login");
@@ -1298,7 +1316,8 @@ const title = document.getElementById("loginTitle");
 
 /** ✅ API */
 async function api(act, args, opts){
-  const payload = { action: act, ...(args||{}) };
+  // ✅ Envio compatível com routers que usam body.payload
+  const payload = { action: act, payload: (args||{}) , ...(args||{}) };
 
   if(token && !payload.token && act !== "loginPIN" && act !== "loginAdminCPF"){
     payload.token = token;
@@ -2974,7 +2993,8 @@ async function adminCarregar_(){
  * ✅ CARREGAR CONTEXTO
  * ====================== */
 async function carregar(){
-  const dStr = document.getElementById("dataRef").value.trim();
+  const dStr = (document.getElementById("dataRef")?.value || "").trim() || getDataPorHorario_();
+  if(document.getElementById("dataRef")) document.getElementById("dataRef").value = dStr;
   if(!parseDMY_(dStr)){
     alert("❌ Data inválida. Use dd/mm/aaaa.");
     return;
