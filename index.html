@@ -44,6 +44,17 @@
       }catch(_){}
     });
   </script>
+<script>
+// Captura erros com stack (não trava a tela)
+window.addEventListener('error', function(ev){
+  try{
+    console.error('ERRO JS:', ev.message, ev.filename, ev.lineno+':'+ev.colno, ev.error && ev.error.stack);
+    const box=document.getElementById('debugError');
+    if(box){box.style.display='block'; box.textContent='ERRO: '+ev.message+'\n'+(ev.filename||'')+' @ '+(ev.lineno||'?')+':'+(ev.colno||'?')+'\n'+(ev.error&&ev.error.stack?ev.error.stack:'');}
+  }catch(_){ }
+}, true);
+</script>
+
 
 <script>
 /* ===== BOOT (ANTES DE TUDO) =====
@@ -509,6 +520,8 @@ if ('serviceWorker' in navigator) {
 </style>
 </head>
 <body>
+<pre id="debugError" style="display:none;position:fixed;bottom:10px;left:10px;right:10px;max-height:45vh;overflow:auto;background:#111;color:#0f0;padding:10px;border-radius:10px;z-index:99999;white-space:pre-wrap;font-size:12px;"></pre>
+
 <div class="wrap">
 <!-- LOGIN -->
 <div class="card" id="loginCard">
