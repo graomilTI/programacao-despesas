@@ -1315,16 +1315,28 @@ const title = document.getElementById("loginTitle");
 }
 
 /** ✅ API */
-async function api(action, payload = {}, opts = {}){
-  // ✅ Body padrão (Worker → GAS)
-  const cleanAction = String(action || "").replace(/\u200B/g,"").trim();
-  const body = {
-    action: cleanAction,
-    payload: (payload && typeof payload === "object") ? payload : {}
-  };
+async /** ✅ API (contrato estável: {action, payload, token}) */
+async function api(act, args = {}, opts = {}){
+  // Normaliza action (evita caracteres invisíveis / espaços)
+  const action = String(act || "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
 
-  // token automático (exceto login)
-  if (token && !body.payload.token && cleanAction !== "loginPIN" && cleanAction !== "loginAdminCPF"){
+  const payloadObj = (args && typeof args === "object") ? args : {};
+
+  // Body padrão: action + payload (SEM espalhar args no topo)
+  const body = { action, payload: payloadObj };
+
+  // Compat: alguns handlers leem body.pin/body.cpf direto
+  if (payloadObj && typeof payloadObj === "object") {
+    if (payloadObj.pin != null && body.pin == null) body.pin = payloadObj.pin;
+    if (payloadObj.cpf != null && body.cpf == null) body.cpf = payloadObj.cpf;
+    if (payloadObj.dataRef != null && body.dataRef == null) body.dataRef = payloadObj.dataRef;
+    if (payloadObj.dataReferencia != null && body.dataReferencia == null) body.dataReferencia = payloadObj.dataReferencia;
+  }
+
+  // Injeta token automaticamente (exceto no login)
+  if(token && !body.token && action !== "loginPIN" && action !== "loginAdminCPF"){
     body.token = token;
   }
 
@@ -1336,12 +1348,14 @@ async function api(action, payload = {}, opts = {}){
   try{
     const res = await fetch(API_BASE, {
       method:"POST",
+      // IMPORTANTE: seu Worker encaminha "cru" e o GAS lê e.postData.contents
       headers:{ "Content-Type":"text/plain;charset=utf-8" },
       body: JSON.stringify(body),
       signal: controller.signal
     });
     txt = await res.text();
   }catch(e){
+    clearTimeout(t);
     const msg = (String(e).includes("AbortError"))
       ? "Tempo excedido (servidor demorou). Tente novamente."
       : "Falha de rede / CORS";
