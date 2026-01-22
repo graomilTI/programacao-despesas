@@ -1,7 +1,28 @@
 <!DOCTYPE html>
 
 <html lang="pt-BR">
-<head><script>(function(){
+<head>
+<script>
+/* ===== Boot globals (blindagem) ===== */
+var lastRow = (typeof lastRow !== "undefined") ? lastRow : 0;
+var total   = (typeof total   !== "undefined") ? total   : 0;
+
+/* Regra de data padrão:
+   - até 18:00 -> hoje
+   - após 18:00 -> amanhã
+*/
+function getDataPadrao_(){
+  const agora = new Date();
+  const limite = new Date();
+  limite.setHours(18,0,0,0);
+  if(agora >= limite) agora.setDate(agora.getDate()+1);
+  const dd = String(agora.getDate()).padStart(2,"0");
+  const mm = String(agora.getMonth()+1).padStart(2,"0");
+  const yy = agora.getFullYear();
+  return dd + "/" + mm + "/" + yy;
+}
+</script>
+<script>(function(){
   // 🔥 Evita cache antigo (GitHub Pages + Service Worker de versões anteriores)
   try{
     if('serviceWorker' in navigator){
@@ -1293,28 +1314,39 @@ const title = document.getElementById("loginTitle");
 
 /** ✅ API */
 async function api(act, args, opts){
-  const payload = { action: act, ...(args||{}) };
+  // Contrato FIXO com o backend (Worker/GAS):
+  // { action, payload, token }  + compat (pin/cpf no topo)
+  const payloadObj = (args && typeof args === "object") ? args : {};
+  const body = { action: String(act||"").trim(), payload: payloadObj };
 
-  if(token && !payload.token && act !== "loginPIN" && act !== "loginAdminCPF"){
-    payload.token = token;
+  // compat: alguns handlers leem pin/cpf no topo
+  if(body.action === "loginPIN" || body.action === "login_pin"){
+    body.pin = String(payloadObj.pin || "").trim();
+  }
+  if(body.action === "loginAdminCPF" || body.action === "login_admin_cpf"){
+    body.cpf = String(payloadObj.cpf || "").trim();
   }
 
-  const timeoutMs = Number(opts?.timeoutMs || 20000); // padrão 20s
+  if(token && !body.token && body.action !== "loginPIN" && body.action !== "login_pin" && body.action !== "loginAdminCPF"){
+    body.token = token;
+  }
+
+  const timeoutMs = Number(opts?.timeoutMs || 20000);
   const controller = new AbortController();
   const t = setTimeout(()=> controller.abort(), timeoutMs);
 
-  let txt = "";
+  let raw = "";
   try{
     const res = await fetch(API_BASE, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json;charset=utf-8" },
-      body: JSON.stringify(payload),
+      method: "POST",
+      headers: { "Content-Type":"text/plain;charset=utf-8" }, // combina com Worker/GAS
+      body: JSON.stringify(body),
       signal: controller.signal
     });
-    txt = await res.text();
+    raw = await res.text();
   }catch(e){
     clearTimeout(t);
-    const msg = (String(e).includes("AbortError"))
+    const msg = String(e).includes("AbortError")
       ? "Tempo excedido (servidor demorou). Tente novamente."
       : "Falha de rede / CORS";
     return { ok:false, error: msg, raw:String(e) };
@@ -1322,8 +1354,8 @@ async function api(act, args, opts){
     clearTimeout(t);
   }
 
-  try { return JSON.parse(txt); }
-  catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw:txt }; }
+  try { return JSON.parse(raw); }
+  catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw }; }
 }
 
 
@@ -2969,7 +3001,7 @@ async function adminCarregar_(){
  * ✅ CARREGAR CONTEXTO
  * ====================== */
 async function carregar(){
-  const dStr = document.getElementById("dataRef").value.trim();
+  const dStr = (document.getElementById("dataRef")?.value || "").trim() || getDataPadrao_();
   if(!parseDMY_(dStr)){
     alert("❌ Data inválida. Use dd/mm/aaaa.");
     return;
