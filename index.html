@@ -3481,15 +3481,7 @@ function avancar(){
     const r = salvarEtapaAtual_();
 
     function _next_(){
-      const namesAll = Object.keys(form || {});
-      if(step === "A"){
-        const lista = namesAll.filter(function(n){
-          try{ return PROSSEGUIR((form[n]||{}).disponibilidade_status); }
-          catch(_){ return false; }
-        });
-        if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK)."); return; }
-        setStep("B"); return;
-      }
+      if(step === "A"){ setStep("B"); return; }
       if(step === "B"){ setStep("C"); return; }
       if(step === "C"){ setStep("D"); return; }
       if(step === "D"){ setStep("E"); return; }
@@ -3499,6 +3491,11 @@ function avancar(){
       r.then(function(res){
         if(!res || res.ok === false){
           const msg = (res && (res.error || res.message)) ? (res.error || res.message) : "Falha ao salvar/enfileirar.";
+          if(/etapa obrigat/i.test(String(msg||""))){
+            setDebug("ℹ️ Etapa opcional: ignorando validação 'etapa obrigatória'.");
+            _next_();
+            return;
+          }
           alert("❌ " + msg);
           setDebug("❌ Falha ao salvar: " + msg);
           return;
@@ -3513,6 +3510,11 @@ function avancar(){
 
     if(!r || r.ok === false){
       const msg = (r && (r.error || r.message)) ? (r.error || r.message) : "Falha ao salvar/enfileirar.";
+      if(/etapa obrigat/i.test(String(msg||""))){
+        setDebug("ℹ️ Etapa opcional: ignorando validação 'etapa obrigatória'.");
+        _next_();
+        return;
+      }
       alert("❌ " + msg);
       setDebug("❌ Falha ao salvar: " + msg);
       return;
