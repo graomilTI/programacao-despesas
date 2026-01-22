@@ -5,8 +5,8 @@
 <script>
 /* ===== Boot globals (blindagem) ===== */
 var lastRow = (typeof lastRow !== "undefined") ? lastRow : 0;
-var total   = (typeof total   !== "undefined") ? total   : 0;
-
+window.total = (typeof window.total === "number") ? window.total : 0;
+var total = window.total;
 /* Regra de data padrão:
    - até 18:00 -> hoje
    - após 18:00 -> amanhã
