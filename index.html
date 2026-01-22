@@ -4317,3 +4317,34 @@ function boolToSimNao_(checked){ return checked ? "SIM" : "NAO"; }
 })();
 </script>
 <!-- ================= FIM PATCH FINAL ================= -->
+
+<!-- ===== PATCH DESPESAS FINAL ===== -->
+<script>
+/* Garantir leitura correta das checkboxes no Painel B (Alimentação) */
+function coletarAlimentacaoLinha_(row){
+  const get = (q)=>row.querySelector(q);
+  return {
+    cafe: get('[data-campo="cafe"]')?.checked ? "SIM" : "NAO",
+    almoco: get('[data-campo="almoco"]')?.checked ? "SIM" : "NAO",
+    janta: get('[data-campo="janta"]')?.checked ? "SIM" : "NAO"
+  };
+}
+
+/* Override seguro do payload de despesas */
+(function(){
+  const _old = window.montarPayloadDespesas;
+  window.montarPayloadDespesas = function(etapa){
+    const payload = _old ? _old(etapa) : { itens: [] };
+    if(payload && Array.isArray(payload.itens)){
+      payload.itens = payload.itens.map(it=>{
+        if(typeof it.cafe === "boolean") it.cafe = it.cafe ? "SIM":"NAO";
+        if(typeof it.almoco === "boolean") it.almoco = it.almoco ? "SIM":"NAO";
+        if(typeof it.janta === "boolean") it.janta = it.janta ? "SIM":"NAO";
+        return it;
+      });
+    }
+    return payload;
+  };
+})();
+</script>
+<!-- ===== FIM PATCH DESPESAS FINAL ===== -->
