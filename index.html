@@ -1410,9 +1410,16 @@ const title = document.getElementById("loginTitle");
 
 /** ✅ API */
 async function api(act, args, opts){
-  // Contrato FIXO com o backend (Worker/GAS):
-  // { action, payload, token }  + compat (pin/cpf no topo)
-  const payloadObj = (args && typeof args === "object") ? args : {};
+  // Contrato com backend (Worker/GAS):
+  // Enviamos SEMPRE { action, payload, token }.
+  // ✅ Blindagem: se você passar {payload:{...}} (double wrap), nós "desembrulhamos".
+  const payloadObjRaw = (args && typeof args === "object") ? args : {};
+  const payloadObj = (payloadObjRaw && typeof payloadObjRaw === "object"
+    && Object.keys(payloadObjRaw).length === 1
+    && Object.prototype.hasOwnProperty.call(payloadObjRaw, "payload"))
+      ? payloadObjRaw.payload
+      : payloadObjRaw;
+
   const body = { action: String(act||"").trim(), payload: payloadObj };
 
   // compat: alguns handlers leem pin/cpf no topo
