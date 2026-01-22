@@ -1841,7 +1841,7 @@ async function enfileirarPosProcesso_(dataRef, etapa, registros){
 
 /** ✅ Atualiza bloqueio/visibilidade só de 1 colaborador (mais rápido) */
 function syncBlockedRowsByNome_(nome){
-  const ok = PROSSEGUIR((form[nome]?.disponibilidade_status ?? "OK"));
+  const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
 
   ["B","C","D","E"].forEach(k=>{
     const row = domIndex[k].get(nome);
@@ -3181,14 +3181,6 @@ async function carregar(){
     };
   });
 
-  // ✅ Blindagem: se algum registro veio sem status, assume OK
-  Object.keys(form).forEach(n=>{
-    if(!form[n]) return;
-    const st = String(form[n].disponibilidade_status ?? "").trim();
-    if(!st) form[n].disponibilidade_status = "OK";
-  });
-
-
   orderedNames = computeOrderedNames_();
   buildAllStepsDom_();
 
@@ -3450,34 +3442,67 @@ if(step === "B" && isFriday_(dataRef)){
   return { ok:true };
 }
 
-async async function avancar(){
+function avancar(){
   try{
+    // Etapa final (E): salva + gera PDF (pode ser async)
+    if(step === "E"){
+      const r0 = finalizarEtapaEComPdf_();
 
-  if(step === "E"){
-    const ok = await finalizarEtapaEComPdf_();
-    if(!ok || !ok.ok) return;
+      if(r0 && typeof r0.then === "function"){
+        r0.then(function(ok){
+          if(!ok || ok.ok === false) return;
+          alert("✅ Programação finalizada! PDF gerado.");
+          setTimeout(function(){
+            logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação.");
+          }, 700);
+        }).catch(function(err){
+          console.error(err);
+          alert((err && err.message) ? err.message : String(err || "Erro ao finalizar."));
+        });
+      }else{
+        const ok = r0;
+        if(!ok || ok.ok === false) return;
+        alert("✅ Programação finalizada! PDF gerado.");
+        setTimeout(function(){
+          logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação.");
+        }, 700);
+      }
+      return;
+    }
 
-    alert("✅ Programação finalizada! PDF gerado.");
-    setTimeout(() => logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação."), 700);
-    return;
-  }
+    const r = salvarEtapaAtual_();
 
-  const res = await salvarEtapaAtual_();
-  if(!res || !res.ok) return;
+    function _next_(){
+      const namesAll = Object.keys(form || {});
+      if(step === "A"){
+        const lista = namesAll.filter(function(n){
+          try{ return PROSSEGUIR((form[n]||{}).disponibilidade_status); }
+          catch(_){ return false; }
+        });
+        if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK)."); return; }
+        setStep("B"); return;
+      }
+      if(step === "B"){ setStep("C"); return; }
+      if(step === "C"){ setStep("D"); return; }
+      if(step === "D"){ setStep("E"); return; }
+    }
 
-  const namesAll = Object.keys(form);
-  if(step==="A"){
-    const lista = namesAll.filter(n => PROSSEGUIR((form[n]?.disponibilidade_status ?? "OK")));
-    if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK)."); return; }
-    setStep("B"); return;
-  }
-  if(step==="B"){ setStep("C"); return; }
-  if(step==="C"){ setStep("D"); return; }
-  if(step==="D"){ setStep("E"); return; }
+    if(r && typeof r.then === "function"){
+      r.then(function(res){
+        if(!res || res.ok === false) return;
+        _next_();
+      }).catch(function(err){
+        console.error(err);
+        alert((err && err.message) ? err.message : String(err || "Erro ao salvar."));
+      });
+      return;
+    }
 
-  }catch(e){
-    console.error('avancar() falhou:', e);
-    alert('Falha ao avançar: ' + (e && e.message ? e.message : e));
+    if(!r || r.ok === false) return;
+    _next_();
+  }catch(err){
+    console.error(err);
+    alert((err && err.message) ? err.message : String(err || "Erro ao avançar."));
   }
 }
 
