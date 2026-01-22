@@ -765,6 +765,11 @@ let step = "A";
 let form = {};
 let busy = false;
 
+// ✅ Blindagem: alguns trechos antigos usavam "total" sem declarar.
+// Mantém compatibilidade e evita ReferenceError.
+var total = 0;
+
+
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 
 /** ✅ FAST MAPS */
@@ -841,44 +846,34 @@ function toDirectDownloadUrl_(url){
   return url;
 }
 
-function sendToWindowOrDownload_(winOrUrl, urlMaybe, filenameMaybe){
-  // ✅ Compat: aceita chamada antiga (win, url, name) e nova (url, name)
-  let win = null, url = "", filename = "";
+function sendToWindowOrDownload_(rawUrl, filename){
+    const url = forceDownloadUrl_(rawUrl);
+    const safeName = (filename || "programacao.pdf").replace(/[\\/:*?"<>|]+/g, "_");
 
-  if(typeof winOrUrl === "string"){
-    url = winOrUrl;
-    filename = urlMaybe || "";
-  }else{
-    win = winOrUrl || null;
-    url = urlMaybe || "";
-    filename = filenameMaybe || "";
-  }
+    // 1) tenta download "de verdade" via link (não depende de popup)
+    try{
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeName;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>a.remove(), 50);
+    }catch(e){ /* ignore */ }
 
-  url = String(url||"").trim();
-  if(!url) return false;
+    // 2) fallback: abre em nova aba (sem navegar a página atual)
+    setTimeout(()=>{
+      try{ window.open(url, "_blank", "noopener"); }catch(e){}
+    }, 120);
 
-  const direct = toDirectDownloadUrl_(url);
-  const safeName = (filename || "programacao.pdf").replace(/[\/:*?"<>|]+/g, "_");
+    // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
+    setTimeout(()=>{
+      try{ window.open(url, "_blank", "noopener"); }catch(e){}
+    }, 200);
 
-  // 0) se abriu a janela de download, tenta usá-la (não derruba o app)
-  try{
-    if(win && !win.closed){
-      win.location.href = direct;
-      // fecha depois de um tempo (melhor UX)
-      setTimeout(()=>{ try{ win.close(); }catch(_e){} }, 2500);
-    }
-  }catch(_e){}
-
-  // 1) tenta disparar download sem navegar a página atual
-  try{
-    forceDownloadUrl_(direct, safeName); // já tenta iframe + <a> + window.open
-    return true;
-  }catch(_e){}
-
-  // 2) fallback: nova aba
-  try{ window.open(direct, "_blank", "noopener"); }catch(_e){}
-  return true;
 }
+
 
 function setDebug(msg){ document.getElementById("debugInfo").innerText = msg || ""; }
 function show(id){ document.getElementById(id).style.display="block"; }
@@ -1241,24 +1236,6 @@ function isFriday_(dataRef){
   return d.getDay() === 5;
 }
 
-// ✅ Regra de data por horário: até 18h = hoje | depois = amanhã
-function getDataPorHorario_(){
-  const now = new Date();
-  const limite = new Date(now);
-  limite.setHours(18,0,0,0);
-  const d = new Date(now);
-  if(now > limite) d.setDate(d.getDate()+1);
-  d.setHours(0,0,0,0);
-  return formatDMY_(d);
-}
-
-document.addEventListener("DOMContentLoaded", ()=>{
-  const el = document.getElementById("dataRef");
-  if(el && !String(el.value||"").trim()){
-    el.value = getDataPorHorario_();
-  }
-});
-
 function isAuthError_(text){
   const t = String(text||"").toLowerCase();
   return t.includes("sessão expirada") || t.includes("sessao expirada") || t.includes("faça login") || t.includes("faca login");
@@ -1315,29 +1292,11 @@ const title = document.getElementById("loginTitle");
 }
 
 /** ✅ API */
-async /** ✅ API (contrato estável: {action, payload, token}) */
-async function api(act, args = {}, opts = {}){
-  // Normaliza action (evita caracteres invisíveis / espaços)
-  const action = String(act || "")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .trim();
+async function api(act, args, opts){
+  const payload = { action: act, ...(args||{}) };
 
-  const payloadObj = (args && typeof args === "object") ? args : {};
-
-  // Body padrão: action + payload (SEM espalhar args no topo)
-  const body = { action, payload: payloadObj };
-
-  // Compat: alguns handlers leem body.pin/body.cpf direto
-  if (payloadObj && typeof payloadObj === "object") {
-    if (payloadObj.pin != null && body.pin == null) body.pin = payloadObj.pin;
-    if (payloadObj.cpf != null && body.cpf == null) body.cpf = payloadObj.cpf;
-    if (payloadObj.dataRef != null && body.dataRef == null) body.dataRef = payloadObj.dataRef;
-    if (payloadObj.dataReferencia != null && body.dataReferencia == null) body.dataReferencia = payloadObj.dataReferencia;
-  }
-
-  // Injeta token automaticamente (exceto no login)
-  if(token && !body.token && action !== "loginPIN" && action !== "loginAdminCPF"){
-    body.token = token;
+  if(token && !payload.token && act !== "loginPIN" && act !== "loginAdminCPF"){
+    payload.token = token;
   }
 
   const timeoutMs = Number(opts?.timeoutMs || 20000); // padrão 20s
@@ -1348,9 +1307,8 @@ async function api(act, args = {}, opts = {}){
   try{
     const res = await fetch(API_BASE, {
       method:"POST",
-      // IMPORTANTE: seu Worker encaminha "cru" e o GAS lê e.postData.contents
-      headers:{ "Content-Type":"text/plain;charset=utf-8" },
-      body: JSON.stringify(body),
+      headers:{ "Content-Type":"application/json;charset=utf-8" },
+      body: JSON.stringify(payload),
       signal: controller.signal
     });
     txt = await res.text();
@@ -3011,8 +2969,7 @@ async function adminCarregar_(){
  * ✅ CARREGAR CONTEXTO
  * ====================== */
 async function carregar(){
-  const dStr = (document.getElementById("dataRef")?.value || "").trim() || getDataPorHorario_();
-  if(document.getElementById("dataRef")) document.getElementById("dataRef").value = dStr;
+  const dStr = document.getElementById("dataRef").value.trim();
   if(!parseDMY_(dStr)){
     alert("❌ Data inválida. Use dd/mm/aaaa.");
     return;
