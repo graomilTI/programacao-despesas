@@ -1841,7 +1841,7 @@ async function enfileirarPosProcesso_(dataRef, etapa, registros){
 
 /** ✅ Atualiza bloqueio/visibilidade só de 1 colaborador (mais rápido) */
 function syncBlockedRowsByNome_(nome){
-  const ok = PROSSEGUIR(form[nome]?.disponibilidade_status);
+  const ok = PROSSEGUIR((form[nome]?.disponibilidade_status ?? "OK"));
 
   ["B","C","D","E"].forEach(k=>{
     const row = domIndex[k].get(nome);
@@ -3181,6 +3181,14 @@ async function carregar(){
     };
   });
 
+  // ✅ Blindagem: se algum registro veio sem status, assume OK
+  Object.keys(form).forEach(n=>{
+    if(!form[n]) return;
+    const st = String(form[n].disponibilidade_status ?? "").trim();
+    if(!st) form[n].disponibilidade_status = "OK";
+  });
+
+
   orderedNames = computeOrderedNames_();
   buildAllStepsDom_();
 
@@ -3457,7 +3465,7 @@ async function avancar(){
 
   const namesAll = Object.keys(form);
   if(step==="A"){
-    const lista = namesAll.filter(n => PROSSEGUIR(form[n].disponibilidade_status));
+    const lista = namesAll.filter(n => PROSSEGUIR((form[n]?.disponibilidade_status ?? "OK")));
     if(!lista.length){ alert("Nenhum colaborador para seguir (somente OK)."); return; }
     setStep("B"); return;
   }
