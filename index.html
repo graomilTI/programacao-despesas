@@ -2,6 +2,37 @@
 
 <html lang="pt-BR">
 <head>
+<script>
+/* ===== BOOT (ANTES DE TUDO) =====
+   Evita ReferenceError em variáveis legadas (total, lastRow, payload, etc)
+*/
+(function(){
+  var g = window;
+  if (typeof g.total === "undefined") g.total = 0;
+  if (typeof g.lastRow === "undefined") g.lastRow = 0;
+  if (typeof g.ativos === "undefined") g.ativos = [];
+  if (typeof g.payload === "undefined") g.payload = null;
+  if (typeof g.dRef === "undefined") g.dRef = "";
+  if (typeof g.chk === "undefined") g.chk = false;
+  if (typeof g.k === "undefined") g.k = "";
+  if (typeof g.v === "undefined") g.v = null;
+
+  // Parser dd/MM/yyyy -> Date (ou null)
+  if (typeof g._parseDMY_ !== "function") {
+    g._parseDMY_ = function(s){
+      s = String(s || "").trim();
+      if (!s) return null;
+      var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!m) return null;
+      var dd = +m[1], mm = +m[2], yy = +m[3];
+      var d = new Date(yy, mm-1, dd);
+      if (isNaN(d.getTime())) return null;
+      return d;
+    };
+  }
+})();
+</script>
+
 <!-- ===== BOOTSTRAP GLOBAL (blindagem) ===== -->
 <script>
 /**
