@@ -3,60 +3,83 @@
 <html lang="pt-BR">
 <head>
 
-  <!-- ✅ BLINDAGEM GLOBAL (evita ReferenceError: total/lastRow/etc) -->
+  <!-- ✅ BOOTSTRAP ÚNICO (blindagem + estado global) -->
   <script>
-    // Top-level (não module) → cria identificadores globais
-    var total = 0;
-    var lastRow = 0;
-    var ativos = [];
-    var dRef = "";
-    var chk = null;
-    var k = "";
-    var payload = {};
-    // espelha no window para usos via window.*
-    window.total = window.total ?? total;
-    window.lastRow = window.lastRow ?? lastRow;
-    window.ativos = window.ativos ?? ativos;
-    window.dRef = window.dRef ?? dRef;
-    window.chk = window.chk ?? chk;
-    window.k = window.k ?? k;
-    window.payload = window.payload ?? payload;// ✅ Hotfix global: suprime a quebra por "total is not defined"
-// (isso acontece quando algum trecho legado roda antes da blindagem em cache antigo)
-window.onerror = function(msg, src, line, col, err){
-  try{
-    const m = String(msg || "");
-    if (/\btotal\s+is\s+not\s+defined\b/i.test(m)){
-      window.total = (typeof window.total === "number") ? window.total : 0;
-      // garante também o identificador global (para trechos não-module)
-      try{ if (typeof total === "undefined") { /* ok */ } }catch(_){}
-      console.warn("[HOTFIX] Corrigido:", m, "em", src, line+":"+col);
-      return true; // impede alert/propagação
-    }
-  }catch(_){}
-  return false;
-};
-
-    // helper de data (dd/MM/yyyy) usado em partes antigas do front
-    window._parseDMY_ = window._parseDMY_ || function(dmy){
-      const s = String(dmy||"").trim();
-      const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      if(!m) return null;
-      const dd=+m[1], mm=+m[2]-1, yy=+m[3];
-      const dt = new Date(yy,mm,dd);
-      return isNaN(dt.getTime())? null : dt;
+  (function(){
+    // Estado central (evita variáveis soltas e "is not defined")
+    const state = window.__APP_STATE__ || {
+      total: 0,
+      lastRow: 0,
+      ativos: [],
+      payload: null,
+      dRef: "",
+      chk: false,
+      k: "",
+      v: null,
     };
+    window.__APP_STATE__ = state;
 
-    // Captura erros globais para não “matar” a tela inteira
-    window.addEventListener("error", function(ev){
+    // Define aliases legados (total, lastRow, etc) como getters/setters.
+    // Assim, qualquer trecho antigo continua funcionando sem quebrar.
+    function bindLegacy(name, def){
       try{
-        const msg = (ev && ev.message) ? ev.message : "Erro desconhecido";
-        // evita loop de alert
-        if(!window.__lastAlertMsg || window.__lastAlertMsg !== msg){
-          window.__lastAlertMsg = msg;
-          console.error("[ERRO GLOBAL]", ev.error || ev);
+        if (!Object.prototype.hasOwnProperty.call(state, name)) state[name] = def;
+        // Se já existe propriedade global (de versões antigas), tenta migrar para o state
+        if (Object.prototype.hasOwnProperty.call(window, name)) {
+          const cur = window[name];
+          if (cur !== undefined && cur !== null) state[name] = cur;
         }
       }catch(_){}
-    });
+
+      try{
+        Object.defineProperty(window, name, {
+          configurable: true,
+          enumerable: true,
+          get: function(){ return state[name]; },
+          set: function(val){ state[name] = val; }
+        });
+      }catch(_){
+        // fallback (em ambientes que bloqueiam defineProperty no window)
+        window[name] = state[name];
+      }
+    }
+
+    bindLegacy("total", 0);
+    bindLegacy("lastRow", 0);
+    bindLegacy("ativos", []);
+    bindLegacy("payload", null);
+    bindLegacy("dRef", "");
+    bindLegacy("chk", false);
+    bindLegacy("k", "");
+    bindLegacy("v", null);
+
+    // Parser dd/MM/yyyy -> Date (ou null)
+    if (typeof window._parseDMY_ !== "function") {
+      window._parseDMY_ = function(s){
+        s = String(s || "").trim();
+        if (!s) return null;
+        var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!m) return null;
+        var dd = +m[1], mm = +m[2], yy = +m[3];
+        var d = new Date(yy, mm-1, dd, 12, 0, 0, 0);
+        return isNaN(d.getTime()) ? null : d;
+      };
+    }
+
+    // Data padrão: até 18:00 -> hoje | após 18:00 -> amanhã
+    if (typeof window.getDataPadrao_ !== "function") {
+      window.getDataPadrao_ = function(){
+        const agora = new Date();
+        const limite = new Date();
+        limite.setHours(18,0,0,0);
+        if (agora >= limite) agora.setDate(agora.getDate()+1);
+        const dd = String(agora.getDate()).padStart(2,"0");
+        const mm = String(agora.getMonth()+1).padStart(2,"0");
+        const yy = agora.getFullYear();
+        return dd + "/" + mm + "/" + yy;
+      };
+    }
+  })();
   </script>
 <script>
 // Captura erros com stack (não trava a tela)
@@ -70,84 +93,12 @@ window.addEventListener('error', function(ev){
 </script>
 
 
-<script>
-/* ===== BOOT (ANTES DE TUDO) =====
-   Evita ReferenceError em variáveis legadas (total, lastRow, payload, etc)
-*/
-(function(){
-  var g = window;
-  if (typeof g.total === "undefined") g.total = 0;
-  if (typeof g.lastRow === "undefined") g.lastRow = 0;
-  if (typeof g.ativos === "undefined") g.ativos = [];
-  if (typeof g.payload === "undefined") g.payload = null;
-  if (typeof g.dRef === "undefined") g.dRef = "";
-  if (typeof g.chk === "undefined") g.chk = false;
-  if (typeof g.k === "undefined") g.k = "";
-  if (typeof g.v === "undefined") g.v = null;
 
-  // Parser dd/MM/yyyy -> Date (ou null)
-  if (typeof g._parseDMY_ !== "function") {
-    g._parseDMY_ = function(s){
-      s = String(s || "").trim();
-      if (!s) return null;
-      var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      if (!m) return null;
-      var dd = +m[1], mm = +m[2], yy = +m[3];
-      var d = new Date(yy, mm-1, dd);
-      if (isNaN(d.getTime())) return null;
-      return d;
-    };
-  }
-})();
-</script>
 
-<!-- ===== BOOTSTRAP GLOBAL (blindagem) ===== -->
-<script>
-/**
- * Blindagem de variáveis globais.
- * Alguns trechos legados usam variáveis sem declarar (total, lastRow, payload, etc).
- * Se não existirem, o navegador joga ReferenceError ("X is not defined").
- * Aqui garantimos que elas existam no escopo global.
- */
-var total = 0;
-var lastRow = 0;
-var ativos = [];
-var payload = null;
-var dRef = "";
-var chk = false;
-var k = "";
-var v = null;
 
-// Parser dd/MM/yyyy -> Date (ou null)
-function _parseDMY_(s){
-  s = String(s||"").trim();
-  var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if(!m) return null;
-  var dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
-  return new Date(yy, mm-1, dd, 12, 0, 0, 0);
-}
-</script>
 
-<script>
-/* ===== Boot globals (blindagem) ===== */
-var lastRow = (typeof lastRow !== "undefined") ? lastRow : 0;
-window.total = (typeof window.total === "number") ? window.total : 0;
-var total = window.total;
-/* Regra de data padrão:
-   - até 18:00 -> hoje
-   - após 18:00 -> amanhã
-*/
-function getDataPadrao_(){
-  const agora = new Date();
-  const limite = new Date();
-  limite.setHours(18,0,0,0);
-  if(agora >= limite) agora.setDate(agora.getDate()+1);
-  const dd = String(agora.getDate()).padStart(2,"0");
-  const mm = String(agora.getMonth()+1).padStart(2,"0");
-  const yy = agora.getFullYear();
-  return dd + "/" + mm + "/" + yy;
-}
-</script>
+
+
 <script>(function(){
   // 🔥 Evita cache antigo (GitHub Pages + Service Worker de versões anteriores)
   try{
@@ -916,9 +867,7 @@ let busy = false;
 
 // ✅ Blindagem: alguns trechos antigos usavam "total" sem declarar.
 // Mantém compatibilidade e evita ReferenceError.
-var total = 0;
-
-
+// total legado já é fornecido pelo __APP_STATE__
 let loginMode = localStorage.getItem("DESP_LOGIN_MODE") || "PIN";
 
 /** ✅ FAST MAPS */
