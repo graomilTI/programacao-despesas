@@ -4281,3 +4281,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
+<!-- ================= PATCH FINAL (Etapas opcionais + Bloqueios + SIM/NAO) ================= -->
+<script>
+/* Regras de bloqueio conforme Painel A */
+function regraBloqueioPorDisponibilidade_(status){
+  status = String(status||"").toUpperCase();
+  if(status === "FALTA" || status === "ATESTADO" || status === "FÉRIAS"){
+    return { B:false, C:false, D:false, E:false };
+  }
+  if(status === "FOLGA"){
+    return { B:true, C:false, D:false, E:false };
+  }
+  return { B:true, C:true, D:true, E:true }; // OK padrão
+}
+
+/* Checkbox -> SIM/NAO garantido */
+function boolToSimNao_(checked){ return checked ? "SIM" : "NAO"; }
+
+/* Override seguro do coletor de payload */
+(function(){
+  const _oldCollect = window.collectPayload_;
+  window.collectPayload_ = function(){
+    const p = _oldCollect ? _oldCollect() : {};
+    if(p && p.despesas){
+      Object.keys(p.despesas).forEach(nome=>{
+        const d = p.despesas[nome];
+        ["cafe","almoco","janta"].forEach(k=>{
+          if(typeof d[k] === "boolean") d[k] = boolToSimNao_(d[k]);
+        });
+      });
+    }
+    return p;
+  }
+})();
+</script>
+<!-- ================= FIM PATCH FINAL ================= -->
