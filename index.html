@@ -2,15 +2,31 @@
 
 <html lang="pt-BR">
 <head>
-<!-- ===== BOOTSTRAP GLOBAL (blindagem definitiva) ===== -->
+<!-- ===== BOOTSTRAP GLOBAL (blindagem) ===== -->
 <script>
-(function () {
-  if (typeof window.total === "undefined") window.total = 0;
-  if (typeof window.lastRow === "undefined") window.lastRow = 0;
+/**
+ * Blindagem de variáveis globais.
+ * Alguns trechos legados usam variáveis sem declarar (total, lastRow, payload, etc).
+ * Se não existirem, o navegador joga ReferenceError ("X is not defined").
+ * Aqui garantimos que elas existam no escopo global.
+ */
+var total = 0;
+var lastRow = 0;
+var ativos = [];
+var payload = null;
+var dRef = "";
+var chk = false;
+var k = "";
+var v = null;
 
-  try { total = window.total; } catch (_) { var total = window.total; }
-  try { lastRow = window.lastRow; } catch (_) { var lastRow = window.lastRow; }
-})();
+// Parser dd/MM/yyyy -> Date (ou null)
+function _parseDMY_(s){
+  s = String(s||"").trim();
+  var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m) return null;
+  var dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
+  return new Date(yy, mm-1, dd, 12, 0, 0, 0);
+}
 </script>
 
 <script>
@@ -4110,5 +4126,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+
+<script>
+function chooseDateByHour_(){
+  const now = new Date();
+  const h = now.getHours();
+  const d = new Date(now.getTime() + (h >= 18 ? 86400000 : 0));
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('dataRef');
+  if(inp && !inp.value) inp.value = chooseDateByHour_();
+});
+</script>
+
 </body>
 </html>
