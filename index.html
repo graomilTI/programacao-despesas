@@ -1315,12 +1315,17 @@ const title = document.getElementById("loginTitle");
 }
 
 /** ✅ API */
-async function api(act, args, opts){
-  // ✅ Envio compatível com routers que usam body.payload
-  const payload = { action: act, payload: (args||{}) , ...(args||{}) };
+async function api(action, payload = {}, opts = {}){
+  // ✅ Body padrão (Worker → GAS)
+  const cleanAction = String(action || "").replace(/\u200B/g,"").trim();
+  const body = {
+    action: cleanAction,
+    payload: (payload && typeof payload === "object") ? payload : {}
+  };
 
-  if(token && !payload.token && act !== "loginPIN" && act !== "loginAdminCPF"){
-    payload.token = token;
+  // token automático (exceto login)
+  if (token && !body.payload.token && cleanAction !== "loginPIN" && cleanAction !== "loginAdminCPF"){
+    body.token = token;
   }
 
   const timeoutMs = Number(opts?.timeoutMs || 20000); // padrão 20s
@@ -1331,13 +1336,12 @@ async function api(act, args, opts){
   try{
     const res = await fetch(API_BASE, {
       method:"POST",
-      headers:{ "Content-Type":"application/json;charset=utf-8" },
-      body: JSON.stringify(payload),
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify(body),
       signal: controller.signal
     });
     txt = await res.text();
   }catch(e){
-    clearTimeout(t);
     const msg = (String(e).includes("AbortError"))
       ? "Tempo excedido (servidor demorou). Tente novamente."
       : "Falha de rede / CORS";
