@@ -3450,7 +3450,9 @@ if(step === "B" && isFriday_(dataRef)){
   return { ok:true };
 }
 
-async function avancar(){
+async async function avancar(){
+  try{
+
   if(step === "E"){
     const ok = await finalizarEtapaEComPdf_();
     if(!ok || !ok.ok) return;
@@ -3472,6 +3474,11 @@ async function avancar(){
   if(step==="B"){ setStep("C"); return; }
   if(step==="C"){ setStep("D"); return; }
   if(step==="D"){ setStep("E"); return; }
+
+  }catch(e){
+    console.error('avancar() falhou:', e);
+    alert('Falha ao avançar: ' + (e && e.message ? e.message : e));
+  }
 }
 
 function voltar(){
