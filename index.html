@@ -732,11 +732,8 @@ if ('serviceWorker' in navigator) {
 <div class="muted" id="encInfo" style="margin-top:8px;"></div>
 <div id="encLista" style="margin-top:10px;"></div>
 <div class="toolsRow" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
-<button id="btnEncBaixarPdf" type="button" onclick="encBaixarPdf_()">⬇️ Baixar Programação (PDF)</button>
-<button class="secondary" id="btnEncEncerrar" type="button" onclick="encEncerrar_()">✅ Encerrar processo</button>
-
-<button class="light" onclick="encVoltarInicio_()" type="button">🏠 Voltar para início</button>
-<button onclick="encVoltarProgramacao_()" type="button">📋 Voltar para programação</button>
+<button id="btnEncBaixarPdf" type="button" onclick="encBaixarPdf_()">⬇️ Baixar PDF</button>
+<button class="secondary" id="btnEncSalvar" type="button" onclick="encSalvar_()">✅ Salvar programação</button>
 </div>
 </div>
 </div>
@@ -1156,11 +1153,19 @@ function encBaixarPdf_(){
   baixarPDFProgramacao_();
 }
 
-function encEncerrar_(){
+async function encSalvar_(){
   try{
-    logoutForcado("✅ Processo encerrado.");
+    if(typeof setBusy_ === 'function') setBusy_(true, 'Salvando programação…');
+    const r = await salvarEtapaAtual_(); // re-salva etapa E (sem PDF)
+    if(!r || r.ok === false){
+      alert(r?.error || r?.message || 'Falha ao salvar.');
+      return;
+    }
+    alert('✅ Programação salva.');
   }catch(e){
-    try{ logout(); }catch(_){}
+    alert((e && e.message) ? e.message : String(e||'Erro ao salvar'));
+  }finally{
+    try{ if(typeof setBusy_ === 'function') setBusy_(false); }catch(_){}
   }
 }
 
@@ -1873,30 +1878,25 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   // ✅ Etapa E: enfileira salvamento (rápido) e NÃO gera PDF aqui.
   // O PDF fica para o painel final (botão "Baixar Programação (PDF)").
   if(etapa === "E"){
-    const CHUNK_E = 900;
-    const ticketsE = [];
-
+    // ✅ Etapa E: SALVA SINCRONO (rápido, sem PDF). Isso garante Timestamp/valores atualizados na planilha na hora.
+    const CHUNK_E = 450; // menor p/ evitar timeout
     if(!registros.length){
-      const payload = { dataReferencia: dataRef, etapa: "E", registros: [] };
-      const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
-      if(r?.ok && r.ticket) ticketsE.push(r.ticket);
-      return { ok: !!r?.ok, queued:true, tickets: ticketsE, raw:r };
+      const payload = { dataReferencia: dataRef, etapa: "E", registros: [], finalizar:true, modo:"FULL" };
+      const r = await api("salvarEtapa", { payload }, { timeoutMs: 90000 });
+      return r || { ok:false, error:"Falha ao salvar etapa E" };
     }
-
     for(let i=0;i<registros.length;i+=CHUNK_E){
       const slice = registros.slice(i, i+CHUNK_E);
-      const payload = { dataReferencia: dataRef, etapa: "E", registros: slice };
-      const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
+      const payload = { dataReferencia: dataRef, etapa: "E", registros: slice, finalizar:true, modo:"FULL" };
+      const r = await api("salvarEtapa", { payload }, { timeoutMs: 90000 });
       if(!r || !r.ok){
-        return r || { ok:false, error:"Falha ao enfileirar salvarEtapaAsync (E)" };
+        return r || { ok:false, error:"Falha ao salvar etapa E" };
       }
-      if(r.ticket) ticketsE.push(r.ticket);
     }
-
-    return { ok:true, queued:true, tickets: ticketsE };
+    return { ok:true, saved:true };
   }
 
-  // ✅ A-D: enfileira e NÃO bloqueia a navegação (processa no gatilho 1min)
+  // ✅ A-D: enfileira e NÃO bloqueia a navegação (processa no gatilho 1min) enfileira e NÃO bloqueia a navegação (processa no gatilho 1min)
   const CHUNK = 900; // evita payloads muito grandes
   const tickets = [];
 
