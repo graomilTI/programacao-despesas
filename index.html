@@ -1608,6 +1608,13 @@ async function baixarPDFProgramacao_(){
   const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   if(url){
     sendToWindowOrDownload_(win, url, nome);
+    try{
+      console.log("PDF gerado:", r);
+      if(r.folderUrl){
+        // abre a pasta em outra aba (ajuda a confirmar onde salvou)
+        window.open(r.folderUrl, "_blank", "noopener");
+      }
+    }catch(_e){}
     setDebug("PDF gerado ✅ (abrindo download)");
     return { ok:true, pdf:true };
   }
