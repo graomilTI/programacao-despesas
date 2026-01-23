@@ -1221,7 +1221,6 @@ const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
 
   const payload = {
-    token: (session && session.token) ? session.token : (localStorage.getItem('token')||''),
     cliente,
     contato_nome: document.getElementById('cli_contato_nome')?.value?.trim() || '',
     telefone: document.getElementById('cli_contato_tel')?.value?.trim() || '',
@@ -1261,7 +1260,7 @@ const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   if(st) st.innerText = 'Salvando...';
   setBusy(true);
 
-  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000, noLogout: true });
+  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
 
   setBusy(false);
   if(!r || !r.ok){
@@ -1273,30 +1272,14 @@ const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
 
   if(st) st.innerText = 'Registro salvo ✅';
 
-  // ✅ Se retornar PDF, NÃO manda para Encerramento (encerramento pode forçar logout do fluxo de programação).
-  // Em vez disso, mostramos link + tentamos abrir em nova aba.
+  // se retornar pdf, manda para encerramento
+  const pdfs = [];
   const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
-  const viewUrl = r.pdfViewUrl || r.viewUrl || url;
+  if(url) pdfs.push({ name: r.name || r.fileName || 'Registro_Contato.pdf', pdfDownloadUrl: url, pdfViewUrl: r.pdfViewUrl || r.viewUrl || '' });
 
-  const box = document.getElementById('cliPdfBox');
-  if(url){
-    if(box){
-      box.innerHTML = `
-        <div style="margin-top:10px; padding:12px; border:1px solid #d0d7de; border-radius:10px; background:#fff;">
-          <div style="font-weight:700; margin-bottom:6px;">📄 PDF gerado</div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <a class="btn btn-success" href="${url}" target="_blank" rel="noopener">⬇️ Baixar PDF</a>
-            <a class="btn btn-light" href="${viewUrl}" target="_blank" rel="noopener">🔗 Abrir</a>
-          </div>
-        </div>`;
-      box.style.display = "block";
-    }
-    try{ window.open(viewUrl, "_blank"); }catch(e){}
-  }else{
-    if(box){
-      box.innerHTML = '';
-      box.style.display = "none";
-    }
+  if(pdfs.length){
+    encRender_(data, pdfs);
+    switchScreen('encerramento');
   }
 }
 
@@ -1427,8 +1410,6 @@ const title = document.getElementById("loginTitle");
 
 /** ✅ API */
 async function api(act, args, opts){
-  opts = opts || {};
-
   // Contrato com backend (Worker/GAS):
   // Enviamos SEMPRE { action, payload, token }.
   // ✅ Blindagem: se você passar {payload:{...}} (double wrap), nós "desembrulhamos".
@@ -1634,7 +1615,7 @@ async function finalizarEtapaEComPdf_(){
 /** =========================
  * ✅ LOGIN / DATA PADRÃO
  * ========================= */
-async async function login(){
+async function login(){
   const raw = document.getElementById("loginInput").value;
 
   document.getElementById("loginStatus").innerText = "Entrando...";
