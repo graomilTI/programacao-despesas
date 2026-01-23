@@ -4432,6 +4432,92 @@ document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('dataRef');
   if(inp && !inp.value) inp.value = chooseDateByHour_();
 });
+
+/* =========================
+ * FIX CLIENTES: payload TDZ + IDs compat
+ * ========================= */
+window.cliSalvarRegistro_ = async function(){
+  try{
+    if(!window.token){ if(typeof logoutForcado==='function') logoutForcado('Faça login primeiro.'); else alert('Faça login primeiro.'); return; }
+
+    const $ = (id)=> document.getElementById(id);
+    const cliente = ($('cli_cliente')?.value || '').trim();
+    const contato = ($('cli_contato')?.value || $('cli_contato_nome')?.value || '').trim();
+    const tel     = ($('cli_tel')?.value || $('cli_contato_tel')?.value || $('cli_telefone')?.value || '').trim();
+    const data    = ($('cli_data')?.value || '').trim();
+
+    if(!cliente){ alert('Informe o cliente.'); return; }
+    if(typeof parseDMY_ === 'function' && !parseDMY_(data)){ alert('Data inválida (dd/MM/aaaa).'); return; }
+    if(!data){ alert('Informe a data.'); return; }
+
+    const interacoes = {
+      visita: !!$('cli_tipo_visita')?.checked || !!$('cli_i_visita')?.checked,
+      online: !!$('cli_tipo_online')?.checked || !!$('cli_i_online')?.checked,
+      almoco: !!$('cli_tipo_almoco')?.checked || !!$('cli_i_almoco')?.checked,
+      outros: !!$('cli_tipo_outros')?.checked || !!$('cli_i_outros')?.checked
+    };
+
+    const outros_desc = ($('cli_outros_desc')?.value || '').trim();
+    if(interacoes.outros && !outros_desc){
+      alert('Descreva o campo "Outros" (obrigatório quando selecionado).');
+      return;
+    }
+
+    // monta payload SEMPRE depois de ler tudo (evita "Cannot access payload before initialization")
+    const p = {
+      cliente,
+      contato_nome: contato,
+      telefone: tel,
+      data,
+      supervisao:   (window.ctx?.supervisao || window.ctx?.sup || ''),
+      coordenacao:  (window.ctx?.coordenacao || window.ctx?.coord || ''),
+      gestorNome:   (window.ctx?.nome || window.ctx?.gestorNome || ''),
+      interacoes,
+      outros_desc,
+      participantes_grao:   (window.cliPartGrao_ || window.__cli_part_grao || []).slice(),
+      participantes_cliente:(window.cliPartCli_  || window.__cli_part_cli  || []).slice(),
+      resumo:       ($('cli_resumo')?.value || '').trim(),
+      providencias: ($('cli_providencias')?.value || '').trim()
+    };
+
+    // fotos (multi)
+    const files = Array.from($('cli_fotos')?.files || $('cli_foto')?.files || []);
+    const photos = [];
+    if(typeof fileToDataUrl_ === 'function'){
+      for(const f of files.slice(0,6)){
+        const dataUrl = await fileToDataUrl_(f);
+        if(dataUrl) photos.push({ name:f.name, mimeType:f.type, dataUrl });
+      }
+    }
+    if(photos.length) p.fotos = photos;
+
+    const st = $('cli_status') || $('cliStatus');
+    if(st) st.innerText = 'Salvando...';
+    if(typeof setBusy === 'function') setBusy(true);
+
+    const r = await api('cliente_registrarContato', { payload: p }, { timeoutMs: 180000 });
+
+    if(typeof setBusy === 'function') setBusy(false);
+
+    if(!r || !r.ok){
+      const err = r?.error || r?.message || 'Falha ao salvar.';
+      if(st) st.innerText = err;
+      alert(err);
+      return;
+    }
+
+    if(st) st.innerText = 'Registro salvo ✅';
+
+    const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
+    if(url){
+      // tenta baixar (sem navegar para /true)
+      try{ window.open(url, '_blank'); }catch(e){}
+    }
+  }catch(e){
+    alert(String(e?.message || e));
+  }
+};
+
 </script>
 
 </body>
