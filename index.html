@@ -991,32 +991,19 @@ function toDirectDownloadUrl_(url){
   return url;
 }
 
-function sendToWindowOrDownload_(rawUrl, filename){
-    const url = forceDownloadUrl_(rawUrl);
-    const safeName = (filename || "programacao.pdf").replace(/[\\/:*?"<>|]+/g, "_");
+function sendToWindowOrDownload_(url, filename){
+  url = String(url||"");
+  if(!url) return false;
 
-    // 1) tenta download "de verdade" via link (não depende de popup)
-    try{
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = safeName;
-      a.rel = "noopener";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>a.remove(), 50);
-    }catch(e){ /* ignore */ }
+  const safeName = (filename || "programacao.pdf").replace(/[\/:*?"<>|]+/g, "_");
+  const direct = toDirectDownloadUrl_(url);
 
-    // 2) fallback: abre em nova aba (sem navegar a página atual)
-    setTimeout(()=>{
-      try{ window.open(url, "_blank", "noopener"); }catch(e){}
-    }, 120);
+  // 1) tenta forçar download (sem navegar a página atual)
+  try{ forceDownloadUrl_(direct, safeName); }catch(e){}
 
-    // 3) fallback extra: abre em nova aba (caso o browser bloqueie a navegação)
-    setTimeout(()=>{
-      try{ window.open(url, "_blank", "noopener"); }catch(e){}
-    }, 200);
-
+  // 2) fallback: abre em nova aba
+  setTimeout(()=>{ try{ window.open(direct, "_blank", "noopener"); }catch(e){} }, 120);
+  return true;
 }
 
 
@@ -1149,14 +1136,97 @@ function encAbrir_(i){
   window.open(url, '_blank', 'noopener');
 }
 
-function encBaixarPdf_(){
-  baixarPDFProgramacao_();
+
+// =========================
+// ✅ SALVAR PROGRAMAÇÃO (FULL - A→E) NO FINAL
+// =========================
+function buildRegistrosFull_(){
+  const namesAll = Object.keys(form || {});
+  return namesAll
+    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
+    .map(n => {
+      const f = form[n] || {};
+      const sup = (supPorNomeFast?.[n] || ctx?.mapSupPorNome?.[n] || "");
+      const tipoEst = String(f.estadia_tipo || "Casa").trim();
+      const diasRaw = f.hotel_dias;
+      const dias = (diasRaw === "" || diasRaw == null) ? "" : Math.floor(Number(diasRaw||0));
+      const hora = String(f.hotel_chegada || "").trim();
+      const obsNorm = normalizeHotelObs_(tipoEst, f.estadia_obs, diasRaw, hora);
+
+      const cafe   = isSim_(f.cafe_valor)   ? "SIM" : "NÃO";
+      const almoco = isSim_(f.almoco_valor) ? "SIM" : "NÃO";
+      const janta  = isSim_(f.janta_valor)  ? "SIM" : "NÃO";
+
+      return {
+        colaborador: n,
+        coordenacao: f.coordenacao,
+        supervisao: sup,
+
+        disponibilidade_status: String(f.disponibilidade_status||"OK").trim(),
+        disponibilidade_obs: String(f.disponibilidade_obs||"").trim(),
+
+        estadia_tipo: tipoEst,
+        estadia_obs: obsNorm,
+        hotel_dias: (tipoEst==="Hotel" ? (dias!=="" && dias>0 ? dias : "") : ""),
+        hotel_chegada: (tipoEst==="Hotel" ? hora : ""),
+
+        cafe_valor: cafe,
+        almoco_valor: almoco,
+        janta_valor: janta,
+
+        deslocamento_tipo: f.deslocamento_tipo || "",
+        deslocamento_obs: f.deslocamento_obs || "",
+
+        extras_recarga_valor: Number(f.extras_recarga_valor||0),
+        extras_passagem_valor: Number(f.extras_passagem_valor||0),
+        extras_lavagem_valor: Number(f.extras_lavagem_valor||0),
+        manut_veic: Number(f.manut_veic||0),
+        extras_obs: f.extras_obs || ""
+      };
+    });
+}
+
+async function salvarProgramacaoFull_(){
+  if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
+  const dataRef = document.getElementById("dataRef").value.trim();
+  if(!parseDMY_(dataRef)){
+    alert("DataRef inválida (dd/MM/aaaa).");
+    return { ok:false };
+  }
+
+  const registros = buildRegistrosFull_();
+  setBusy(true);
+  setDebug("Salvando programação (FULL)…");
+
+  const r = await api(
+    "finalizarEtapaE",
+    { payload: { dataReferencia: dataRef, etapa:"E", registros, apenasSalvar:true, finalizar:true, modo:"FULL" } },
+    { timeoutMs: 60000 }
+  );
+
+  setBusy(false);
+
+  if(!r || !r.ok){
+    const err = r?.error || "Falha ao salvar programação.";
+    alert("❌ " + err);
+    setDebug("❌ " + err);
+    return { ok:false, error: err };
+  }
+
+  setDebug(`✅ Salvo (upd:${r.updated||0} ins:${r.inserted||0})`);
+  return r;
+}
+
+async function encBaixarPdf_(){
+  const s = await salvarProgramacaoFull_();
+  if(!s || s.ok===false) return;
+  await baixarPDFProgramacao_();
 }
 
 async function encSalvar_(){
   try{
     if(typeof setBusy_ === 'function') setBusy_(true, 'Salvando programação…');
-    const r = await salvarEtapaAtual_(); // re-salva etapa E (sem PDF)
+    const r = await salvarProgramacaoFull_(); // salva FULL (A→E)
     if(!r || r.ok === false){
       alert(r?.error || r?.message || 'Falha ao salvar.');
       return;
@@ -1607,7 +1677,8 @@ async function baixarPDFProgramacao_(){
 
   const url  = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || "";
   if(url){
-    sendToWindowOrDownload_(win, url, nome);
+    sendToWindowOrDownload_(url, nome);
+    try{ if(win && !win.closed) win.close(); }catch(e){}
     try{
       console.log("PDF gerado:", r);
       if(r.folderUrl){
@@ -2429,7 +2500,7 @@ function bindDelegationC_(){
   if(!box || box._bound) return;
   box._bound = true;
 
-  const toSN = (checked)=> checked ? "SIM" : "";
+  const toSN = (checked)=> checked ? "SIM" : "NÃO";
 
   box.addEventListener("change", (e)=>{
     const el = e.target;
@@ -3427,9 +3498,9 @@ let registros = [];
     registros = dirtyNames
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => {
-        const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "";
-        const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "";
-        const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "";
+        const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "NÃO";
+        const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "NÃO";
+        const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "NÃO";
 
         return {
           colaborador: n,
