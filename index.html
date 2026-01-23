@@ -1201,7 +1201,7 @@ async function salvarProgramacaoFull_(){
   const r = await api(
     "finalizarEtapaE",
     { payload: { dataReferencia: dataRef, etapa:"E", registros, apenasSalvar:true, finalizar:true, modo:"FULL" } },
-    { timeoutMs: 60000 }
+    { timeoutMs: 180000 }
   );
 
   setBusy(false);
@@ -1218,8 +1218,10 @@ async function salvarProgramacaoFull_(){
 }
 
 async function encBaixarPdf_(){
-  const s = await salvarProgramacaoFull_();
-  if(!s || s.ok===false) return;
+  // ✅ Não bloqueia o PDF se o "salvar" demorar (o servidor pode concluir depois)
+  // Dispara salvar em background (sem travar o clique)
+  try{ salvarProgramacaoFull_(); }catch(_e){}
+  // Gera/baixa o PDF imediatamente
   await baixarPDFProgramacao_();
 }
 
@@ -1652,10 +1654,10 @@ async function baixarPDFProgramacao_(){
   setDebug("Gerando PDF...");
 
   const r = await api(
-  "gerarPDFProgramacao",
-  { payload: { dataReferencia: dataRef } },
-  { timeoutMs: 120000 } // 120s
-);
+    "gerarPDFProgramacao",
+    { payload: { dataRef: dataRef, dataReferencia: dataRef } },
+    { timeoutMs: 180000 }
+  );
   setBusy(false); // ✅ ADICIONE AQUI (logo após o await)
 
   if(!r || !r.ok){
@@ -1666,7 +1668,7 @@ async function baixarPDFProgramacao_(){
   }
 
   const nome = r.pdfFileName || r.fileName || "programacao.pdf";
-  const b64  = r.pdf?.b64 || r.b64 || "";
+  const b64  = (r.pdf && r.pdf.b64) ? r.pdf.b64 : (r.b64 || "");
 
   if(b64){
     downloadPdfFromB64_(b64, nome);
