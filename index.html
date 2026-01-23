@@ -1252,11 +1252,22 @@ async function cliSalvarRegistro_(){
       participantes_cliente
     };
 
-    // anexo (opcional)
-    const f = byId("cli_foto")?.files?.[0];
-    if (f){
-      payload.foto_nome = f.name || "foto.png";
-      payload.foto_base64 = await fileToDataUrl(f);
+    // anexo(s) (opcional)
+    const inpFotos = byId("cli_fotos");
+    const files = (inpFotos && inpFotos.files) ? Array.from(inpFotos.files) : [];
+    if (files.length){
+      payload.fotos = [];
+      for (let i=0; i<files.length; i++){
+        const f = files[i];
+        const dataUrl = await fileToDataUrl_(f); // data:image/...;base64,...
+        if (dataUrl){
+          payload.fotos.push({
+            name: f.name || ("foto_"+(i+1)+".png"),
+            mimeType: f.type || "image/png",
+            dataUrl
+          });
+        }
+      }
     }
 
     const btn = byId("btnCliSalvar");
