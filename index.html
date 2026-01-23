@@ -868,6 +868,25 @@ let GAS_FALLBACK = localStorage.getItem("GAS_FALLBACK_URL") || "";
 let token = localStorage.getItem("DESP_TOKEN") || "";
 window.token = token;
 
+// ✅ Compat (legado): alguns trechos antigos chamavam getSession_()
+// Aqui no front, ela devolve o token atual (string).
+if (typeof window.getSession_ !== "function") {
+  window.getSession_ = function(){
+    try{ return window.token || localStorage.getItem("DESP_TOKEN") || ""; }
+    catch(_){ return ""; }
+  };
+}
+
+// ✅ Compat (legado): setSession_ no front (salva token)
+if (typeof window.setSession_ !== "function") {
+  window.setSession_ = function(t){
+    t = String(t||"").trim();
+    window.token = t;
+    try{ localStorage.setItem("DESP_TOKEN", t); }catch(_){ }
+    return t;
+  };
+}
+
 /** 🔁 Descobre URL do GAS pelo / (worker) para fallback quando o Worker cair (502) */
 function initApiBase_(){
   try{
