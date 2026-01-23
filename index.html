@@ -5,11 +5,6 @@
 
   <!-- ✅ BOOTSTRAP ÚNICO (blindagem + estado global) -->
   <script>
-// ==== INDEX BUILD v11 (Clientes fix + debug) ====
-window.__INDEX_BUILD__ = 'v11-2026-01-23';
-console.log('INDEX BUILD', window.__INDEX_BUILD__);
-window.addEventListener('error', (ev)=>{ try{ console.error('JS ERROR', ev.error || ev.message); }catch(e){} });
-
   
 // ===== FIX: globals usados no fluxo (evita ReferenceError em modo strict/closures) =====
 var total = 0;
@@ -1334,19 +1329,22 @@ function normTxt_(s){
   return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 
-async function cliSalvarRegistroOld_(){
+async async function cliSalvarRegistro_(){
+  // ✅ Clientes: sempre começa "limpo" (sem restore/cache)
+  // ✅ Blindagem: não usa variável chamada "payload" (evita TDZ de vez)
   try{
-    // ✅ NÃO usa variável "payload" (evita TDZ de vez)
-    const token = (getSession_ && getSession_()) || "";
+    if(!token){
+      msgErro("Faça login primeiro.");
+      return;
+    }
+
     const cliente = (byId("cli_cliente")?.value || "").trim();
     const contato = (byId("cli_contato")?.value || "").trim();
-    const telefone = (byId("cli_tel")?.value || byId("cli_telefone")?.value || "").trim();
+    const telefone = (byId("cli_telefone")?.value || "").trim();
     const data = (byId("cli_data")?.value || "").trim();
 
-    if(!token){ msgErro("Faça login primeiro."); return; }
-    if(!cliente){ msgErro("Informe o cliente."); return; }
-    if(!contato){ msgErro("Informe o contato."); return; }
-    if(!data){ msgErro("Informe a data."); return; }
+    if(!cliente) return msgErro("Informe o Cliente.");
+    if(!data) return msgErro("Informe a Data.");
 
     const interacoes = {
       visita: !!byId("cli_i_visita")?.checked,
@@ -1355,47 +1353,63 @@ async function cliSalvarRegistroOld_(){
       outros: !!byId("cli_i_outros")?.checked
     };
 
-    const payloadCli = {};
-    payloadCli.token = token;
-    payloadCli.cliente = cliente;
-    payloadCli.contato_nome = contato;
-    payloadCli.telefone = telefone;
-    payloadCli.data = data;
-    payloadCli.interacoes = interacoes;
-    payloadCli.outros_desc = (byId("cli_outros_desc")?.value || "").trim();
-    payloadCli.resumo = (byId("cli_resumo")?.value || "").trim();
-    payloadCli.providencias = (byId("cli_providencias")?.value || "").trim();
-    payloadCli.participantes_grao = (window.__cli_part_grao || []).slice();
-    payloadCli.participantes_cliente = (window.__cli_part_cli || []).slice();
+    const outros_desc  = (byId("cli_outros_desc")?.value || "").trim();
+    const resumo       = (byId("cli_resumo")?.value || "").trim();
+    const providencias = (byId("cli_providencias")?.value || "").trim();
 
-    // anexo (opcional)
-    const f = byId("cli_foto")?.files?.[0];
+    const participantes_grao    = (window.__cli_part_grao || []).slice();
+    const participantes_cliente = (window.__cli_part_cli  || []).slice();
+
+    const payloadCli = {
+      token,
+      cliente,
+      contato_nome: contato,
+      telefone,
+      data,
+      interacoes,
+      outros_desc,
+      resumo,
+      providencias,
+      participantes_grao,
+      participantes_cliente
+    };
+
+    // anexo (opcional) — usa input multiple id="cli_fotos"
+    const files = byId("cli_fotos")?.files;
+    const f = files && files.length ? files[0] : null;
     if (f){
-      payloadCli.foto_nome = f.name || "foto.png";
-      payloadCli.foto_base64 = await fileToDataUrl_(f);
+      payloadCli.foto_nome = f.name || "foto.jpg";
+      payloadCli.foto_base64 = await fileToDataUrl_(f); // dataURL completo
     }
 
-    const btn = byId("btnCliSalvar");
-    if (btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
+    const btn = document.querySelector('button[onclick*="cliSalvarRegistro_"]');
+    if (btn){ btn.disabled = true; btn.classList.add("loading"); }
 
-    const r = await api("cliente_registrarContato", payloadCli);
+    const st = byId("cli_status");
+    if (st) st.innerText = "Salvando...";
 
-    if (btn){ btn.disabled = false; btn.textContent = "Gerar PDF e Salvar"; }
+    // envia
+    const resp = await apiPost_({ action:"cliente_registrarContato", payload: payloadCli }, token);
 
-    if(!r || r.ok !== true){
-      const err = (r && (r.error || r.message)) ? (r.error || r.message) : "Falha ao salvar.";
-      msgErro(err);
-      return;
+    if (!resp || !resp.ok){
+      throw new Error(resp && resp.error ? resp.error : "Falha ao salvar.");
     }
 
-    msgOk("Registro salvo!");
-    const url = r.downloadUrl || r.fileUrl || r.url;
-    if (url){
-      window.open(url, "_blank", "noopener");
+    if (st) st.innerText = "✅ Salvo com sucesso.";
+    // abre PDF se veio url
+    if (resp.pdf_url){
+      const a = document.createElement("a");
+      a.href = resp.pdf_url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.click();
     }
   }catch(e){
     msgErro(String(e && e.message ? e.message : e));
     try{ console.error(e); }catch(_){}
+  }finally{
+    const btn = document.querySelector('button[onclick*="cliSalvarRegistro_"]');
+    if (btn){ btn.disabled = false; btn.classList.remove("loading"); }
   }
 }
 
@@ -4243,7 +4257,7 @@ async function cliSalvarRegistro_(){
   if(!cliente){ alert('Informe o cliente.'); return; }
   if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
 
-  const payloadCli = {
+  const payload = {
     cliente,
     contato_nome: (document.getElementById('cli_contato')?.value || '').trim(),
     telefone:     (document.getElementById('cli_tel')?.value || '').trim(),
@@ -4264,7 +4278,7 @@ async function cliSalvarRegistro_(){
     providencias: (document.getElementById('cli_providencias')?.value || '')
   };
 
-  if(payloadCli.interacoes.outros && !payloadCli.outros_desc){
+  if(payload.interacoes.outros && !payload.outros_desc){
     alert('Descreva o campo "Outros" (obrigatório quando selecionado).');
     return;
   }
@@ -4275,13 +4289,13 @@ async function cliSalvarRegistro_(){
     const dataUrl = await fileToDataUrl_(f);
     if(dataUrl) photos.push({ name:f.name, mimeType:f.type, dataUrl });
   }
-  payloadCli.fotos = photos;
+  payload.fotos = photos;
 
   const st = document.getElementById('cli_status');
   if(st) st.innerText = 'Salvando...';
   if(typeof setBusy === 'function') setBusy(true);
 
-  const r = await api('cliente_registrarContato', { payload: payloadCli }, { timeoutMs: 180000 });
+  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
 
   if(typeof setBusy === 'function') setBusy(false);
   if(!r || !r.ok){
@@ -4425,125 +4439,22 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
-<!-- PATCH CLIENTES v14: intercepta onclick antigo (payload TDZ) -->
 <script>
-(function(){
-  function byId(id){return document.getElementById(id);}  
-  function trim(v){return String(v||'').trim();}
-  function msg(s){ try{ const el=byId('cli_status')||byId('cliStatus'); if(el) el.innerText=s; }catch(_){} }
+  // ===== INDEX BUILD v15-2026-01-23 (CLIENTES CLEAN START) =====
+  try{ console.log("INDEX BUILD v15-2026-01-23"); }catch(_){}
 
-  async function fileToDataUrlSafe_(file){
-    return new Promise((resolve)=>{
-      try{
-        const fr=new FileReader();
-        fr.onload=()=>resolve(String(fr.result||''));
-        fr.onerror=()=>resolve('');
-        fr.readAsDataURL(file);
-      }catch(e){ resolve(''); }
-    });
-  }
-
-  // ✅ Função segura (não depende do onclick antigo)
-  window.cliSalvarRegistroSafe_ = async function(){
-    try{
-      const token = (typeof getSession_==='function' ? (getSession_()||'') : (window.token||''));
-      if(!token){ alert('Faça login primeiro.'); return; }
-
-      const cliente = trim(byId('cli_cliente')?.value);
-      const contato = trim((byId('cli_contato_nome')||byId('cli_contato'))?.value);
-      const telefone = trim((byId('cli_contato_tel')||byId('cli_tel')||byId('cli_telefone'))?.value);
-      const data = trim(byId('cli_data')?.value);
-
-      if(!cliente){ alert('Informe o cliente.'); return; }
-      if(!contato){ alert('Informe o contato.'); return; }
-      if(!data){ alert('Informe a data.'); return; }
-
-      const interacoes = {
-        visita: !!(byId('cli_tipo_visita')||byId('cli_i_visita'))?.checked,
-        online: !!(byId('cli_tipo_online')||byId('cli_i_online'))?.checked,
-        almoco: !!(byId('cli_tipo_almoco')||byId('cli_i_almoco'))?.checked,
-        outros: !!(byId('cli_tipo_outros')||byId('cli_i_outros'))?.checked
-      };
-
-      const outros_desc = trim(byId('cli_outros_desc')?.value);
-      if(interacoes.outros && !outros_desc){
-        alert('Descreva o campo "Outros" (obrigatório quando selecionado).');
-        return;
-      }
-
-      const payloadCli = {
-        token,
-        cliente,
-        contato_nome: contato,
-        telefone,
-        data,
-        interacoes,
-        outros_desc,
-        resumo: trim(byId('cli_resumo')?.value),
-        providencias: trim(byId('cli_providencias')?.value),
-        participantes_grao: (window.__cli_part_grao||window.cliPartGrao_||[]).slice?.() || [],
-        participantes_cliente: (window.__cli_part_cli||window.cliPartCli_||[]).slice?.() || []
-      };
-
-      // anexos (input pode ser cli_foto OU cli_fotos)
-      const files = [
-        ...(byId('cli_fotos')?.files ? Array.from(byId('cli_fotos').files) : []),
-        ...(byId('cli_foto')?.files ? Array.from(byId('cli_foto').files) : [])
-      ].slice(0,6);
-
-      if(files.length){
-        payloadCli.fotos = [];
-        for(const f of files){
-          const dataUrl = await (typeof fileToDataUrl_==='function' ? fileToDataUrl_(f) : fileToDataUrlSafe_(f));
-          if(dataUrl) payloadCli.fotos.push({ name:f.name||'foto', mimeType:f.type||'', dataUrl });
-        }
-      }
-
-      msg('Salvando...');
-      if(typeof setBusy==='function') setBusy(true);
-
-      // ✅ chama API sem embrulhar em {payload: ...} (evita qualquer ambiguidade)
-      const r = await api('cliente_registrarContato', payloadCli, { timeoutMs: 180000 });
-
-      if(typeof setBusy==='function') setBusy(false);
-
-      if(!r || !r.ok){
-        const err = r?.error || r?.message || 'Falha ao salvar.';
-        msg(err);
-        alert(err);
-        return;
-      }
-
-      msg('Registro salvo ✅');
-      const url = r.pdfDownloadUrl || r.downloadUrl || r.fileUrl || r.url;
-      if(url) window.open(url, '_blank', 'noopener');
-
-    }catch(e){
-      if(typeof setBusy==='function') setBusy(false);
-      const m = String(e && e.message ? e.message : e);
-      msg(m);
-      alert(m);
-      try{ console.error(e); }catch(_){}
-    }
-  };
-
-  function hookButton(){
-    const btn = byId('btnCliSalvar') || Array.from(document.querySelectorAll('button')).find(b=>/Gerar PDF e Salvar/i.test(b.textContent||''));
-    if(!btn) return;
-    // Remove handler antigo (que ainda tenta usar variável payload)
-    try{ btn.onclick = null; }catch(_){}
-    try{ btn.removeAttribute('onclick'); }catch(_){}
-    btn.addEventListener('click', function(ev){
+  // Captura clique no botão para impedir handlers antigos/inline quebrados
+  document.addEventListener("click", function(ev){
+    const el = ev.target;
+    if(!el) return;
+    const txt = (el.textContent || "").trim().toLowerCase();
+    const isCliBtn = (el.tagName === "BUTTON" || el.tagName === "A") && (txt === "gerar pdf e salvar");
+    if (isCliBtn){
       ev.preventDefault();
-      ev.stopPropagation();
-      window.cliSalvarRegistroSafe_();
-    }, true);
-  }
-
-  document.addEventListener('DOMContentLoaded', hookButton);
-  setTimeout(hookButton, 200);
-  setTimeout(hookButton, 800);
-})();
+      ev.stopImmediatePropagation();
+      cliSalvarRegistro_();
+    }
+  }, true);
 </script>
 
 </body>
