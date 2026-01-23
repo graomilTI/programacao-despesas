@@ -4424,5 +4424,127 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+
+<!-- PATCH CLIENTES v14: intercepta onclick antigo (payload TDZ) -->
+<script>
+(function(){
+  function byId(id){return document.getElementById(id);}  
+  function trim(v){return String(v||'').trim();}
+  function msg(s){ try{ const el=byId('cli_status')||byId('cliStatus'); if(el) el.innerText=s; }catch(_){} }
+
+  async function fileToDataUrlSafe_(file){
+    return new Promise((resolve)=>{
+      try{
+        const fr=new FileReader();
+        fr.onload=()=>resolve(String(fr.result||''));
+        fr.onerror=()=>resolve('');
+        fr.readAsDataURL(file);
+      }catch(e){ resolve(''); }
+    });
+  }
+
+  // ✅ Função segura (não depende do onclick antigo)
+  window.cliSalvarRegistroSafe_ = async function(){
+    try{
+      const token = (typeof getSession_==='function' ? (getSession_()||'') : (window.token||''));
+      if(!token){ alert('Faça login primeiro.'); return; }
+
+      const cliente = trim(byId('cli_cliente')?.value);
+      const contato = trim((byId('cli_contato_nome')||byId('cli_contato'))?.value);
+      const telefone = trim((byId('cli_contato_tel')||byId('cli_tel')||byId('cli_telefone'))?.value);
+      const data = trim(byId('cli_data')?.value);
+
+      if(!cliente){ alert('Informe o cliente.'); return; }
+      if(!contato){ alert('Informe o contato.'); return; }
+      if(!data){ alert('Informe a data.'); return; }
+
+      const interacoes = {
+        visita: !!(byId('cli_tipo_visita')||byId('cli_i_visita'))?.checked,
+        online: !!(byId('cli_tipo_online')||byId('cli_i_online'))?.checked,
+        almoco: !!(byId('cli_tipo_almoco')||byId('cli_i_almoco'))?.checked,
+        outros: !!(byId('cli_tipo_outros')||byId('cli_i_outros'))?.checked
+      };
+
+      const outros_desc = trim(byId('cli_outros_desc')?.value);
+      if(interacoes.outros && !outros_desc){
+        alert('Descreva o campo "Outros" (obrigatório quando selecionado).');
+        return;
+      }
+
+      const payloadCli = {
+        token,
+        cliente,
+        contato_nome: contato,
+        telefone,
+        data,
+        interacoes,
+        outros_desc,
+        resumo: trim(byId('cli_resumo')?.value),
+        providencias: trim(byId('cli_providencias')?.value),
+        participantes_grao: (window.__cli_part_grao||window.cliPartGrao_||[]).slice?.() || [],
+        participantes_cliente: (window.__cli_part_cli||window.cliPartCli_||[]).slice?.() || []
+      };
+
+      // anexos (input pode ser cli_foto OU cli_fotos)
+      const files = [
+        ...(byId('cli_fotos')?.files ? Array.from(byId('cli_fotos').files) : []),
+        ...(byId('cli_foto')?.files ? Array.from(byId('cli_foto').files) : [])
+      ].slice(0,6);
+
+      if(files.length){
+        payloadCli.fotos = [];
+        for(const f of files){
+          const dataUrl = await (typeof fileToDataUrl_==='function' ? fileToDataUrl_(f) : fileToDataUrlSafe_(f));
+          if(dataUrl) payloadCli.fotos.push({ name:f.name||'foto', mimeType:f.type||'', dataUrl });
+        }
+      }
+
+      msg('Salvando...');
+      if(typeof setBusy==='function') setBusy(true);
+
+      // ✅ chama API sem embrulhar em {payload: ...} (evita qualquer ambiguidade)
+      const r = await api('cliente_registrarContato', payloadCli, { timeoutMs: 180000 });
+
+      if(typeof setBusy==='function') setBusy(false);
+
+      if(!r || !r.ok){
+        const err = r?.error || r?.message || 'Falha ao salvar.';
+        msg(err);
+        alert(err);
+        return;
+      }
+
+      msg('Registro salvo ✅');
+      const url = r.pdfDownloadUrl || r.downloadUrl || r.fileUrl || r.url;
+      if(url) window.open(url, '_blank', 'noopener');
+
+    }catch(e){
+      if(typeof setBusy==='function') setBusy(false);
+      const m = String(e && e.message ? e.message : e);
+      msg(m);
+      alert(m);
+      try{ console.error(e); }catch(_){}
+    }
+  };
+
+  function hookButton(){
+    const btn = byId('btnCliSalvar') || Array.from(document.querySelectorAll('button')).find(b=>/Gerar PDF e Salvar/i.test(b.textContent||''));
+    if(!btn) return;
+    // Remove handler antigo (que ainda tenta usar variável payload)
+    try{ btn.onclick = null; }catch(_){}
+    try{ btn.removeAttribute('onclick'); }catch(_){}
+    btn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      window.cliSalvarRegistroSafe_();
+    }, true);
+  }
+
+  document.addEventListener('DOMContentLoaded', hookButton);
+  setTimeout(hookButton, 200);
+  setTimeout(hookButton, 800);
+})();
+</script>
+
 </body>
 </html>
