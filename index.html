@@ -1237,23 +1237,12 @@ async function salvarProgramacaoFull_(){
   setBusy(true);
   setDebug("Salvando programação (FULL)…");
 
-  const r = await api(
-    "finalizarEtapaE",
-    { payload: { dataReferencia: dataRef, etapa:"E", registros, apenasSalvar:true, finalizar:true, modo:"FULL" } },
-    { timeoutMs: 180000 }
-  );
+  enqueueEtapaNoWait_({ dataReferencia: dataRef, etapa:"E", registros, apenasSalvar:true, finalizar:true, modo:"ETAPA" });
 
   setBusy(false);
+  setDebug("📬 Enviado para fila (Etapa E). Pode continuar sem travar.");
 
-  if(!r || !r.ok){
-    const err = r?.error || "Falha ao salvar programação.";
-    alert("❌ " + err);
-    setDebug("❌ " + err);
-    return { ok:false, error: err };
-  }
-
-  setDebug(`✅ Salvo (upd:${r.updated||0} ins:${r.inserted||0})`);
-  return r;
+  return { ok:true, queued:true };
 }
 
 async function encBaixarPdf_(){
@@ -1631,6 +1620,41 @@ async function api(act, args, opts){
   catch(e){ return { ok:false, error:"Resposta inválida do servidor", raw }; }
 }
 
+// ✅ Enfileira etapa SEM TRAVAR o painel (usa sendBeacon/keepalive)
+function enqueueEtapaNoWait_(payload){
+  try{
+    payload = payload || {};
+    payload.modo = "ETAPA";
+
+    const body = {
+      action: "enqueueEtapa",
+      token: token || "",
+      payload
+    };
+
+    const raw = JSON.stringify(body);
+
+    // 1) tenta sendBeacon
+    if (navigator.sendBeacon) {
+      const ok = navigator.sendBeacon(API_BASE, new Blob([raw], { type: "text/plain;charset=utf-8" }));
+      if (ok) return true;
+    }
+
+    // 2) fallback fetch keepalive (SEM await)
+    fetch(API_BASE, {
+      method: "POST",
+      headers: { "Content-Type":"text/plain;charset=utf-8" },
+      body: raw,
+      keepalive: true
+    }).catch(()=>{});
+
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+
+
 
   /** =========================
  * ✅ PDF (FORÇAR DOWNLOAD)
@@ -1994,54 +2018,13 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   etapa = String(etapa || "").trim().toUpperCase();
   registros = Array.isArray(registros) ? registros : [];
 
-  if(!dataRef) return { ok:false, error:"dataReferencia obrigatória" };
-  if(!etapa || !"ABCDE".includes(etapa)) return { ok:false, error:"etapa inválida" };
+  // ✅ Não bloqueia: só enfileira e segue
+  const payload = { dataReferencia: dataRef, etapa, registros, modo:"ETAPA" };
+  enqueueEtapaNoWait_(payload);
 
-  // ✅ Etapa E: enfileira salvamento (rápido) e NÃO gera PDF aqui.
-  // O PDF fica para o painel final (botão "Baixar Programação (PDF)").
-  if(etapa === "E"){
-    // ✅ Etapa E: SALVA SINCRONO (rápido, sem PDF). Isso garante Timestamp/valores atualizados na planilha na hora.
-    const CHUNK_E = 450; // menor p/ evitar timeout
-    if(!registros.length){
-      const payload = { dataReferencia: dataRef, etapa: "E", registros: [], finalizar:true, modo:"FULL" };
-      const r = await api("salvarEtapa", { payload }, { timeoutMs: 90000 });
-      return r || { ok:false, error:"Falha ao salvar etapa E" };
-    }
-    for(let i=0;i<registros.length;i+=CHUNK_E){
-      const slice = registros.slice(i, i+CHUNK_E);
-      const payload = { dataReferencia: dataRef, etapa: "E", registros: slice, finalizar:true, modo:"FULL" };
-      const r = await api("salvarEtapa", { payload }, { timeoutMs: 90000 });
-      if(!r || !r.ok){
-        return r || { ok:false, error:"Falha ao salvar etapa E" };
-      }
-    }
-    return { ok:true, saved:true };
-  }
-
-  // ✅ A-D: enfileira e NÃO bloqueia a navegação (processa no gatilho 1min) enfileira e NÃO bloqueia a navegação (processa no gatilho 1min)
-  const CHUNK = 900; // evita payloads muito grandes
-  const tickets = [];
-
-  if(!registros.length){
-    // ainda assim enfileira (ex: limpar etapa)
-    const payload = { dataReferencia: dataRef, etapa, registros: [] };
-    const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
-    if(r?.ok && r.ticket) tickets.push(r.ticket);
-    return { ok: !!r?.ok, queued: true, tickets, raw: r };
-  }
-
-  for(let i=0;i<registros.length;i+=CHUNK){
-    const slice = registros.slice(i, i+CHUNK);
-    const payload = { dataReferencia: dataRef, etapa, registros: slice };
-    const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
-    if(!r || !r.ok){
-      return r || { ok:false, error:"Falha ao enfileirar salvarEtapaAsync" };
-    }
-    if(r.ticket) tickets.push(r.ticket);
-  }
-
-  return { ok:true, queued:true, tickets };
+  return { ok:true, queued:true };
 }
+
 
 
 async function enfileirarPosProcesso_(dataRef, etapa, registros){
