@@ -3643,8 +3643,8 @@ if(step === "B" && isFriday_(dataRef)){
   if(step === "E"){
     try{ enfileirarPosProcesso_(dataRef, step, registros); }catch(_){ }
   } else {
-    await enfileirarPosProcesso_(dataRef, step, registros);
-  }
+  // (removido) enfileirarPosProcesso_: etapa já vai para FILA por enqueueEtapaNoWait_
+}
 
   if(dirty[step]) dirty[step].clear();
 
