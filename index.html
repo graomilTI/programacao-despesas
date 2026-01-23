@@ -5,7 +5,15 @@
 
   <!-- ✅ BOOTSTRAP ÚNICO (blindagem + estado global) -->
   <script>
-  (function(){
+  
+// ===== FIX: globals usados no fluxo (evita ReferenceError em modo strict/closures) =====
+var total = 0;
+var lastRow = 0;
+var payload = null;
+var action = null;
+// ====================================================================================
+
+(function(){
     // Estado central (evita variáveis soltas e "is not defined")
     const state = window.__APP_STATE__ || {
       total: 0,
@@ -80,20 +88,7 @@
       };
     }
   })();
-  
-function readFileAsDataURL(file){
-  return new Promise(function(resolve,reject){
-    try{
-      if(!file) return resolve("");
-      const r = new FileReader();
-      r.onload = function(){ resolve(String(r.result||"")); };
-      r.onerror = function(e){ reject(e); };
-      r.readAsDataURL(file);
-    }catch(err){ reject(err); }
-  });
-}
-
-</script>
+  </script>
 <script>
 // Captura erros com stack (não trava a tela)
 window.addEventListener('error', function(ev){
@@ -1269,7 +1264,7 @@ async function cliSalvarRegistro_(){
     const f = byId("cli_foto")?.files?.[0];
     if (f){
       payload.foto_nome = f.name || "foto.png";
-      payload.foto_dataUrl = await fileToDataUrl_(f);
+      payload.foto_base64 = await fileToDataUrl(f);
     }
 
     const btn = byId("btnCliSalvar");
