@@ -1389,17 +1389,20 @@ async function cliSalvarRegistro_(){
     if (st) st.innerText = "Salvando...";
 
     // envia
-    const resp = await apiPost_({ action:"cliente_registrarContato", payload: payloadCli }, token);
+    const resp = await api("cliente_registrarContato", { payload: payloadCli }, { timeoutMs: 180000 });
 
     if (!resp || !resp.ok){
       throw new Error(resp && resp.error ? resp.error : "Falha ao salvar.");
     }
 
     if (st) st.innerText = "✅ Salvo com sucesso.";
+
+    // abre PDF se veio url (compat: pdf_url | pdfDownloadUrl | url)
+    const pdfUrl = resp.pdf_url || resp.pdfDownloadUrl || resp.url || resp.pdf || "";
     // abre PDF se veio url
-    if (resp.pdf_url){
+    if (pdfUrl){
       const a = document.createElement("a");
-      a.href = resp.pdf_url;
+      a.href = pdfUrl;
       a.target = "_blank";
       a.rel = "noopener";
       a.click();
