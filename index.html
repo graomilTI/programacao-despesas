@@ -4279,72 +4279,49 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+
+<!-- ===== PATCH: Auto-download PDF + Cliente sem logout ===== -->
+<script>
+function _firstPdfUrl_(pdfs){
+  if(!Array.isArray(pdfs) || !pdfs.length) return "";
+  const p = pdfs[0] || {};
+  return String(p.pdfDownloadUrl || p.downloadUrl || p.pdfViewUrl || p.viewUrl || "").trim();
+}
+function tentarDownloadAutomatico_(pdfs){
+  try{
+    const url = _firstPdfUrl_(pdfs);
+    if(!url) return;
+    // tenta abrir em nova aba (pode ser bloqueado dependendo do navegador)
+    window.open(url, "_blank");
+  }catch(e){}
+}
+// Ajuste: ao renderizar encerramento, tenta abrir o 1º PDF automaticamente
+(function(){
+  if(typeof encRender_ !== "function") return;
+  const _old = encRender_;
+  encRender_ = function(dataRef, pdfs){
+    const r = _old(dataRef, pdfs);
+    // tenta download/abrir após render
+    setTimeout(()=>tentarDownloadAutomatico_(pdfs), 200);
+    return r;
+  };
+})();
+
+// Ajuste: nunca forçar logout no fluxo de Cliente por erro de geração de PDF.
+// (A ação pode falhar em PDF mas salvar contato ok; o usuário não deve ser deslogado)
+(function(){
+  if(typeof isAuthError_ !== "function") return;
+  const _oldIsAuth = isAuthError_;
+  window.isAuthError_ = function(text){
+    // mantém regra original, mas evita falsos positivos em mensagens de cliente
+    // (quando o backend devolve "faça login" em html inesperado, etc.)
+    const t = String(text||"").toLowerCase();
+    if(t.includes("cliente_registrarcontato") || t.includes("registro de contato")) return false;
+    return _oldIsAuth(text);
+  };
+})();
+</script>
+<!-- ===== FIM PATCH ===== -->
+
 </body>
 </html>
-
-<!-- ================= PATCH FINAL (Etapas opcionais + Bloqueios + SIM/NAO) ================= -->
-<script>
-/* Regras de bloqueio conforme Painel A */
-function regraBloqueioPorDisponibilidade_(status){
-  status = String(status||"").toUpperCase();
-  if(status === "FALTA" || status === "ATESTADO" || status === "FÉRIAS"){
-    return { B:false, C:false, D:false, E:false };
-  }
-  if(status === "FOLGA"){
-    return { B:true, C:false, D:false, E:false };
-  }
-  return { B:true, C:true, D:true, E:true }; // OK padrão
-}
-
-/* Checkbox -> SIM/NAO garantido */
-function boolToSimNao_(checked){ return checked ? "SIM" : "NAO"; }
-
-/* Override seguro do coletor de payload */
-(function(){
-  const _oldCollect = window.collectPayload_;
-  window.collectPayload_ = function(){
-    const p = _oldCollect ? _oldCollect() : {};
-    if(p && p.despesas){
-      Object.keys(p.despesas).forEach(nome=>{
-        const d = p.despesas[nome];
-        ["cafe","almoco","janta"].forEach(k=>{
-          if(typeof d[k] === "boolean") d[k] = boolToSimNao_(d[k]);
-        });
-      });
-    }
-    return p;
-  }
-})();
-</script>
-<!-- ================= FIM PATCH FINAL ================= -->
-
-<!-- ===== PATCH DESPESAS FINAL ===== -->
-<script>
-/* Garantir leitura correta das checkboxes no Painel B (Alimentação) */
-function coletarAlimentacaoLinha_(row){
-  const get = (q)=>row.querySelector(q);
-  return {
-    cafe: get('[data-campo="cafe"]')?.checked ? "SIM" : "NAO",
-    almoco: get('[data-campo="almoco"]')?.checked ? "SIM" : "NAO",
-    janta: get('[data-campo="janta"]')?.checked ? "SIM" : "NAO"
-  };
-}
-
-/* Override seguro do payload de despesas */
-(function(){
-  const _old = window.montarPayloadDespesas;
-  window.montarPayloadDespesas = function(etapa){
-    const payload = _old ? _old(etapa) : { itens: [] };
-    if(payload && Array.isArray(payload.itens)){
-      payload.itens = payload.itens.map(it=>{
-        if(typeof it.cafe === "boolean") it.cafe = it.cafe ? "SIM":"NAO";
-        if(typeof it.almoco === "boolean") it.almoco = it.almoco ? "SIM":"NAO";
-        if(typeof it.janta === "boolean") it.janta = it.janta ? "SIM":"NAO";
-        return it;
-      });
-    }
-    return payload;
-  };
-})();
-</script>
-<!-- ===== FIM PATCH DESPESAS FINAL ===== -->
