@@ -1334,7 +1334,7 @@ function normTxt_(s){
   return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 
-async function cliSalvarRegistro_(){
+async function cliSalvarRegistroOld_(){
   try{
     // ✅ NÃO usa variável "payload" (evita TDZ de vez)
     const token = (getSession_ && getSession_()) || "";
