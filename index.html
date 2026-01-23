@@ -1635,12 +1635,12 @@ async function finalizarEtapaEComPdf_(){
     }));
 
   setBusy(true);
-  setDebug("Finalizando... (gerando PDFs)");
+  setDebug("Finalizando...");
 
   const r = await api(
     "finalizarEtapaE",
-    { payload: { dataReferencia: dataRef, etapa:"E", registros } },
-    { timeoutMs: 180000 }
+    { payload: { dataReferencia: dataRef, etapa:"E", registros, apenasSalvar:true, finalizar:true } },
+    { timeoutMs: 45000 }
   );
 
   setBusy(false);
