@@ -1221,6 +1221,7 @@ const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
 
   const payload = {
+    token: (session && session.token) ? session.token : (localStorage.getItem('token')||''),
     cliente,
     contato_nome: document.getElementById('cli_contato_nome')?.value?.trim() || '',
     telefone: document.getElementById('cli_contato_tel')?.value?.trim() || '',
@@ -1260,7 +1261,7 @@ const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
   if(st) st.innerText = 'Salvando...';
   setBusy(true);
 
-  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
+  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000, noLogout: true });
 
   setBusy(false);
   if(!r || !r.ok){
@@ -1272,14 +1273,30 @@ const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
 
   if(st) st.innerText = 'Registro salvo ✅';
 
-  // se retornar pdf, manda para encerramento
-  const pdfs = [];
+  // ✅ Se retornar PDF, NÃO manda para Encerramento (encerramento pode forçar logout do fluxo de programação).
+  // Em vez disso, mostramos link + tentamos abrir em nova aba.
   const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
-  if(url) pdfs.push({ name: r.name || r.fileName || 'Registro_Contato.pdf', pdfDownloadUrl: url, pdfViewUrl: r.pdfViewUrl || r.viewUrl || '' });
+  const viewUrl = r.pdfViewUrl || r.viewUrl || url;
 
-  if(pdfs.length){
-    encRender_(data, pdfs);
-    switchScreen('encerramento');
+  const box = document.getElementById('cliPdfBox');
+  if(url){
+    if(box){
+      box.innerHTML = `
+        <div style="margin-top:10px; padding:12px; border:1px solid #d0d7de; border-radius:10px; background:#fff;">
+          <div style="font-weight:700; margin-bottom:6px;">📄 PDF gerado</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a class="btn btn-success" href="${url}" target="_blank" rel="noopener">⬇️ Baixar PDF</a>
+            <a class="btn btn-light" href="${viewUrl}" target="_blank" rel="noopener">🔗 Abrir</a>
+          </div>
+        </div>`;
+      box.style.display = "block";
+    }
+    try{ window.open(viewUrl, "_blank"); }catch(e){}
+  }else{
+    if(box){
+      box.innerHTML = '';
+      box.style.display = "none";
+    }
   }
 }
 
@@ -1410,6 +1427,8 @@ const title = document.getElementById("loginTitle");
 
 /** ✅ API */
 async function api(act, args, opts){
+  opts = opts || {};
+
   // Contrato com backend (Worker/GAS):
   // Enviamos SEMPRE { action, payload, token }.
   // ✅ Blindagem: se você passar {payload:{...}} (double wrap), nós "desembrulhamos".
@@ -4278,50 +4297,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if(inp && !inp.value) inp.value = chooseDateByHour_();
 });
 </script>
-
-
-<!-- ===== PATCH: Auto-download PDF + Cliente sem logout ===== -->
-<script>
-function _firstPdfUrl_(pdfs){
-  if(!Array.isArray(pdfs) || !pdfs.length) return "";
-  const p = pdfs[0] || {};
-  return String(p.pdfDownloadUrl || p.downloadUrl || p.pdfViewUrl || p.viewUrl || "").trim();
-}
-function tentarDownloadAutomatico_(pdfs){
-  try{
-    const url = _firstPdfUrl_(pdfs);
-    if(!url) return;
-    // tenta abrir em nova aba (pode ser bloqueado dependendo do navegador)
-    window.open(url, "_blank");
-  }catch(e){}
-}
-// Ajuste: ao renderizar encerramento, tenta abrir o 1º PDF automaticamente
-(function(){
-  if(typeof encRender_ !== "function") return;
-  const _old = encRender_;
-  encRender_ = function(dataRef, pdfs){
-    const r = _old(dataRef, pdfs);
-    // tenta download/abrir após render
-    setTimeout(()=>tentarDownloadAutomatico_(pdfs), 200);
-    return r;
-  };
-})();
-
-// Ajuste: nunca forçar logout no fluxo de Cliente por erro de geração de PDF.
-// (A ação pode falhar em PDF mas salvar contato ok; o usuário não deve ser deslogado)
-(function(){
-  if(typeof isAuthError_ !== "function") return;
-  const _oldIsAuth = isAuthError_;
-  window.isAuthError_ = function(text){
-    // mantém regra original, mas evita falsos positivos em mensagens de cliente
-    // (quando o backend devolve "faça login" em html inesperado, etc.)
-    const t = String(text||"").toLowerCase();
-    if(t.includes("cliente_registrarcontato") || t.includes("registro de contato")) return false;
-    return _oldIsAuth(text);
-  };
-})();
-</script>
-<!-- ===== FIM PATCH ===== -->
 
 </body>
 </html>
