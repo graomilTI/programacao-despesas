@@ -13,6 +13,14 @@ var payload = null;
 var action = null;
 // ====================================================================================
 
+// ===== Helpers mínimos (Clientes) =====
+function byId(id){ return document.getElementById(id); }
+function msgErro(m){
+  try{ alert(String(m||"Erro")); }catch(e){}
+  return false;
+}
+// =====================================
+
 (function(){
     // Estado central (evita variáveis soltas e "is not defined")
     const state = window.__APP_STATE__ || {
@@ -1396,13 +1404,10 @@ async function cliSalvarRegistro_(){
     }
 
     if (st) st.innerText = "✅ Salvo com sucesso.";
-
-    // abre PDF se veio url (compat: pdf_url | pdfDownloadUrl | url)
-    const pdfUrl = resp.pdf_url || resp.pdfDownloadUrl || resp.url || resp.pdf || "";
     // abre PDF se veio url
-    if (pdfUrl){
+    if (resp.pdf_url){
       const a = document.createElement("a");
-      a.href = pdfUrl;
+      a.href = resp.pdf_url;
       a.target = "_blank";
       a.rel = "noopener";
       a.click();
