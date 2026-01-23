@@ -1151,15 +1151,46 @@ function encAbrir_(i){
 function buildRegistrosFull_(){
   const namesAll = Object.keys(form || {});
   return namesAll
-    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-    .map(n => {
+        .map(n => {
       const f = form[n] || {};
       const sup = (supPorNomeFast?.[n] || ctx?.mapSupPorNome?.[n] || "");
+      const status = String(f.disponibilidade_status||"OK").trim();
+      const pros = PROSSEGUIR(status);
+
       const tipoEst = String(f.estadia_tipo || "Casa").trim();
       const diasRaw = f.hotel_dias;
       const dias = (diasRaw === "" || diasRaw == null) ? "" : Math.floor(Number(diasRaw||0));
       const hora = String(f.hotel_chegada || "").trim();
       const obsNorm = normalizeHotelObs_(tipoEst, f.estadia_obs, diasRaw, hora);
+
+      // ✅ Se NÃO prosseguir (Disponibilidade != OK): limpa campos das etapas seguintes
+      // Assim garantimos que a disponibilidade fique registrada e a conferência enxergue.
+      let _tipoEst = tipoEst, _dias = dias, _hora = hora, _obsNorm = obsNorm;
+      let _cafe = isSim_(f.cafe_valor)   ? "SIM" : "NÃO";
+      let _almoco = isSim_(f.almoco_valor) ? "SIM" : "NÃO";
+      let _janta = isSim_(f.janta_valor)  ? "SIM" : "NÃO";
+      let _deslTipo = f.deslocamento_tipo || "";
+      let _deslObs  = f.deslocamento_obs  || "";
+      let _rec = Number(f.extras_recarga_valor||0);
+      let _pas = Number(f.extras_passagem_valor||0);
+      let _lav = Number(f.extras_lavagem_valor||0);
+      let _extObs = String(f.extras_obs||"").trim();
+      let _manut = String(f.manut_veic||"").trim();
+
+      if(!pros){
+        _tipoEst = "";
+        _dias = "";
+        _hora = "";
+        _obsNorm = "";
+        _cafe = "NÃO";
+        _almoco = "NÃO";
+        _janta = "NÃO";
+        _deslTipo = "";
+        _deslObs = "";
+        _rec = 0; _pas = 0; _lav = 0;
+        _extObs = "";
+        _manut = "";
+      }
 
       const cafe   = isSim_(f.cafe_valor)   ? "SIM" : "NÃO";
       const almoco = isSim_(f.almoco_valor) ? "SIM" : "NÃO";
@@ -1170,24 +1201,24 @@ function buildRegistrosFull_(){
         coordenacao: f.coordenacao,
         supervisao: sup,
 
-        disponibilidade_status: String(f.disponibilidade_status||"OK").trim(),
+        disponibilidade_status: status,
         disponibilidade_obs: String(f.disponibilidade_obs||"").trim(),
 
-        estadia_tipo: tipoEst,
-        estadia_obs: obsNorm,
-        hotel_dias: (tipoEst==="Hotel" ? (dias!=="" && dias>0 ? dias : "") : ""),
-        hotel_chegada: (tipoEst==="Hotel" ? hora : ""),
+        estadia_tipo: _tipoEst,
+        estadia_obs: _obsNorm,
+        hotel_dias: (_tipoEst==="Hotel" ? (_dias!=="" && _dias>0 ? _dias : "") : ""),
+        hotel_chegada: (_tipoEst==="Hotel" ? _hora : ""),
 
-        cafe_valor: cafe,
-        almoco_valor: almoco,
-        janta_valor: janta,
+        cafe_valor: _cafe,
+        almoco_valor: _almoco,
+        janta_valor: _janta,
 
-        deslocamento_tipo: f.deslocamento_tipo || "",
-        deslocamento_obs: f.deslocamento_obs || "",
+        deslocamento_tipo: _deslTipo,
+        deslocamento_obs: _deslObs,
 
-        extras_recarga_valor: Number(f.extras_recarga_valor||0),
-        extras_passagem_valor: Number(f.extras_passagem_valor||0),
-        extras_lavagem_valor: Number(f.extras_lavagem_valor||0),
+        extras_recarga_valor: _rec,
+        extras_passagem_valor: _pas,
+        extras_lavagem_valor: _lav,
         manut_veic: Number(f.manut_veic||0),
         extras_obs: f.extras_obs || ""
       };
@@ -1337,7 +1368,7 @@ function normTxt_(s){
   return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 
-async function cliSalvarRegistro_(){
+async async function cliSalvarRegistro_(){
   // ✅ Clientes: sempre começa "limpo" (sem restore/cache)
   // ✅ Blindagem: não usa variável chamada "payload" (evita TDZ de vez)
   try{
@@ -1397,7 +1428,7 @@ async function cliSalvarRegistro_(){
     if (st) st.innerText = "Salvando...";
 
     // envia
-    const resp = await api("cliente_registrarContato", { payload: payloadCli }, { timeoutMs: 180000 });
+    const resp = await api("cliente_registrarContato", { "payload": payloadCli }, { timeoutMs: 180000 });
 
     if (!resp || !resp.ok){
       throw new Error(resp && resp.error ? resp.error : "Falha ao salvar.");
@@ -1719,8 +1750,7 @@ async function finalizarEtapaEComPdf_(){
 
   const namesAll = Object.keys(form);
   const registros = namesAll
-    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-    .map(n => ({
+        .map(n => ({
       colaborador: n,
       coordenacao: form[n].coordenacao,
       supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
@@ -3462,7 +3492,8 @@ async function salvarEtapaAtual_(){
 let registros = [];
 
   if(step === "A"){
-    registros = dirtyNames.map(n => {
+    // ✅ GARANTIA: salva disponibilidade de TODOS (não depende de "dirty")
+    registros = namesAll.map(n => {
       const status = String(form[n].disponibilidade_status || "OK").trim().toUpperCase();
       const isTransf = status === "TRANSFERIR";
 
@@ -3482,8 +3513,7 @@ let registros = [];
 
   if(step === "B"){
     registros = dirtyNames
-      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-      .map(n => {
+            .map(n => {
         const tipo = String(form[n].estadia_tipo || "Casa").trim();
 
         const diasRaw = form[n].hotel_dias;
@@ -3501,7 +3531,7 @@ let registros = [];
           coordenacao: form[n].coordenacao,
           supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
           estadia_tipo: tipo,
-          estadia_obs: obsNorm,
+          estadia_obs: _obsNorm,
           hotel_dias: (tipo==="Hotel" ? (dias>0 ? Math.floor(dias) : "") : ""),
           hotel_chegada: (tipo==="Hotel" ? hora : "")
         };
@@ -3510,8 +3540,7 @@ let registros = [];
 
   if(step === "C"){
     registros = dirtyNames
-      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-      .map(n => {
+            .map(n => {
         const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "NÃO";
         const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "NÃO";
         const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "NÃO";
@@ -3521,9 +3550,9 @@ let registros = [];
           coordenacao: form[n].coordenacao,
           supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
 
-          cafe_valor: cafe,
-          almoco_valor: almoco,
-          janta_valor: janta,
+          cafe_valor: _cafe,
+          almoco_valor: _almoco,
+          janta_valor: _janta,
 
           cafe: cafe,
           almoco: almoco,
@@ -3538,8 +3567,7 @@ let registros = [];
 
   if(step === "D"){
     registros = dirtyNames
-      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-      .map(n => ({
+            .map(n => ({
         colaborador: n,
         coordenacao: form[n].coordenacao,
         supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
@@ -3550,8 +3578,7 @@ let registros = [];
 
   if(step === "E"){
     registros = dirtyNames
-      .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-      .map(n => ({
+            .map(n => ({
         colaborador: n,
         coordenacao: form[n].coordenacao,
         supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
@@ -3588,8 +3615,7 @@ if(step === "B" && isFriday_(dataRef)){
   const dom = addDays_(dataRef, 2);
 
   const regsW = namesAll
-    .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
-    .filter(n => !!form[n].wknd_hosp)
+        .filter(n => !!form[n].wknd_hosp)
     .filter(n => ["Hotel","Fazenda","Alojamento"].includes(String(form[n].estadia_tipo||"").trim()))
     .map(n => {
       const tipo = String(form[n].estadia_tipo||"").trim();
@@ -3609,7 +3635,7 @@ if(step === "B" && isFriday_(dataRef)){
         coordenacao: form[n].coordenacao,
         supervisao: (supPorNomeFast[n] || ctx?.mapSupPorNome?.[n] || ""),
         estadia_tipo: tipo,
-        estadia_obs: obsNorm,
+        estadia_obs: _obsNorm,
         hotel_dias: (tipo==="Hotel" ? (dias>0 ? Math.floor(dias) : "") : ""),
         hotel_chegada: (tipo==="Hotel" ? hora : "")
       };
