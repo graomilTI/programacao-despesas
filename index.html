@@ -858,6 +858,7 @@ let GAS_FALLBACK = localStorage.getItem("GAS_FALLBACK_URL") || "";
 
 /** ✅ estado */
 let token = localStorage.getItem("DESP_TOKEN") || "";
+window.token = token;
 
 /** 🔁 Descobre URL do GAS pelo / (worker) para fallback quando o Worker cair (502) */
 function initApiBase_(){
@@ -1366,6 +1367,7 @@ function isAuthError_(text){
 function logoutForcado(msg){
   try{ localStorage.removeItem("DESP_TOKEN"); }catch(e){}
   token = "";
+window.token = "";
   ctx = null;
   form = {};
   supPorNomeFast = {};
@@ -1639,6 +1641,7 @@ async function login(){
 
   token = out.token;
   localStorage.setItem("DESP_TOKEN", token);
+window.token = token;
 
   hide("loginCard");
   show("app");
