@@ -732,6 +732,9 @@ if ('serviceWorker' in navigator) {
 <div class="muted" id="encInfo" style="margin-top:8px;"></div>
 <div id="encLista" style="margin-top:10px;"></div>
 <div class="toolsRow" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+<button id="btnEncBaixarPdf" type="button" onclick="encBaixarPdf_()">⬇️ Baixar Programação (PDF)</button>
+<button class="secondary" id="btnEncEncerrar" type="button" onclick="encEncerrar_()">✅ Encerrar processo</button>
+
 <button class="light" onclick="encVoltarInicio_()" type="button">🏠 Voltar para início</button>
 <button onclick="encVoltarProgramacao_()" type="button">📋 Voltar para programação</button>
 </div>
@@ -1148,6 +1151,19 @@ function encAbrir_(i){
   if(!url){ alert('PDF sem link.'); return; }
   window.open(url, '_blank', 'noopener');
 }
+
+function encBaixarPdf_(){
+  baixarPDFProgramacao_();
+}
+
+function encEncerrar_(){
+  try{
+    logoutForcado("✅ Processo encerrado.");
+  }catch(e){
+    try{ logout(); }catch(_){}
+  }
+}
+
 function encVoltarInicio_(){
   // volta para topo (data + carregar)
   switchScreen('programacao');
@@ -1614,7 +1630,7 @@ async function finalizarEtapaEComPdf_(){
       extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
       extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
       extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
-      manut_veic_valor: Number(form[n].manut_veic_valor||0),
+      manut_veic: Number(form[n].manut_veic||0),
       extras_obs: form[n].extras_obs || ""
     }));
 
@@ -1854,10 +1870,30 @@ async function salvarEtapaPayload_(dataRef, etapa, registros){
   if(!dataRef) return { ok:false, error:"dataReferencia obrigatória" };
   if(!etapa || !"ABCDE".includes(etapa)) return { ok:false, error:"etapa inválida" };
 
-  // ✅ Etapa E: precisa finalizar + retornar PDFs
+  // ✅ Etapa E: enfileira salvamento (rápido) e NÃO gera PDF aqui.
+  // O PDF fica para o painel final (botão "Baixar Programação (PDF)").
   if(etapa === "E"){
-    const payload = { dataReferencia: dataRef, etapa: "E", registros };
-    return await api("finalizarEtapaE", { payload }, { timeoutMs: 120000 });
+    const CHUNK_E = 900;
+    const ticketsE = [];
+
+    if(!registros.length){
+      const payload = { dataReferencia: dataRef, etapa: "E", registros: [] };
+      const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
+      if(r?.ok && r.ticket) ticketsE.push(r.ticket);
+      return { ok: !!r?.ok, queued:true, tickets: ticketsE, raw:r };
+    }
+
+    for(let i=0;i<registros.length;i+=CHUNK_E){
+      const slice = registros.slice(i, i+CHUNK_E);
+      const payload = { dataReferencia: dataRef, etapa: "E", registros: slice };
+      const r = await api("salvarEtapaAsync", { payload }, { timeoutMs: 45000 });
+      if(!r || !r.ok){
+        return r || { ok:false, error:"Falha ao enfileirar salvarEtapaAsync (E)" };
+      }
+      if(r.ticket) ticketsE.push(r.ticket);
+    }
+
+    return { ok:true, queued:true, tickets: ticketsE };
   }
 
   // ✅ A-D: enfileira e NÃO bloqueia a navegação (processa no gatilho 1min)
@@ -2159,7 +2195,7 @@ function buildAllStepsDom_(){
     const rec = Number(form[n].extras_recarga_valor||0) > 0;
     const pas = Number(form[n].extras_passagem_valor||0) > 0;
     const lav = Number(form[n].extras_lavagem_valor||0) > 0;
-    const man = Number(form[n].manut_veic_valor||0) > 0;
+    const man = Number(form[n].manut_veic||0) > 0;
 
     return `
       <div class="nomeRow" id="rowE_${idSafe(n)}" data-nome="${escAttr(n)}">
@@ -2201,12 +2237,12 @@ function buildAllStepsDom_(){
 
           <div class="inlineVal">
             <div class="chkRow">
-              <input type="checkbox" data-action="extraToggle" data-field="manut_veic_valor" data-nome="${escAttr(n)}" ${man?"checked":""}>
+              <input type="checkbox" data-action="extraToggle" data-field="manut_veic" data-nome="${escAttr(n)}" ${man?"checked":""}>
               <span>Manutenção Veículo</span>
             </div>
             <input type="number" step="0.01" class="${man?"":"extraInputHidden"}"
-              data-action="extraVal" data-field="manut_veic_valor" data-nome="${escAttr(n)}"
-              placeholder="Valor" value="${escAttr(form[n].manut_veic_valor)}">
+              data-action="extraVal" data-field="manut_veic" data-nome="${escAttr(n)}"
+              placeholder="Valor" value="${escAttr(form[n].manut_veic)}">
           </div>
         </div>
 
@@ -2386,7 +2422,7 @@ function bindDelegationC_(){
   if(!box || box._bound) return;
   box._bound = true;
 
-  const toSN = (checked)=> checked ? "SIM" : "NÃO";
+  const toSN = (checked)=> checked ? "SIM" : "";
 
   box.addEventListener("change", (e)=>{
     const el = e.target;
@@ -2700,7 +2736,7 @@ function adminGetLiberadas_(n){
   if(Number(f.extras_recarga_valor||0)>0) out.push('Recarga');
   if(Number(f.extras_passagem_valor||0)>0) out.push('Passagem');
   if(Number(f.extras_lavagem_valor||0)>0) out.push('Lavagem');
-  if(Number(f.manut_veic_valor||0)>0) out.push('Manut');
+  if(Number(f.manut_veic||0)>0) out.push('Manut');
   return out;
 }
 
@@ -2719,7 +2755,7 @@ function adminRowFromForm_(n){
   const rec   = Number(f.extras_recarga_valor || 0) || 0;
   const pas   = Number(f.extras_passagem_valor || 0) || 0;
   const lav   = Number(f.extras_lavagem_valor || 0) || 0;
-  const man   = Number(f.manut_veic_valor || 0) || 0;
+  const man   = Number(f.manut_veic || 0) || 0;
 
   // só aparece se tiver algo marcado
   if(!(estLabel || cafe || alm || janta || desl || rec>0 || pas>0 || lav>0 || man>0)) return null;
@@ -3227,9 +3263,9 @@ async function carregar(){
       hotel_dias: (prev.hotel_dias === "" || prev.hotel_dias == null) ? "" : Number(prev.hotel_dias),
       hotel_chegada: (prev.hotel_chegada == null) ? "" : String(prev.hotel_chegada),
 
-      cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "NÃO",
-      almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "NÃO",
-      janta_valor:  isSim_(prev.janta_valor)  ? "SIM" : "NÃO",
+      cafe_valor:   isSim_(prev.cafe_valor)   ? "SIM" : "",
+      almoco_valor: isSim_(prev.almoco_valor) ? "SIM" : "",
+      janta_valor:  isSim_(prev.janta_valor)  ? "SIM" : "",
 
       deslocamento_tipo: prev.deslocamento_tipo ?? "",
       deslocamento_obs: prev.deslocamento_obs ?? "",
@@ -3238,7 +3274,7 @@ async function carregar(){
       extras_passagem_valor: Number(prev.extras_passagem_valor ?? 0),
       extras_lavagem_valor: Number(prev.extras_lavagem_valor ?? 0),
 
-      manut_veic_valor: Number(prev.manut_veic ?? prev.manut_veic_valor ?? 0),
+      manut_veic: Number(prev.manut_veic ?? prev.manut_veic_valor ?? 0),
 
       extras_obs: prev.extras_obs ?? ""
     };
@@ -3384,9 +3420,9 @@ let registros = [];
     registros = dirtyNames
       .filter(n => PROSSEGUIR(form[n].disponibilidade_status))
       .map(n => {
-        const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "NÃO";
-        const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "NÃO";
-        const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "NÃO";
+        const cafe   = isSim_(form[n].cafe_valor)   ? "SIM" : "";
+        const almoco = isSim_(form[n].almoco_valor) ? "SIM" : "";
+        const janta  = isSim_(form[n].janta_valor)  ? "SIM" : "";
 
         return {
           colaborador: n,
@@ -3430,7 +3466,7 @@ let registros = [];
         extras_recarga_valor: Number(form[n].extras_recarga_valor||0),
         extras_passagem_valor: Number(form[n].extras_passagem_valor||0),
         extras_lavagem_valor: Number(form[n].extras_lavagem_valor||0),
-        manut_veic_valor: Number(form[n].manut_veic_valor||0),
+        manut_veic: Number(form[n].manut_veic||0),
         extras_obs: form[n].extras_obs || ""
       }));
   }
@@ -3502,7 +3538,12 @@ if(step === "B" && isFriday_(dataRef)){
   }
 }
 
-  await enfileirarPosProcesso_(dataRef, step, registros);
+  // ✅ E: não espera pós-processo (evita travar). Ele já roda pelo gatilho da fila.
+  if(step === "E"){
+    try{ enfileirarPosProcesso_(dataRef, step, registros); }catch(_){ }
+  } else {
+    await enfileirarPosProcesso_(dataRef, step, registros);
+  }
 
   if(dirty[step]) dirty[step].clear();
 
@@ -3548,14 +3589,13 @@ function avancar(){
       return;
     }
 
-    // ✅ Etapa final (E): tenta finalizar (salvar + PDF). Aqui sim avisamos se falhar.
-    const r0 = finalizarEtapaEComPdf_();
+    // ✅ Etapa final (E): salva/enfileira rápido. PDF fica pro painel final.
+    const r0 = salvarEtapaAtual_();
 
     function _okFinal_(){
-      alert("✅ Programação finalizada! PDF gerado.");
-      setTimeout(function(){
-        logoutForcado("✅ Programação finalizada! Faça login novamente para uma nova programação.");
-      }, 700);
+      // ✅ Não faz logout automático. Mostra painel final com botões.
+      setDebug("✅ Programação finalizada.");
+      switchScreen("encerramento");
     }
 
     if(r0 && typeof r0.then === "function"){
