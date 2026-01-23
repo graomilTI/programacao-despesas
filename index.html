@@ -1368,7 +1368,7 @@ function normTxt_(s){
   return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 
-async async function cliSalvarRegistro_(){
+async function cliSalvarRegistro_(){
   // ✅ Clientes: sempre começa "limpo" (sem restore/cache)
   // ✅ Blindagem: não usa variável chamada "payload" (evita TDZ de vez)
   try{
