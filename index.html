@@ -1209,77 +1209,82 @@ function normTxt_(s){
 }
 
 async function cliSalvarRegistro_(){
-  // não apaga o formulário: apenas pede login
-  if(!token){
-    alert("Faça login primeiro.");
-    try{ show("loginCard"); hide("app"); }catch(_){ }
-    return;
-  }
-const cliente = document.getElementById('cli_cliente')?.value?.trim() || '';
-  const data = document.getElementById('cli_data')?.value?.trim() || '';
-  if(!cliente){ alert('Informe o cliente.'); return; }
-  if(!parseDMY_(data)){ alert('Data inválida (dd/mm/aaaa).'); return; }
+  try{
+    if(!token){
+      msgErro("Faça login primeiro.");
+      return;
+    }
 
-  const payload = {
-    cliente,
-    contato_nome: document.getElementById('cli_contato_nome')?.value?.trim() || '',
-    telefone: document.getElementById('cli_contato_tel')?.value?.trim() || '',
-    data,
-    supervisao: (ctx?.supervisao || ''),
-    coordenacao: (ctx?.coordenacao || ''),
-    gestorNome: (ctx?.nome || ctx?.gestorNome || ''),
-    interacoes: {
-      visita: !!document.getElementById('cli_tipo_visita')?.checked,
-      online: !!document.getElementById('cli_tipo_online')?.checked,
-      almoco: !!document.getElementById('cli_tipo_almoco')?.checked,
-      outros: !!document.getElementById('cli_tipo_outros')?.checked
-    },
-    outros_desc: document.getElementById('cli_outros_desc')?.value?.trim() || '',
-    participantes_grao: cli_part_grao.slice(),
-    participantes_cliente: cli_part_cliente.slice(),
-    resumo: document.getElementById('cli_resumo')?.value || '',
-    providencias: document.getElementById('cli_providencias')?.value || ''
-  };
+    const cliente = (byId("cli_cliente")?.value || "").trim();
+    const contato = (byId("cli_contato")?.value || "").trim();
+    const telefone = (byId("cli_telefone")?.value || "").trim();
+    const data = (byId("cli_data")?.value || "").trim();
 
-  if(payload.interacoes && payload.interacoes.outros && !String(payload.outros_desc||"").trim()){
-    alert("Descreva o campo \"Outros\" (obrigatório quando selecionado).");
-    return;
-  }
+    if(!cliente) return msgErro("Informe o Cliente.");
+    if(!data) return msgErro("Informe a Data.");
 
-  // fotos -> dataUrl (base64 embutido; limitado)
-  const files = Array.from(document.getElementById('cli_fotos')?.files || []);
-  const photos = [];
-  const maxPhotos = 6; // evita payload gigante
-  for(const f of files.slice(0,maxPhotos)){
-    const dataUrl = await fileToDataUrl_(f);
-    if(dataUrl) photos.push({ name: f.name, mimeType: f.type, dataUrl });
-  }
-  payload.fotos = photos;
+    const interacoes = {
+      visita: !!byId("cli_i_visita")?.checked,
+      online: !!byId("cli_i_online")?.checked,
+      almoco: !!byId("cli_i_almoco")?.checked,
+      outros: !!byId("cli_i_outros")?.checked
+    };
 
-  const st = document.getElementById('cliStatus');
-  if(st) st.innerText = 'Salvando...';
-  setBusy(true);
+    const outros_desc = (byId("cli_outros_desc")?.value || "").trim();
+    const resumo = (byId("cli_resumo")?.value || "").trim();
+    const providencias = (byId("cli_providencias")?.value || "").trim();
 
-  const r = await api('cliente_registrarContato', { payload }, { timeoutMs: 180000 });
+    const participantes_grao = (window.__cli_part_grao || []).slice();
+    const participantes_cliente = (window.__cli_part_cli || []).slice();
 
-  setBusy(false);
-  if(!r || !r.ok){
-    const err = r?.error || 'Falha ao salvar.';
-    if(st) st.innerText = err;
-    alert(err);
-    return;
-  }
+    const payload = {
+      token,
+      cliente,
+      contato_nome: contato,
+      telefone,
+      data,
+      interacoes,
+      outros_desc,
+      resumo,
+      providencias,
+      participantes_grao,
+      participantes_cliente
+    };
 
-  if(st) st.innerText = 'Registro salvo ✅';
+    // anexo (opcional)
+    const f = byId("cli_foto")?.files?.[0];
+    if (f){
+      payload.foto_nome = f.name || "foto.png";
+      payload.foto_base64 = await fileToDataUrl(f);
+    }
 
-  // se retornar pdf, manda para encerramento
-  const pdfs = [];
-  const url = r.pdfDownloadUrl || r.downloadUrl || r.pdfViewUrl || r.viewUrl || '';
-  if(url) pdfs.push({ name: r.name || r.fileName || 'Registro_Contato.pdf', pdfDownloadUrl: url, pdfViewUrl: r.pdfViewUrl || r.viewUrl || '' });
+    const btn = byId("btnCliSalvar");
+    if (btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
 
-  if(pdfs.length){
-    encRender_(data, pdfs);
-    switchScreen('encerramento');
+    const r = await api("cliente_registrarContato", payload);
+
+    if (btn){ btn.disabled = false; btn.textContent = "Gerar PDF e Salvar"; }
+
+    if(!r || r.ok !== true){
+      const err = (r && (r.error || r.message)) ? (r.error || r.message) : "Falha ao salvar.";
+      msgErro(err);
+      return;
+    }
+
+    msgOk("Registro salvo! Gerando download...");
+
+    const url = r.downloadUrl || r.fileUrl || r.url;
+    if (url){
+      // tenta baixar; se o navegador bloquear, abre em nova aba
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.click();
+    }
+  }catch(e){
+    msgErro(String(e && e.message ? e.message : e));
+    try{ console.error(e); }catch(_){}
   }
 }
 
