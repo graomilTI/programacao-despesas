@@ -1336,18 +1336,17 @@ function normTxt_(s){
 
 async function cliSalvarRegistro_(){
   try{
-    if(!token){
-      msgErro("Faça login primeiro.");
-      return;
-    }
-
+    // ✅ NÃO usa variável "payload" (evita TDZ de vez)
+    const token = (getSession_ && getSession_()) || "";
     const cliente = (byId("cli_cliente")?.value || "").trim();
     const contato = (byId("cli_contato")?.value || "").trim();
-    const telefone = (byId("cli_telefone")?.value || "").trim();
+    const telefone = (byId("cli_tel")?.value || byId("cli_telefone")?.value || "").trim();
     const data = (byId("cli_data")?.value || "").trim();
 
-    if(!cliente) return msgErro("Informe o Cliente.");
-    if(!data) return msgErro("Informe a Data.");
+    if(!token){ msgErro("Faça login primeiro."); return; }
+    if(!cliente){ msgErro("Informe o cliente."); return; }
+    if(!contato){ msgErro("Informe o contato."); return; }
+    if(!data){ msgErro("Informe a data."); return; }
 
     const interacoes = {
       visita: !!byId("cli_i_visita")?.checked,
@@ -1356,38 +1355,30 @@ async function cliSalvarRegistro_(){
       outros: !!byId("cli_i_outros")?.checked
     };
 
-    const outros_desc = (byId("cli_outros_desc")?.value || "").trim();
-    const resumo = (byId("cli_resumo")?.value || "").trim();
-    const providencias = (byId("cli_providencias")?.value || "").trim();
-
-    const participantes_grao = (window.__cli_part_grao || []).slice();
-    const participantes_cliente = (window.__cli_part_cli || []).slice();
-
-    const payload = {
-      token,
-      cliente,
-      contato_nome: contato,
-      telefone,
-      data,
-      interacoes,
-      outros_desc,
-      resumo,
-      providencias,
-      participantes_grao,
-      participantes_cliente
-    };
+    const payloadCli = {};
+    payloadCli.token = token;
+    payloadCli.cliente = cliente;
+    payloadCli.contato_nome = contato;
+    payloadCli.telefone = telefone;
+    payloadCli.data = data;
+    payloadCli.interacoes = interacoes;
+    payloadCli.outros_desc = (byId("cli_outros_desc")?.value || "").trim();
+    payloadCli.resumo = (byId("cli_resumo")?.value || "").trim();
+    payloadCli.providencias = (byId("cli_providencias")?.value || "").trim();
+    payloadCli.participantes_grao = (window.__cli_part_grao || []).slice();
+    payloadCli.participantes_cliente = (window.__cli_part_cli || []).slice();
 
     // anexo (opcional)
     const f = byId("cli_foto")?.files?.[0];
     if (f){
-      payload.foto_nome = f.name || "foto.png";
-      payload.foto_base64 = await fileToDataUrl(f);
+      payloadCli.foto_nome = f.name || "foto.png";
+      payloadCli.foto_base64 = await fileToDataUrl_(f);
     }
 
     const btn = byId("btnCliSalvar");
     if (btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
 
-    const r = await api("cliente_registrarContato", payload);
+    const r = await api("cliente_registrarContato", payloadCli);
 
     if (btn){ btn.disabled = false; btn.textContent = "Gerar PDF e Salvar"; }
 
@@ -1397,16 +1388,10 @@ async function cliSalvarRegistro_(){
       return;
     }
 
-    msgOk("Registro salvo! Gerando download...");
-
+    msgOk("Registro salvo!");
     const url = r.downloadUrl || r.fileUrl || r.url;
     if (url){
-      // tenta baixar; se o navegador bloquear, abre em nova aba
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.rel = "noopener";
-      a.click();
+      window.open(url, "_blank", "noopener");
     }
   }catch(e){
     msgErro(String(e && e.message ? e.message : e));
