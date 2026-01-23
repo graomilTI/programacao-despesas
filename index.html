@@ -4249,7 +4249,7 @@ async function fileToDataUrl_(file){
 }
 
 // OVERRIDE: salvar clientes corretamente
-async function cliSalvarRegistro_(){
+async function cliSalvarRegistro_LEGACY_(){
   if(!window.token){ logoutForcado('Faça login primeiro.'); return; }
 
   const cliente = (document.getElementById('cli_cliente')?.value || '').trim();
