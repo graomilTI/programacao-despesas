@@ -1522,6 +1522,18 @@ function maskData(s){
   return d.replace(/^(\d{2})(\d{2})(\d+)/,"$1/$2/$3");
 }
 
+
+/**
+ * Formata Date -> dd/MM/aaaa
+ */
+function _fmtDMY_(d) {
+  if (!(d instanceof Date) || isNaN(d)) return null;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+
 function parseDMY_(s){
   // Aceita:
   //  - dd/MM/aaaa (com 1-2 dígitos) em QUALQUER parte do texto
@@ -1534,16 +1546,6 @@ function parseDMY_(s){
       if(d0 instanceof Date && !isNaN(d0)) return d0;
     }
 
-/**
- * Formata Date -> dd/MM/aaaa
- */
-function _fmtDMY_(d) {
-  if (!(d instanceof Date) || isNaN(d)) return null;
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${dd}/${mm}/${yy}`;
-}
 
 catch(_){}
   }
