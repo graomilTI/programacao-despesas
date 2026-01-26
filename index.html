@@ -1521,34 +1521,36 @@ function _fmtDMY_(d) {
 }
 
 function parseDMY_(s){
-  if (s == null) return null;
-  if (s instanceof Date) return isNaN(s) ? null : s;
+  if(s == null) return null;
+  if(s instanceof Date) return isNaN(s) ? null : s;
 
-  let t = String(s).trim();
-  if (!t) return null;
+  let t = (typeof s === "string") ? s : String(s);
+  t = t.trim()
+       .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+       .replace(/[\u2215\u2044\uFF0F]/g, "/")
+       .replace(/\./g, "/");
 
-  // Se vier ISO ou com hora, pega só a parte da data
-  if (t.includes("T")) t = t.split("T")[0].trim();
-  if (t.includes(" ")) t = t.split(" ")[0].trim();
-
-  // dd/MM/aaaa (ou dd-MM-aaaa / dd. MM .aaaa)
-  let m = t.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
-  if (m){
-    const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
-    const d = new Date(yy, mm-1, dd);
-    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
+  // yyyy-mm-dd
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m){
+    const y=+m[1], mo=+m[2], d=+m[3];
+    const dt = new Date(y, mo-1, d);
+    if(dt && dt.getFullYear()===y && (dt.getMonth()+1)===mo && dt.getDate()===d) return dt;
   }
 
-  // aaaa-MM-dd (ou aaaa/MM/dd)
-  m = t.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-  if (m){
-    const yy = parseInt(m[1],10), mm = parseInt(m[2],10), dd = parseInt(m[3],10);
-    const d = new Date(yy, mm-1, dd);
-    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
+  // procura dd/mm/yyyy (pode estar "no meio" do texto)
+  m = t.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if(m){
+    const d=+m[1], mo=+m[2], y=+m[3];
+    const dt = new Date(y, mo-1, d);
+    if(dt && dt.getFullYear()===y && (dt.getMonth()+1)===mo && dt.getDate()===d) return dt;
   }
 
-  return null;
+  // tenta parse nativo (último recurso)
+  const dt0 = new Date(t);
+  return isNaN(dt0) ? null : dt0;
 }
+
 function formatDMY_(d){
   const dd = String(d.getDate()).padStart(2,"0");
   const mm = String(d.getMonth()+1).padStart(2,"0");
@@ -3337,38 +3339,10 @@ async function adminCarregar_(){
 /** ======================
  * ✅ CARREGAR CONTEXTO
  * ====================== */
-async function carregar(){
-  const raw = (document.getElementById("dataRef")?.value || "").trim() || getDataPadrao_();
-  let dt = parseDMY_(raw);
-  let dStr = null;
-  if(dt){
-    dStr = _fmtDMY_(dt);
-  } else {
-    // fallback: aceita dd/MM/aaaa OU yyyy-MM-dd (input date) OU dd-MM-aaaa
-    const t0 = String(raw || "").trim()
-      .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
-      .replace(/[\u2215\u2044\uFF0F]/g, "/")
-      .replace(/\s+/g, "");
+async async function carregar(){
+  const dStr = getDataRefSeguro_();
+  if(!dStr) return;
 
-    // dd/MM/aaaa
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(t0)) dStr = t0;
-    // yyyy-MM-dd
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(t0)) {
-      const [y,m,d] = t0.split("-");
-      dStr = `${d}/${m}/${y}`;
-    }
-    // dd-MM-aaaa
-    else if (/^\d{2}-\d{2}-\d{4}$/.test(t0)) {
-      const [d,m,y] = t0.split("-");
-      dStr = `${d}/${m}/${y}`;
-    }
-  }
-  if(!dStr){
-    alert("DataReferencia inválida (use dd/MM/aaaa).");
-    return;
-  }
-  // normaliza o campo
-  try{ document.getElementById("dataRef").value = dStr; }catch(_){ }
 setBusy(true);
   setDebug("Carregando...");
   hide("bottomBar");
