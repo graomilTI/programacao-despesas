@@ -1532,7 +1532,20 @@ function parseDMY_(s){
     try{
       const d0 = window._parseDMY_(s);
       if(d0 instanceof Date && !isNaN(d0)) return d0;
-    }catch(_){}
+    }
+
+/**
+ * Formata Date -> dd/MM/aaaa
+ */
+function _fmtDMY_(d) {
+  if (!(d instanceof Date) || isNaN(d)) return null;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+
+catch(_){}
   }
   if(s instanceof Date) return isNaN(s) ? null : s;
   let t = String(s ?? "").trim();
