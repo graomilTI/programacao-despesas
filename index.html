@@ -1525,13 +1525,44 @@ function parseDMY_(s){
   //  - dd/MM/aaaa (com 1-2 dígitos) em QUALQUER parte do texto
   //  - aaaa-MM-dd (input type="date")
   //  - dd-MM-aaaa / dd.MM.aaaa (normaliza)
-  //  - Date nativo (ou string Date) -> tenta extrair
-  if(window._parseDMY_){
-    try{
-      const d0 = window._parseDMY_(s);
-      if(d0 instanceof Date && !isNaN(d0)) return d0;
-    }
+  //  - Date nativo
+  if (!s) return null;
+  if (s instanceof Date) return (isNaN(s) ? null : s);
 
+  const str = String(s).trim();
+
+  // Se existir um parser global (do seu bundle), use com segurança
+  if (window._parseDMY_) {
+    try {
+      const d0 = window._parseDMY_(str);
+      if (d0 instanceof Date && !isNaN(d0)) return d0;
+    } catch (err) {
+      // ignora e cai para os fallbacks abaixo
+    }
+  }
+
+  // aaaa-MM-dd (ex.: input type="date")
+  let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+    const d = new Date(y, mo - 1, da);
+    if (!isNaN(d)) return d;
+  }
+
+  // dd/MM/aaaa (ou dd-MM-aaaa ou dd.MM.aaaa) em qualquer parte do texto
+  m = str.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (m) {
+    const da = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+    const d = new Date(y, mo - 1, da);
+    if (!isNaN(d)) return d;
+  }
+
+  // fallback final
+  const d2 = new Date(str);
+  if (d2 instanceof Date && !isNaN(d2)) return d2;
+
+  return null;
+}
 
 /**
  * Lê e valida a DataReferencia do input #dataRef.
