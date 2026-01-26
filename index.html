@@ -870,14 +870,14 @@ if ('serviceWorker' in navigator) {
 /**
  * ✅ Worker
  * - Você pode configurar sem editar o arquivo:
- *   1) Querystring: ?worker=https://SEU-WORKER.cloudflare.workers.dev
- *   2) Ou via console: localStorage.setItem("WORKER_BASE","https://SEU-WORKER.cloudflare.workers.dev")
+ *   1) Querystring: ?worker=https://blue-brook-0f9b.tecnologia-f0c.workers.dev
+ *   2) Ou via console: localStorage.setItem("WORKER_BASE","https://blue-brook-0f9b.tecnologia-f0c.workers.dev")
  */
-const WORKER_BASE_DEFAULT = "hhttps://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
+const WORKER_BASE_DEFAULT = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev";
 const qsWorker = new URLSearchParams(location.search).get("worker");
 const WORKER_BASE = String(qsWorker || localStorage.getItem("WORKER_BASE") || WORKER_BASE_DEFAULT).replace(/\/+$/, "");
 
-if (WORKER_BASE.includes("SEU-WORKER")) {
+if (WORKER_BASE.includes("blue-brook-0f9b")) {
   console.warn("⚠️ Configure o WORKER_BASE (edite o index ou use ?worker=... / localStorage).");
 }
 
@@ -4489,4 +4489,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
