@@ -1521,36 +1521,69 @@ function _fmtDMY_(d) {
 }
 
 function parseDMY_(s){
-  if(s == null) return null;
-  if(s instanceof Date) return isNaN(s) ? null : s;
+  // Aceita:
+  //  - dd/MM/aaaa (ou dd-MM-aaaa / dd.MM.aaaa) em qualquer parte do texto
+  //  - aaaa-MM-dd (input type="date") / aaaa/MM/dd
+  //  - Date nativo
+  if (s instanceof Date) return isNaN(s) ? null : s;
 
-  let t = (typeof s === "string") ? s : String(s);
-  t = t.trim()
-       .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
-       .replace(/[\u2215\u2044\uFF0F]/g, "/")
-       .replace(/\./g, "/");
+  let t = String(s ?? "").trim();
+  if (!t) return null;
 
-  // yyyy-mm-dd
-  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m){
-    const y=+m[1], mo=+m[2], d=+m[3];
-    const dt = new Date(y, mo-1, d);
-    if(dt && dt.getFullYear()===y && (dt.getMonth()+1)===mo && dt.getDate()===d) return dt;
+  // Robustez: remove caracteres invisíveis e normaliza separadores unicode
+  t = t.normalize ? t.normalize("NFKC") : t;
+  t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
+  t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
+  t = t.replace(/[^0-9\/\.\-\s]/g, "");
+  if(!t) return null;
+
+  // dd/MM/aaaa (ou dd-MM-aaaa / dd.MM.aaaa)
+  let m = t.match(/(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})/);
+  if (m){
+    const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
+    const d = new Date(yy, mm-1, dd);
+    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
   }
 
-  // procura dd/mm/yyyy (pode estar "no meio" do texto)
-  m = t.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if(m){
-    const d=+m[1], mo=+m[2], y=+m[3];
-    const dt = new Date(y, mo-1, d);
-    if(dt && dt.getFullYear()===y && (dt.getMonth()+1)===mo && dt.getDate()===d) return dt;
+  // aaaa-MM-dd (ou aaaa/MM/dd)
+  m = t.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m){
+    const yy = parseInt(m[1],10), mm = parseInt(m[2],10), dd = parseInt(m[3],10);
+    const d = new Date(yy, mm-1, dd);
+    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
   }
 
-  // tenta parse nativo (último recurso)
-  const dt0 = new Date(t);
-  return isNaN(dt0) ? null : dt0;
+  return null;
 }
 
+/**
+ * Lê e valida a DataReferencia do input #dataRef.
+ * - aceita dd/MM/aaaa
+ * - aceita aaaa-MM-dd (input type="date")
+ * - normaliza e devolve sempre dd/MM/aaaa
+ */
+function getDataRefSeguro_() {
+  const el = document.getElementById("dataRef")
+          || document.getElementById("data")
+          || document.querySelector('input[name="dataRef"]')
+          || document.querySelector('input[type="date"]');
+
+  const raw = (el ? el.value : "").trim();
+  const dt = parseDMY_(raw);
+
+  if (!dt) {
+    alert("DataReferencia inválida (use dd/MM/aaaa).");
+    return null;
+  }
+
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const yy = dt.getFullYear();
+  const dataRef = `${dd}/${mm}/${yy}`;
+
+  if (el) el.value = dataRef;
+  return dataRef;
+}
 function formatDMY_(d){
   const dd = String(d.getDate()).padStart(2,"0");
   const mm = String(d.getMonth()+1).padStart(2,"0");
@@ -3339,10 +3372,23 @@ async function adminCarregar_(){
 /** ======================
  * ✅ CARREGAR CONTEXTO
  * ====================== */
-async async function carregar(){
-  const dStr = getDataRefSeguro_();
-  if(!dStr) return;
-
+async function carregar(){
+  const raw = (document.getElementById("dataRef")?.value || "").trim() || getDataPadrao_();
+  let dt = parseDMY_(raw);
+  let dStr = null;
+  if(dt){
+    dStr = _fmtDMY_(dt);
+  } else {
+    // fallback: aceita dd/MM/aaaa direto
+    const t = String(raw || "").trim().replace(/[^0-9\/]/g, "");
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(t)) dStr = t;
+  }
+  if(!dStr){
+    alert("DataReferencia inválida (use dd/MM/aaaa).");
+    return;
+  }
+  // normaliza o campo
+  try{ document.getElementById("dataRef").value = dStr; }catch(_){ }
 setBusy(true);
   setDebug("Carregando...");
   hide("bottomBar");
