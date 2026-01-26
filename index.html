@@ -1521,116 +1521,30 @@ function _fmtDMY_(d) {
 }
 
 function parseDMY_(s){
-  // Aceita:
-  //  - dd/MM/aaaa (com 1-2 dígitos) em QUALQUER parte do texto
-  //  - aaaa-MM-dd (input type="date")
-  //  - dd-MM-aaaa / dd.MM.aaaa (normaliza)
-  //  - Date nativo
-  if (!s) return null;
-  if (s instanceof Date) return (isNaN(s) ? null : s);
+  if (s == null) return null;
+  if (s instanceof Date) return isNaN(s) ? null : s;
 
-  const str = String(s).trim();
+  let t = String(s).trim();
+  if (!t) return null;
 
-  // Se existir um parser global (do seu bundle), use com segurança
-  if (window._parseDMY_) {
-    try {
-      const d0 = window._parseDMY_(str);
-      if (d0 instanceof Date && !isNaN(d0)) return d0;
-    } catch (err) {
-      // ignora e cai para os fallbacks abaixo
-    }
-  }
+  // Se vier ISO ou com hora, pega só a parte da data
+  if (t.includes("T")) t = t.split("T")[0].trim();
+  if (t.includes(" ")) t = t.split(" ")[0].trim();
 
-  // aaaa-MM-dd (ex.: input type="date")
-  let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) {
-    const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
-    const d = new Date(y, mo - 1, da);
-    if (!isNaN(d)) return d;
-  }
-
-  // dd/MM/aaaa (ou dd-MM-aaaa ou dd.MM.aaaa) em qualquer parte do texto
-  m = str.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
-  if (m) {
-    const da = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
-    const d = new Date(y, mo - 1, da);
-    if (!isNaN(d)) return d;
-  }
-
-  // fallback final
-  const d2 = new Date(str);
-  if (d2 instanceof Date && !isNaN(d2)) return d2;
-
-  return null;
-}
-
-/**
- * Lê e valida a DataReferencia do input #dataRef.
- * - aceita dd/MM/aaaa
- * - aceita aaaa-MM-dd (input type="date")
- * - normaliza e devolve sempre dd/MM/aaaa
- */
-function getDataRefSeguro_() {
-  const el = document.getElementById("dataRef") || document.getElementById("data") || document.querySelector('input[name="dataRef"]');
-  const raw = (el ? el.value : "").trim();
-
-  // tenta parser completo
-  let dt = parseDMY_(raw);
-
-  // se falhar, aceita dd/MM/aaaa "na marra"
-  let dataRef = null;
-  if (dt) {
-    dataRef = _fmtDMY_(dt);
-  } else {
-    const t = String(raw || "").trim()
-      .normalize ? String(raw || "").trim().normalize("NFKC") : String(raw || "").trim();
-    const clean = t
-      .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
-      .replace(/[\u2215\u2044\uFF0F]/g, "/")
-      .replace(/[^0-9\/\-]/g, "");
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) dataRef = clean;
-  }
-
-  if (!dataRef) {
-    alert("DataReferencia inválida (use dd/MM/aaaa).");
-    return null;
-  }
-
-  // normaliza input para dd/MM/aaaa
-  if (el) el.value = dataRef;
-  return dataRef;
-}
-
-
-
-catch(_){}
-  }
-  if(s instanceof Date) return isNaN(s) ? null : s;
-  let t = String(s ?? "").trim();
-  
-  // robustez: remove caracteres invisíveis e normaliza separadores unicode
-  t = t.normalize ? t.normalize("NFKC") : t;
-  t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
-  // troca barras unicode por "/" e remove caracteres estranhos mantendo dígitos e separadores
-  t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
-  t = t.replace(/[^0-9\/\.\-\s]/g, "");
-if(!t) return null;
-
-  // Se vier com hora (ex: "26/01/2026 00:00:00"), pega só o trecho da data
-  // Tenta achar dd/MM/aaaa
-  let m = t.match(/(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})/);
-  if(m){
+  // dd/MM/aaaa (ou dd-MM-aaaa / dd. MM .aaaa)
+  let m = t.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
+  if (m){
     const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
     const d = new Date(yy, mm-1, dd);
-    if(d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
+    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
   }
 
   // aaaa-MM-dd (ou aaaa/MM/dd)
-  m = t.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if(m){
+  m = t.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (m){
     const yy = parseInt(m[1],10), mm = parseInt(m[2],10), dd = parseInt(m[3],10);
     const d = new Date(yy, mm-1, dd);
-    if(d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
+    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
   }
 
   return null;
