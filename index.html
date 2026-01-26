@@ -1250,22 +1250,8 @@ function buildRegistrosFull_(){
 
 async function salvarProgramacaoFull_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
-  const _rawDataRef = document.getElementById("dataRef").value.trim();
-  let _dt = parseDMY_(_rawDataRef);
-  let dataRef = null;
-  if(_dt){
-    dataRef = _fmtDMY_(_dt);
-  } else {
-    // fallback: se já veio no formato dd/MM/aaaa, aceita sem depender do parser
-    const t = String(_rawDataRef||"").trim().replace(/[^0-9\/]/g,"");
-    if(/^\d{2}\/\d{2}\/\d{4}$/.test(t)) dataRef = t;
-  }
-  if(!dataRef){
-    alert("DataReferencia inválida (use dd/MM/aaaa).");
-    return { ok:false };
-  }
-  // normaliza o campo para dd/MM/aaaa
-  document.getElementById("dataRef").value = dataRef;
+    const dataRef = getDataRefSeguro_();
+  if(!dataRef) return { ok:false };
 // normaliza o campo para dd/MM/aaaa (evita salvar em formato diferente)
   document.getElementById("dataRef").value = dataRef;
 
@@ -1545,6 +1531,45 @@ function parseDMY_(s){
       const d0 = window._parseDMY_(s);
       if(d0 instanceof Date && !isNaN(d0)) return d0;
     }
+
+
+/**
+ * Lê e valida a DataReferencia do input #dataRef.
+ * - aceita dd/MM/aaaa
+ * - aceita aaaa-MM-dd (input type="date")
+ * - normaliza e devolve sempre dd/MM/aaaa
+ */
+function getDataRefSeguro_() {
+  const el = document.getElementById("dataRef") || document.getElementById("data") || document.querySelector('input[name="dataRef"]');
+  const raw = (el ? el.value : "").trim();
+
+  // tenta parser completo
+  let dt = parseDMY_(raw);
+
+  // se falhar, aceita dd/MM/aaaa "na marra"
+  let dataRef = null;
+  if (dt) {
+    dataRef = _fmtDMY_(dt);
+  } else {
+    const t = String(raw || "").trim()
+      .normalize ? String(raw || "").trim().normalize("NFKC") : String(raw || "").trim();
+    const clean = t
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+      .replace(/[\u2215\u2044\uFF0F]/g, "/")
+      .replace(/[^0-9\/\-]/g, "");
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) dataRef = clean;
+  }
+
+  if (!dataRef) {
+    alert("DataReferencia inválida (use dd/MM/aaaa).");
+    return null;
+  }
+
+  // normaliza input para dd/MM/aaaa
+  if (el) el.value = dataRef;
+  return dataRef;
+}
+
 
 
 catch(_){}
