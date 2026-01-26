@@ -1526,18 +1526,47 @@ function parseDMY_(s){
   //  - aaaa-MM-dd (input type="date")
   //  - dd-MM-aaaa / dd.MM.aaaa (normaliza)
   //  - Date nativo (ou string Date) -> tenta extrair
+  if(s == null) return null;
+
+  // Date nativo
+  try{
+    if(s instanceof Date && !isNaN(s)) return s;
+  }catch(_e){}
+
+  s = String(s||"").trim();
+  if(!s) return null;
+
+  // Compat: se existir parser legado
   if(window._parseDMY_){
     try{
       const d0 = window._parseDMY_(s);
       if(d0 instanceof Date && !isNaN(d0)) return d0;
-    }
+    }catch(e){ /* noop */ }
+  }
 
+  // yyyy-MM-dd
+  let m = s.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if(m){
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const dt = new Date(y, mo-1, d);
+    if(dt && !isNaN(dt)) return dt;
+  }
 
-/**
- * Lê e valida a DataReferencia do input #dataRef.
- * - aceita dd/MM/aaaa
- * - aceita aaaa-MM-dd (input type="date")
- * - normaliza e devolve sempre dd/MM/aaaa
+  // dd/MM/yyyy | dd-MM-yyyy | dd.MM.yyyy
+  m = s.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/);
+  if(m){
+    const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+    const dt = new Date(y, mo-1, d);
+    if(dt && !isNaN(dt)) return dt;
+  }
+
+  // Último recurso: Date.parse (pode falhar em pt-BR, mas ajuda em alguns casos)
+  const dt2 = new Date(s);
+  if(dt2 && !isNaN(dt2)) return dt2;
+
+  return null;
+}
+
  */
 function getDataRefSeguro_() {
   const el = document.getElementById("dataRef") || document.getElementById("data") || document.querySelector('input[name="dataRef"]');
