@@ -1515,27 +1515,39 @@ function maskData(s){
 }
 
 function parseDMY_(s){
-  // Aceita dd/MM/aaaa (1-2 dígitos) e aaaa-MM-dd
-  // Se existir override, usa como 1ª tentativa (mas NÃO retorna se falhar)
+  // Aceita:
+  //  - dd/MM/aaaa (com 1-2 dígitos) em QUALQUER parte do texto
+  //  - aaaa-MM-dd (input type="date")
+  //  - dd-MM-aaaa / dd.MM.aaaa (normaliza)
+  //  - Date nativo (ou string Date) -> tenta extrair
   if(window._parseDMY_){
     try{
       const d0 = window._parseDMY_(s);
-      if(d0) return d0;
-    }catch(_e){}
+      if(d0 instanceof Date && !isNaN(d0)) return d0;
+    }catch(_){}
   }
-  const t = String(s||"").trim();
+  if(s instanceof Date) return isNaN(s) ? null : s;
+  let t = String(s ?? "").trim();
   if(!t) return null;
-  let m = t.match(/^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/);
+
+  // Se vier com hora (ex: "26/01/2026 00:00:00"), pega só o trecho da data
+  // Tenta achar dd/MM/aaaa
+  let m = t.match(/(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})/);
   if(m){
-    const y=+m[1], mm=+m[2], dd=+m[3];
-    const d=new Date(y,mm-1,dd);
-    return (d.getFullYear()===y && d.getMonth()===(mm-1) && d.getDate()===dd) ? d : null;
+    const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
+    const d = new Date(yy, mm-1, dd);
+    if(d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
   }
-  m = t.match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/);
-  if(!m) return null;
-  const dd=+m[1], mm=+m[2], y=+m[3];
-  const d=new Date(y,mm-1,dd);
-  return (d.getFullYear()===y && d.getMonth()===(mm-1) && d.getDate()===dd) ? d : null;
+
+  // aaaa-MM-dd (ou aaaa/MM/dd)
+  m = t.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(m){
+    const yy = parseInt(m[1],10), mm = parseInt(m[2],10), dd = parseInt(m[3],10);
+    const d = new Date(yy, mm-1, dd);
+    if(d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
+  }
+
+  return null;
 }
 function formatDMY_(d){
   const dd = String(d.getDate()).padStart(2,"0");
