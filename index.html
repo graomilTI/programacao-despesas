@@ -1253,7 +1253,7 @@ async function salvarProgramacaoFull_(){
   const _rawDataRef = document.getElementById("dataRef").value.trim();
   const _dt = parseDMY_(_rawDataRef);
   if(!_dt){
-    alert("DataRef inválida (use dd/MM/aaaa ou aaaa-MM-dd).");
+    alert("DataReferencia inválida (use dd/MM/aaaa).");
     return { ok:false };
   }
   const dataRef = _fmtDMY_(_dt);
@@ -1528,13 +1528,14 @@ function parseDMY_(s){
   }
   if(s instanceof Date) return isNaN(s) ? null : s;
   let t = String(s ?? "").trim();
+  
   // robustez: remove caracteres invisíveis e normaliza separadores unicode
   t = t.normalize ? t.normalize("NFKC") : t;
   t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
   // troca barras unicode por "/" e remove caracteres estranhos mantendo dígitos e separadores
   t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
   t = t.replace(/[^0-9\/\.\-\s]/g, "");
-  if(!t) return null;
+if(!t) return null;
 
   // Se vier com hora (ex: "26/01/2026 00:00:00"), pega só o trecho da data
   // Tenta achar dd/MM/aaaa
