@@ -1524,14 +1524,22 @@ function parseDMY_(s){
   if (s == null) return null;
   if (s instanceof Date) return isNaN(s) ? null : s;
 
-  let t = String(s).trim();
+  let t = String(s);
+  try { t = t.normalize("NFKC"); } catch(_){}
+  t = t.trim();
   if (!t) return null;
 
-  // Se vier ISO ou com hora, pega só a parte da data
+  // remove caracteres invisíveis e normaliza separadores
+  t = t
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+    .replace(/[\u2215\u2044\uFF0F]/g, "/")
+    .replace(/[\u2010\u2011\u2012\u2013\u2212]/g, "-");
+
+  // Se vier ISO com hora, pega só a parte da data
   if (t.includes("T")) t = t.split("T")[0].trim();
   if (t.includes(" ")) t = t.split(" ")[0].trim();
 
-  // dd/MM/aaaa (ou dd-MM-aaaa / dd. MM .aaaa)
+  // dd/MM/aaaa (ou dd-MM-aaaa / dd.MM.aaaa)
   let m = t.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
   if (m){
     const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
@@ -1549,6 +1557,8 @@ function parseDMY_(s){
 
   return null;
 }
+
+
 function formatDMY_(d){
   const dd = String(d.getDate()).padStart(2,"0");
   const mm = String(d.getMonth()+1).padStart(2,"0");
