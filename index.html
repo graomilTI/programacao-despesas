@@ -1516,7 +1516,13 @@ function maskData(s){
 
 function parseDMY_(s){
   // Aceita dd/MM/aaaa (1-2 dígitos) e aaaa-MM-dd
-  if(window._parseDMY_) return window._parseDMY_(s);
+  // Se existir override, usa como 1ª tentativa (mas NÃO retorna se falhar)
+  if(window._parseDMY_){
+    try{
+      const d0 = window._parseDMY_(s);
+      if(d0) return d0;
+    }catch(_e){}
+  }
   const t = String(s||"").trim();
   if(!t) return null;
   let m = t.match(/^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/);
