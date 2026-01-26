@@ -1524,22 +1524,14 @@ function parseDMY_(s){
   if (s == null) return null;
   if (s instanceof Date) return isNaN(s) ? null : s;
 
-  let t = String(s);
-  try { t = t.normalize("NFKC"); } catch(_){}
-  t = t.trim();
+  let t = String(s).trim();
   if (!t) return null;
 
-  // remove caracteres invisíveis e normaliza separadores
-  t = t
-    .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
-    .replace(/[\u2215\u2044\uFF0F]/g, "/")
-    .replace(/[\u2010\u2011\u2012\u2013\u2212]/g, "-");
-
-  // Se vier ISO com hora, pega só a parte da data
+  // Se vier ISO ou com hora, pega só a parte da data
   if (t.includes("T")) t = t.split("T")[0].trim();
   if (t.includes(" ")) t = t.split(" ")[0].trim();
 
-  // dd/MM/aaaa (ou dd-MM-aaaa / dd.MM.aaaa)
+  // dd/MM/aaaa (ou dd-MM-aaaa / dd. MM .aaaa)
   let m = t.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
   if (m){
     const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yy = parseInt(m[3],10);
@@ -1557,8 +1549,6 @@ function parseDMY_(s){
 
   return null;
 }
-
-
 function formatDMY_(d){
   const dd = String(d.getDate()).padStart(2,"0");
   const mm = String(d.getMonth()+1).padStart(2,"0");
@@ -3354,9 +3344,24 @@ async function carregar(){
   if(dt){
     dStr = _fmtDMY_(dt);
   } else {
-    // fallback: aceita dd/MM/aaaa direto
-    const t = String(raw || "").trim().replace(/[^0-9\/]/g, "");
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(t)) dStr = t;
+    // fallback: aceita dd/MM/aaaa OU yyyy-MM-dd (input date) OU dd-MM-aaaa
+    const t0 = String(raw || "").trim()
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+      .replace(/[\u2215\u2044\uFF0F]/g, "/")
+      .replace(/\s+/g, "");
+
+    // dd/MM/aaaa
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(t0)) dStr = t0;
+    // yyyy-MM-dd
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(t0)) {
+      const [y,m,d] = t0.split("-");
+      dStr = `${d}/${m}/${y}`;
+    }
+    // dd-MM-aaaa
+    else if (/^\d{2}-\d{2}-\d{4}$/.test(t0)) {
+      const [d,m,y] = t0.split("-");
+      dStr = `${d}/${m}/${y}`;
+    }
   }
   if(!dStr){
     alert("DataReferencia inválida (use dd/MM/aaaa).");
