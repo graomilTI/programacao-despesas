@@ -3353,13 +3353,23 @@ async function adminCarregar_(){
  * ✅ CARREGAR CONTEXTO
  * ====================== */
 async function carregar(){
-  const dStr = (document.getElementById("dataRef")?.value || "").trim() || getDataPadrao_();
-  if(!parseDMY_(dStr)){
-    alert("❌ Data inválida. Use dd/mm/aaaa.");
+  const raw = (document.getElementById("dataRef")?.value || "").trim() || getDataPadrao_();
+  let dt = parseDMY_(raw);
+  let dStr = null;
+  if(dt){
+    dStr = _fmtDMY_(dt);
+  } else {
+    // fallback: aceita dd/MM/aaaa direto
+    const t = String(raw || "").trim().replace(/[^0-9\/]/g, "");
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(t)) dStr = t;
+  }
+  if(!dStr){
+    alert("DataReferencia inválida (use dd/MM/aaaa).");
     return;
   }
-
-  setBusy(true);
+  // normaliza o campo
+  try{ document.getElementById("dataRef").value = dStr; }catch(_){ }
+setBusy(true);
   setDebug("Carregando...");
   hide("bottomBar");
 
