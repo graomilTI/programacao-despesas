@@ -1251,14 +1251,22 @@ function buildRegistrosFull_(){
 async function salvarProgramacaoFull_(){
   if(!ctx){ alert("Carregue a data primeiro."); return { ok:false }; }
   const _rawDataRef = document.getElementById("dataRef").value.trim();
-  const _dt = parseDMY_(_rawDataRef);
-  if(!_dt){
+  let _dt = parseDMY_(_rawDataRef);
+  let dataRef = null;
+  if(_dt){
+    dataRef = _fmtDMY_(_dt);
+  } else {
+    // fallback: se já veio no formato dd/MM/aaaa, aceita sem depender do parser
+    const t = String(_rawDataRef||"").trim().replace(/[^0-9\/]/g,"");
+    if(/^\d{2}\/\d{2}\/\d{4}$/.test(t)) dataRef = t;
+  }
+  if(!dataRef){
     alert("DataReferencia inválida (use dd/MM/aaaa).");
     return { ok:false };
   }
-  const dataRef = _fmtDMY_(_dt);
-
-  // normaliza o campo para dd/MM/aaaa (evita salvar em formato diferente)
+  // normaliza o campo para dd/MM/aaaa
+  document.getElementById("dataRef").value = dataRef;
+// normaliza o campo para dd/MM/aaaa (evita salvar em formato diferente)
   document.getElementById("dataRef").value = dataRef;
 
 
