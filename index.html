@@ -873,7 +873,7 @@ if ('serviceWorker' in navigator) {
  *   1) Querystring: ?worker=https://SEU-WORKER.cloudflare.workers.dev
  *   2) Ou via console: localStorage.setItem("WORKER_BASE","https://SEU-WORKER.cloudflare.workers.dev")
  */
-const WORKER_BASE_DEFAULT = "https://SEU-WORKER.cloudflare.workers.dev";
+const WORKER_BASE_DEFAULT = "hhttps://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
 const qsWorker = new URLSearchParams(location.search).get("worker");
 const WORKER_BASE = String(qsWorker || localStorage.getItem("WORKER_BASE") || WORKER_BASE_DEFAULT).replace(/\/+$/, "");
 
@@ -4489,3 +4489,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
