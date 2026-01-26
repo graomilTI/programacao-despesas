@@ -877,9 +877,6 @@ const WORKER_BASE_DEFAULT = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev"
 const qsWorker = new URLSearchParams(location.search).get("worker");
 const WORKER_BASE = String(qsWorker || localStorage.getItem("WORKER_BASE") || WORKER_BASE_DEFAULT).replace(/\/+$/, "");
 
-if (WORKER_BASE.includes("blue-brook-0f9b")) {
-  console.warn("⚠️ Configure o WORKER_BASE (edite o index ou use ?worker=... / localStorage).");
-}
 
 // IMPORTANTE: a API sempre passa pelo WORKER, não direto no GAS
 let API_BASE = WORKER_BASE;
