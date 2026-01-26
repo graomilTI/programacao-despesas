@@ -867,14 +867,21 @@ if ('serviceWorker' in navigator) {
   // FIX: evita ReferenceError caso algum trecho ainda use lastRow/lastCol
   window.lastRow = 0;
   window.lastCol = 0;
-/** ✅ Worker */
-const WORKER_BASE = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/";
+/**
+ * ✅ Worker
+ * - Você pode configurar sem editar o arquivo:
+ *   1) Querystring: ?worker=https://SEU-WORKER.cloudflare.workers.dev
+ *   2) Ou via console: localStorage.setItem("WORKER_BASE","https://SEU-WORKER.cloudflare.workers.dev")
+ */
+const WORKER_BASE_DEFAULT = "https://SEU-WORKER.cloudflare.workers.dev";
+const qsWorker = new URLSearchParams(location.search).get("worker");
+const WORKER_BASE = String(qsWorker || localStorage.getItem("WORKER_BASE") || WORKER_BASE_DEFAULT).replace(/\/+$/, "");
 
 if (WORKER_BASE.includes("SEU-WORKER")) {
-  console.warn("⚠️ Configure WORKER_BASE com o domínio real do seu Cloudflare Worker.");
+  console.warn("⚠️ Configure o WORKER_BASE (edite o index ou use ?worker=... / localStorage).");
 }
-// IMPORTANTE: troque SEU-WORKER pelo subdomínio real do seu Cloudflare Worker.
-// Se ficar como está, o login vai falhar com ERR_NAME_NOT_RESOLVED.
+
+// IMPORTANTE: a API sempre passa pelo WORKER, não direto no GAS
 let API_BASE = WORKER_BASE;
 let GAS_FALLBACK = localStorage.getItem("GAS_FALLBACK_URL") || "";
 
@@ -4482,4 +4489,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
