@@ -289,15 +289,14 @@
             <div class="hr"></div>
 
             <div class="btnrow">
-              <div class="pill">
-                <span class="small">Etapa:</span>
-                <select id="selEtapa" style="width:auto;min-width:160px">
-                  <option value="A">A — Disponibilidade</option>
-                  <option value="B">B — Hospedagem</option>
-                  <option value="C">C — Alimentação</option>
-                  <option value="D">D — Deslocamento</option>
-                  <option value="E">E — Extras</option>
-                </select>
+              <div class="pill" style="gap:6px;flex-wrap:wrap">
+                <span class="small">Etapas:</span>
+                <button class="tab active" type="button" data-et="A" id="btnEtA">A</button>
+                <button class="tab" type="button" data-et="B" id="btnEtB">B</button>
+                <button class="tab" type="button" data-et="C" id="btnEtC">C</button>
+                <button class="tab" type="button" data-et="D" id="btnEtD">D</button>
+                <button class="tab" type="button" data-et="E" id="btnEtE">E</button>
+                <span class="chip" id="etapaLabel"><b>A — Disponibilidade</b></span>
               </div>
 
               <div class="row right">
@@ -627,6 +626,12 @@ document.querySelectorAll(".tabs .tab").forEach(btn=>{
 
 maskDMY($("inpData"));
 
+// Botões das etapas (A–E)
+document.querySelectorAll('button[data-et]').forEach(btn=>{
+  btn.addEventListener("click", ()=> setEtapa(btn.getAttribute("data-et")));
+});
+
+
 $("btnCarregar").addEventListener("click", carregarContextoUI);
 $("btnPDF").addEventListener("click", gerarPDFUI);
 $("btnAloj").addEventListener("click", listarAlojUI);
@@ -727,6 +732,29 @@ async function registrarContatoUI(){
 
 /** =========================
  * PAINÉIS A–E (ESPECIFICAÇÃO G1000)
+
+let currentEtapa = "A";
+function etapaNome(et){
+  return ({
+    "A":"A — Disponibilidade",
+    "B":"B — Estadia",
+    "C":"C — Alimentação",
+    "D":"D — Deslocamento",
+    "E":"E — Extras"
+  })[et] || et;
+}
+function setEtapa(et){
+  currentEtapa = et;
+  // ativa botões
+  ["A","B","C","D","E"].forEach(k=>{
+    const b = document.querySelector(`button[data-et="${k}"]`);
+    if(b) b.classList.toggle("active", k===et);
+  });
+  const lab = document.getElementById("etapaLabel");
+  if(lab) lab.innerHTML = `<b>${etapaNome(et)}</b>`;
+  renderEtapa();
+}
+
  * ========================= */
 const DISP_OPTS = ["OK","FALTA","FÉRIAS","FOLGA","ATESTADO","TRANSFERIR","INATIVO"];
 const DISP_BLOQ = new Set(["FALTA","FÉRIAS","FOLGA","ATESTADO","TRANSFERIR","INATIVO"]);
@@ -793,7 +821,7 @@ function renderEtapa(){
     return;
   }
   $("painelEtapas").classList.remove("hide");
-  const et = $("selEtapa").value;
+  const et = currentEtapa;
 
   if(et==="A") return renderEtapaA();
   if(et==="B") return renderEtapaB();
