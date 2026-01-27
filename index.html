@@ -396,13 +396,11 @@
 <script>
 /** =========================
  * CONFIG
- * ========================= */
 const WORKER_URL = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/"; // ajuste se trocar
 document.getElementById("workerUrl").textContent = WORKER_URL;
 
 /** =========================
  * UTIL
- * ========================= */
 const $ = (id)=>document.getElementById(id);
 
 function toast(title, msg){
@@ -505,7 +503,6 @@ async function api(action, body){
 
 /** =========================
  * SESSION
- * ========================= */
 const LS_KEY = "G1000_PROGRAMACAO_SESSION_V1";
 function getSess(){
   try{ return JSON.parse(localStorage.getItem(LS_KEY) || "null"); }catch(_){ return null; }
@@ -531,7 +528,6 @@ function applySessionUI(sess){
 
 /** =========================
  * LOGIN UI
- * ========================= */
 let mode = "GESTOR"; // or ADMIN
 function setMode(m){
   mode = m;
@@ -612,7 +608,6 @@ $("btnLogout").addEventListener("click", ()=>{
 
 /** =========================
  * APP
- * ========================= */
 document.querySelectorAll(".tabs .tab").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     const t = btn.getAttribute("data-tab");
@@ -754,7 +749,6 @@ async function registrarContatoUI(){
 
 /** =========================
  * PAINÉIS A–E (ESPECIFICAÇÃO G1000)
- * ========================= */
 
 let currentEtapa = "A";
 function etapaNome(et){
@@ -778,7 +772,6 @@ function setEtapa(et){
   renderEtapa();
 }
 
- * ========================= */
 const DISP_OPTS = ["OK","FALTA","FÉRIAS","FOLGA","ATESTADO","TRANSFERIR","INATIVO"];
 const DISP_BLOQ = new Set(["FALTA","FÉRIAS","FOLGA","ATESTADO","TRANSFERIR","INATIVO"]);
 
@@ -1397,7 +1390,6 @@ function collectAllRegistros(dataRef){
 
 /** =========================
  * START
- * ========================= */
 (function init(){
   setMode("GESTOR");
   const sess = getSess();
