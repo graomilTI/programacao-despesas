@@ -198,7 +198,22 @@
     .btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
     .btn.small{padding:8px 10px;font-weight:900}
 
-  </style>
+  
+/* Modal */
+.modal{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; }
+.modal.hide{ display:none; }
+.modalBackdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
+.modalBox{ position:relative; width:min(560px,92vw); background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
+.modalHead{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee; }
+.modalBody{ padding:14px; display:grid; gap:10px; }
+.modalFoot{ padding:12px 14px; display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #eee; }
+.ghostBtn{ border:1px solid #ddd; background:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; }
+.primaryBtn{ border:0; background:var(--green,#0a6); color:#fff; padding:9px 14px; border-radius:12px; cursor:pointer; font-weight:700; }
+.frow{ display:grid; gap:6px; }
+.frow label{ font-size:12px; color:#374151; font-weight:700; }
+.frow input, .frow select, .frow textarea{ width:100%; padding:10px; border:1px solid #d0d7de; border-radius:12px; box-sizing:border-box; }
+
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -412,6 +427,141 @@ function toast(title, msg){
   toast._t = setTimeout(()=>el.classList.remove("show"), 4200);
 }
 
+
+// ===== Modal obrigatório (Hotel / Alojamento) =====
+const REQ = { open:false, onOk:null, onCancel:null };
+
+function openReqModal(html, {onOk, onCancel}){
+  const m = $("reqModal");
+  const body = $("reqBody");
+  if(!m || !body) return;
+  body.innerHTML = html;
+  REQ.open = true;
+  REQ.onOk = onOk || null;
+  REQ.onCancel = onCancel || null;
+  m.classList.remove("hide");
+}
+function closeReqModal(){
+  const m = $("reqModal");
+  if(!m) return;
+  m.classList.add("hide");
+  REQ.open = false;
+  REQ.onOk = null;
+  REQ.onCancel = null;
+}
+function bindReqModal(){
+  const close = ()=>{ if(REQ.onCancel) REQ.onCancel(); closeReqModal(); };
+  $("reqClose")?.addEventListener("click", close);
+  $("reqCancel")?.addEventListener("click", close);
+  $("reqModal")?.querySelector(".modalBackdrop")?.addEventListener("click", close);
+  $("reqOk")?.addEventListener("click", ()=>{
+    if(REQ.onOk) REQ.onOk();
+  });
+}
+function normUF_(s){ return String(s||"").trim().toUpperCase().slice(0,2); }
+
+function promptHotelObrigatorio_(nome, st, after){
+  openReqModal(`
+    <div class="small">Colaborador: <b>${_esc(nome)}</b></div>
+    <div class="frow">
+      <label>Cidade/UF</label>
+      <input id="reqCidade" placeholder="Ex.: Sinop/MT" />
+    </div>
+    <div class="frow">
+      <label>Hotel</label>
+      <input id="reqHotel" placeholder="Nome do hotel" />
+    </div>
+    <div class="frow">
+      <label>Diárias</label>
+      <input id="reqDias" type="number" min="0" step="1" placeholder="0" />
+    </div>
+    <div class="frow">
+      <label>Chegada (dd/MM/aaaa)</label>
+      <input id="reqChegada" placeholder="dd/MM/aaaa" />
+    </div>
+    <div class="hint">Obrigatório preencher Cidade/UF e Hotel quando marcar HOTEL.</div>
+  `, {
+    onOk: ()=>{
+      const cidade = String($("reqCidade")?.value||"").trim();
+      const hotel = String($("reqHotel")?.value||"").trim();
+      const dias = Number($("reqDias")?.value||0)||0;
+      let chegada = String($("reqChegada")?.value||"").trim();
+      if(chegada){ const n = normalizeDMY(chegada); if(n) chegada=n; }
+      if(!cidade || !hotel){
+        toast("Campos obrigatórios", "Preencha Cidade/UF e Hotel.");
+        return;
+      }
+      st.hotelDias = dias;
+      st.hotelChegada = chegada;
+      // salva tudo no obs (compatível com GS atual)
+      st.obs = `${cidade} | ${hotel}`;
+      closeReqModal();
+      if(after) after();
+    },
+    onCancel: ()=>{
+      // se cancelar, volta para CASA pra não travar o fluxo
+      st.tipo = "CASA";
+      st.obs = "";
+      st.hotelDias = 0;
+      st.hotelChegada = "";
+      if(after) after(true);
+    }
+  });
+}
+
+function promptAlojamentoObrigatorio_(nome, st, opcoes, after){
+  const opts = (opcoes||[]).map(x=>`<option value="${_esc(x)}">${_esc(x)}</option>`).join("");
+  openReqModal(`
+    <div class="small">Colaborador: <b>${_esc(nome)}</b></div>
+    <div class="frow">
+      <label>Alojamento</label>
+      <select id="reqAloj">
+        <option value="">Selecione...</option>
+        ${opts}
+      </select>
+    </div>
+    <div class="hint">Obrigatório selecionar um alojamento quando marcar ALOJAMENTO.</div>
+  `, {
+    onOk: ()=>{
+      const a = String($("reqAloj")?.value||"").trim();
+      if(!a){
+        toast("Obrigatório", "Selecione um alojamento.");
+        return;
+      }
+      st.alojamento = a;
+      if(!String(st.obs||"").trim()) st.obs = a;
+      closeReqModal();
+      if(after) after();
+    },
+    onCancel: ()=>{
+      st.tipo = "CASA";
+      st.alojamento = "";
+      st.obs = "";
+      if(after) after(true);
+    }
+  });
+}
+
+// Validação: bloqueia ir para C/D/E se faltar Hotel/Alojamento
+function validarEtapaB_(){
+  const pend = [];
+  ctxLiberados().forEach(r=>{
+    const nome = String(r.colaborador||r.nome||"").trim();
+    if(!nome) return;
+    const d = ensureDispDefault(nome);
+    if(["FALTA","FÉRIAS","FERIAS","FOLGA","ATESTADO","INATIVO","TRANSFERIR"].includes(String(d.status||"").toUpperCase())) return;
+    const st = STATE.estadia.get(nome) || {};
+    const tipo = String(st.tipo||"").toUpperCase();
+    if(tipo==="HOTEL"){
+      if(!String(st.obs||"").trim()) pend.push({nome, tipo});
+    }
+    if(tipo==="ALOJAMENTO"){
+      if(!String(st.alojamento||"").trim()) pend.push({nome, tipo});
+    }
+  });
+  return pend;
+}
+
 function setDbg(obj){
   $("dbg").value = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
@@ -590,6 +740,106 @@ async function login(){
     };
     setSess(sess);
     applySessionUI(sess);
+
+  // binds modal buttons
+  bindReqModal();
+
+  // Botões salvar/zerar (antes eram omitidos)
+  $("btnMarcarZero")?.addEventListener("click", ()=>{
+    const et = currentEtapa;
+    if(et==="A"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.disp.set(nome, { status:"OK", obs:"" });
+      });
+    }else if(et==="B"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.estadia.set(nome, { tipo:"CASA", obs:"", hotelDias:0, hotelChegada:"", alojamento:"" });
+      });
+    }else if(et==="C"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.alim.set(nome, { cafe:false, almoco:false, janta:false });
+      });
+    }else if(et==="D"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.desl.set(nome, { tipo:"LOGÍSTICA/FROTA", obs:"" });
+      });
+    }else if(et==="E"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.extra.set(nome, { recargaOn:false, recargaV:0, passagemOn:false, passagemV:0, lavagemOn:false, lavagemV:0, manut:false, obs:"" });
+      });
+    }
+    renderEtapa();
+    toast("Etapa zerada", "Agora clique em Salvar etapa.");
+  });
+
+  $("btnSelectAllAlmoco")?.addEventListener("click", ()=>{
+    ctxLiberados().forEach(r=>{
+      const nome = String(r.colaborador||"").trim();
+      const a = STATE.alim.get(nome) || { cafe:false, almoco:false, janta:false };
+      a.almoco = true;
+      STATE.alim.set(nome, a);
+    });
+    if(currentEtapa==="C") renderEtapa();
+  });
+
+  $("btnSalvarEtapa")?.addEventListener("click", async ()=>{
+    const sess2 = getSess();
+    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+    const dataRef = normalizeDMY($("inpData").value);
+    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+
+    // se tentar salvar C/D/E e Etapa B tem pendência, bloqueia
+    if(["C","D","E"].includes(currentEtapa)){
+      const pend = validarEtapaB_();
+      if(pend.length){
+        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+        setEtapa("B");
+        return;
+      }
+    }
+
+    try{
+      const regs = collectAllRegistros(dataRef);
+      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapa", { token: sess2.token, payload });
+      setLog(r);
+      toast("Salvo", `Etapa ${currentEtapa} salva.`);
+    }catch(e){
+      setLog(e.payload || String(e.message||e));
+      toast("Erro", e.message || "Falha ao salvar");
+    }
+  });
+
+  $("btnSalvarAsync")?.addEventListener("click", async ()=>{
+    const sess2 = getSess();
+    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+    const dataRef = normalizeDMY($("inpData").value);
+    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+    if(["C","D","E"].includes(currentEtapa)){
+      const pend = validarEtapaB_();
+      if(pend.length){
+        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+        setEtapa("B");
+        return;
+      }
+    }
+    try{
+      const regs = collectAllRegistros(dataRef);
+      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapaAsync", { token: sess2.token, payload });
+      setLog(r);
+      toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
+    }catch(e){
+      setLog(e.payload || String(e.message||e));
+      toast("Erro", e.message || "Falha ao enfileirar");
+    }
+  });
+
     setLog(resp);
     toast("Logado", "Sessão criada com sucesso.");
     await bootstrapAfterLogin();
@@ -761,6 +1011,14 @@ function etapaNome(et){
   })[et] || et;
 }
 function setEtapa(et){
+  // bloqueia avanço se Etapa B tem pendências
+  if(["C","D","E"].includes(et)){
+    const pend = validarEtapaB_();
+    if(pend.length){
+      toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+      et = "B";
+    }
+  }
   currentEtapa = et;
   // ativa botões
   ["A","B","C","D","E"].forEach(k=>{
@@ -1078,6 +1336,30 @@ function bindEtapaBEvents(){
               }
             }
           }catch(_){}
+          // se não veio do D-1 e continua vazio, exige preenchimento (Cidade/UF + Hotel)
+          if(!String(st.obs||"").trim()){
+            promptHotelObrigatorio_(nome, st, ()=>{
+              if(tipo) tipo.value = st.tipo;
+              if(obs) obs.value = st.obs;
+              if(dias) dias.value = String(st.hotelDias||0);
+              if(chegada) chegada.value = String(st.hotelChegada||"");
+            });
+          }
+        }
+
+        // se Alojamento: exige seleção imediata
+        if(st.tipo==="ALOJAMENTO" && !String(st.alojamento||"").trim()){
+          const supKey = String(sup||"").trim();
+          const opcoes = getAlojOptionsForSup(supKey);
+          // se não tiver opções na REF, só alerta e mantém (gestor pode usar Obs)
+          if(opcoes.length){
+            promptAlojamentoObrigatorio_(nome, st, opcoes, ()=>{
+              if(aloj) aloj.value = st.alojamento || "";
+              if(obs) obs.value = st.obs || "";
+            });
+          }else{
+            toast("Alojamento", "Sem opções na REF para sua supervisão. Preencha em Obs.");
+          }
         }
       });
     }
@@ -1387,15 +1669,135 @@ function collectAllRegistros(dataRef){
   return regs;
 }
 
+
+// =========================
+// START
+ * ========================= */
 (function init(){
   // modo padrão: Gestor (PIN)
   const sess = getSess();
   applySessionUI(sess);
+
+  // binds modal buttons
+  bindReqModal();
+
+  // Botões salvar/zerar (antes eram omitidos)
+  $("btnMarcarZero")?.addEventListener("click", ()=>{
+    const et = currentEtapa;
+    if(et==="A"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.disp.set(nome, { status:"OK", obs:"" });
+      });
+    }else if(et==="B"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.estadia.set(nome, { tipo:"CASA", obs:"", hotelDias:0, hotelChegada:"", alojamento:"" });
+      });
+    }else if(et==="C"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.alim.set(nome, { cafe:false, almoco:false, janta:false });
+      });
+    }else if(et==="D"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.desl.set(nome, { tipo:"LOGÍSTICA/FROTA", obs:"" });
+      });
+    }else if(et==="E"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.extra.set(nome, { recargaOn:false, recargaV:0, passagemOn:false, passagemV:0, lavagemOn:false, lavagemV:0, manut:false, obs:"" });
+      });
+    }
+    renderEtapa();
+    toast("Etapa zerada", "Agora clique em Salvar etapa.");
+  });
+
+  $("btnSelectAllAlmoco")?.addEventListener("click", ()=>{
+    ctxLiberados().forEach(r=>{
+      const nome = String(r.colaborador||"").trim();
+      const a = STATE.alim.get(nome) || { cafe:false, almoco:false, janta:false };
+      a.almoco = true;
+      STATE.alim.set(nome, a);
+    });
+    if(currentEtapa==="C") renderEtapa();
+  });
+
+  $("btnSalvarEtapa")?.addEventListener("click", async ()=>{
+    const sess2 = getSess();
+    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+    const dataRef = normalizeDMY($("inpData").value);
+    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+
+    // se tentar salvar C/D/E e Etapa B tem pendência, bloqueia
+    if(["C","D","E"].includes(currentEtapa)){
+      const pend = validarEtapaB_();
+      if(pend.length){
+        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+        setEtapa("B");
+        return;
+      }
+    }
+
+    try{
+      const regs = collectAllRegistros(dataRef);
+      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapa", { token: sess2.token, payload });
+      setLog(r);
+      toast("Salvo", `Etapa ${currentEtapa} salva.`);
+    }catch(e){
+      setLog(e.payload || String(e.message||e));
+      toast("Erro", e.message || "Falha ao salvar");
+    }
+  });
+
+  $("btnSalvarAsync")?.addEventListener("click", async ()=>{
+    const sess2 = getSess();
+    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+    const dataRef = normalizeDMY($("inpData").value);
+    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+    if(["C","D","E"].includes(currentEtapa)){
+      const pend = validarEtapaB_();
+      if(pend.length){
+        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+        setEtapa("B");
+        return;
+      }
+    }
+    try{
+      const regs = collectAllRegistros(dataRef);
+      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapaAsync", { token: sess2.token, payload });
+      setLog(r);
+      toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
+    }catch(e){
+      setLog(e.payload || String(e.message||e));
+      toast("Erro", e.message || "Falha ao enfileirar");
+    }
+  });
+
   if(sess?.token){
     bootstrapAfterLogin();
   }
 })();
 </script>
+
+<!-- Modal obrigatório (Hotel / Alojamento) -->
+<div id="reqModal" class="modal hide">
+  <div class="modalBackdrop"></div>
+  <div class="modalBox">
+    <div class="modalHead">
+      <div style="font-weight:800">Informações obrigatórias</div>
+      <button id="reqClose" class="ghostBtn" type="button">✕</button>
+    </div>
+    <div id="reqBody" class="modalBody"></div>
+    <div class="modalFoot">
+      <button id="reqCancel" class="ghostBtn" type="button">Cancelar</button>
+      <button id="reqOk" class="primaryBtn" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
-
