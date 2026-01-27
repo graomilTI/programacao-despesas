@@ -860,6 +860,7 @@ async function login(){
         return;
       }
     }
+  }
     try{
       const regs = collectAllRegistros(dataRef);
       const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
@@ -1834,4 +1835,5 @@ function collectAllRegistros(dataRef){
 
 </body>
 </html>
+
 
