@@ -394,13 +394,13 @@
   </div>
 
 <script>
-/** =========================
- * CONFIG
+// =========================
+// CONFIG
 const WORKER_URL = "https://blue-brook-0f9b.tecnologia-f0c.workers.dev/"; // ajuste se trocar
 document.getElementById("workerUrl").textContent = WORKER_URL;
 
-/** =========================
- * UTIL
+// =========================
+// UTIL
 const $ = (id)=>document.getElementById(id);
 
 function toast(title, msg){
@@ -501,8 +501,8 @@ async function api(action, body){
   return json;
 }
 
-/** =========================
- * SESSION
+// =========================
+// SESSION
 const LS_KEY = "G1000_PROGRAMACAO_SESSION_V1";
 function getSess(){
   try{ return JSON.parse(localStorage.getItem(LS_KEY) || "null"); }catch(_){ return null; }
@@ -526,8 +526,8 @@ function applySessionUI(sess){
   }
 }
 
-/** =========================
- * LOGIN UI
+// =========================
+// LOGIN UI
 let mode = "GESTOR"; // or ADMIN
 function setMode(m){
   mode = m;
@@ -606,8 +606,8 @@ $("btnLogout").addEventListener("click", ()=>{
   toast("Logout", "Sessão removida.");
 });
 
-/** =========================
- * APP
+// =========================
+// APP
 document.querySelectorAll(".tabs .tab").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     const t = btn.getAttribute("data-tab");
@@ -747,8 +747,8 @@ async function registrarContatoUI(){
 
 
 
-/** =========================
- * PAINÉIS A–E (ESPECIFICAÇÃO G1000)
+// =========================
+// PAINÉIS A–E (ESPECIFICAÇÃO G1000)
 
 let currentEtapa = "A";
 function etapaNome(et){
@@ -1388,11 +1388,11 @@ function collectAllRegistros(dataRef){
 }
 
 
-/** =========================
- * START
+// =========================
+// START
  * ========================= */
 (function init(){
-  setMode("GESTOR");
+  // modo padrão: Gestor (PIN)
   const sess = getSess();
   applySessionUI(sess);
   if(sess?.token){
