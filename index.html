@@ -3388,13 +3388,27 @@ async function carregar(){
     dStr = _fmtDMY_(dt);
   } else {
     let t = String(raw || "").trim();
-    t = t.normalize ? t.normalize("NFKC") : t;
-    t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
-    t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
 
-    // só números? aplica máscara
-    if (/^\d{8}$/.test(t)) t = maskData(t);
+  // Normalizações de segurança (evita caracteres invisíveis / separadores estranhos)
+  try { t = t.normalize ? t.normalize("NFKC") : t; } catch(_) {}
+  t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
+  t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
 
+  // ✅ Fallback ultra-robusto: se tiver 8 dígitos em qualquer formato, força dd/MM/aaaa
+  // Ex.: "27/01/2026", "27-01-2026", "27.01.2026", "27012026", "27/01/2026 00:00"
+  const digits = t.replace(/\D/g, "");
+  if (digits.length >= 8) {
+    const dd = digits.slice(0,2);
+    const mm = digits.slice(2,4);
+    const yy = digits.slice(4,8);
+    const d = new Date(+yy, (+mm) - 1, +dd);
+    if (d.getFullYear() === +yy && d.getMonth() === (+mm - 1) && d.getDate() === +dd) {
+      dStr = `${dd}/${mm}/${yy}`;
+    }
+  }
+
+  // Se ainda não montou, tenta pelos formatos tradicionais
+  if (!dStr) {
     // dd sep mm sep aaaa
     let m = t.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
     if (m) {
