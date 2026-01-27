@@ -1524,29 +1524,19 @@ function parseDMY_(s){
   // Aceita:
   //  - dd/MM/aaaa (ou dd-MM-aaaa / dd.MM.aaaa) em qualquer parte do texto
   //  - aaaa-MM-dd (input type="date") / aaaa/MM/dd
-  //  - ddmmaa aa (8 dígitos) -> 27012026
   //  - Date nativo
   if (s instanceof Date) return isNaN(s) ? null : s;
 
   let t = String(s ?? "").trim();
   if (!t) return null;
 
+  // Se vier só números (ex: 27012026), aplica máscara dd/MM/aaaa
+  if (/^\d{8}$/.test(t)) t = maskData(t);
+
   // Robustez: remove caracteres invisíveis e normaliza separadores unicode
   t = t.normalize ? t.normalize("NFKC") : t;
   t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
   t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
-
-  // Se veio só números (ou quase), tenta ddmmyyyy
-  const onlyDigits = t.replace(/\D+/g, "");
-  if (onlyDigits.length === 8) {
-    const dd = parseInt(onlyDigits.slice(0,2),10);
-    const mm = parseInt(onlyDigits.slice(2,4),10);
-    const yy = parseInt(onlyDigits.slice(4,8),10);
-    const d = new Date(yy, mm-1, dd);
-    if (d.getFullYear()===yy && d.getMonth()===(mm-1) && d.getDate()===dd) return d;
-  }
-
-  // Mantém só o que interessa para os padrões abaixo
   t = t.replace(/[^0-9\/\.\-\s]/g, "");
   if(!t) return null;
 
@@ -1585,7 +1575,7 @@ function getDataRefSeguro_() {
   const dt = parseDMY_(raw);
 
   if (!dt) {
-    alert("DataReferencia inválida (use dd/MM/aaaa).");
+    alert("DataReferencia inválida (use dd/MM/aaaa).\nValor recebido: " + raw);
     return null;
   }
 
@@ -1955,7 +1945,7 @@ async function carregarDataPadrao(){
   if(!res || !res.ok) return;
   document.getElementById("dataRef").value = res.data || "";
   const permit = res.janela?.permitidas || [];
-  document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+  document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span><span class="pill" style="margin-left:8px;background:#fef3c7;">v2026.01.27-3</span>`;
 }
 
 /** =========================================
@@ -3386,28 +3376,55 @@ async function adminCarregar_(){
  * ✅ CARREGAR CONTEXTO
  * ====================== */
 async function carregar(){
-  const raw = (document.getElementById("dataRef")?.value || "").trim() || getDataPadrao_();
-  let dt = parseDMY_(raw);
+  const el = document.getElementById("dataRef");
+  const raw0 = (el?.value || "");
+  const raw = String(raw0).trim() || getDataPadrao_();
+
+  // ✅ normalização forte (aceita dd/MM/aaaa, dd-MM-aaaa, dd.MM.aaaa, aaaa-MM-dd e 8 dígitos)
   let dStr = null;
-  if(dt){
+  let dt = parseDMY_(raw);
+
+  if (dt) {
     dStr = _fmtDMY_(dt);
   } else {
-    // fallback: aceita dd/MM/aaaa direto ou 8 dígitos (ddmmyyyy)
-    const t = String(raw || "").trim();
-    const t1 = t.replace(/[^0-9\/]/g, "");
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(t1)) {
-      dStr = t1;
-    } else {
-      const dig = t.replace(/\D+/g, "");
-      if (dig.length === 8) dStr = `${dig.slice(0,2)}/${dig.slice(2,4)}/${dig.slice(4,8)}`;
+    let t = String(raw || "").trim();
+    t = t.normalize ? t.normalize("NFKC") : t;
+    t = t.replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "");
+    t = t.replace(/[\u2215\u2044\uFF0F]/g, "/");
+
+    // só números? aplica máscara
+    if (/^\d{8}$/.test(t)) t = maskData(t);
+
+    // dd sep mm sep aaaa
+    let m = t.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
+    if (m) {
+      const dd = String(m[1]).padStart(2, "0");
+      const mm = String(m[2]).padStart(2, "0");
+      const yy = String(m[3]);
+      const d = new Date(+yy, (+mm) - 1, +dd);
+      if (d.getFullYear() === +yy && d.getMonth() === (+mm - 1) && d.getDate() === +dd) dStr = `${dd}/${mm}/${yy}`;
+    }
+
+    // aaaa-mm-dd
+    if (!dStr) {
+      m = t.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (m) {
+        const yy = String(m[1]);
+        const mm = String(m[2]).padStart(2, "0");
+        const dd = String(m[3]).padStart(2, "0");
+        const d = new Date(+yy, (+mm) - 1, +dd);
+        if (d.getFullYear() === +yy && d.getMonth() === (+mm - 1) && d.getDate() === +dd) dStr = `${dd}/${mm}/${yy}`;
+      }
     }
   }
-  if(!dStr){
-    alert("DataReferencia inválida (use dd/MM/aaaa).");
+
+  if (!dStr) {
+    alert("DataReferencia inválida (use dd/MM/aaaa).\nValor recebido: " + raw);
     return;
   }
+
   // normaliza o campo
-  try{ document.getElementById("dataRef").value = dStr; }catch(_){ }
+  try { if (el) el.value = dStr; } catch (_) { }
 setBusy(true);
   setDebug("Carregando...");
   hide("bottomBar");
@@ -3454,7 +3471,7 @@ setBusy(true);
   })();
 
   const permit = res.janela?.permitidas || [];
-  document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span>`;
+  document.getElementById("janelaInfo").innerHTML = `<span class="pill">Permitido: ${permit.join(" ou ")}</span><span class="pill" style="margin-left:8px;background:#fef3c7;">v2026.01.27-3</span>`;
 
   form = {};
   const lanc = res.lancamentos || {};
