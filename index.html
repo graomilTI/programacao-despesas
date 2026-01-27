@@ -657,7 +657,7 @@ async function carregarContextoUI(){
     _ctx = r;
     $("outContexto").value = JSON.stringify(r, null, 2);
     $("painelEtapas").classList.remove("hide");
-    buildTableForEtapa($("selEtapa").value);
+    renderEtapa();
     const permitido = r?.janela?.permitido || r?.permitido || dataRef;
     $("permitido").textContent = permitido || "—";
     toast("Carregado", "Contexto carregado.");
@@ -724,272 +724,624 @@ async function registrarContatoUI(){
 }
 
 
+
 /** =========================
- * PAINÉIS A–E (MVP)
+ * PAINÉIS A–E (ESPECIFICAÇÃO G1000)
  * ========================= */
+const DISP_OPTS = ["OK","FALTA","FÉRIAS","FOLGA","ATESTADO","TRANSFERIR","INATIVO"];
+const DISP_BLOQ = new Set(["FALTA","FÉRIAS","FOLGA","ATESTADO","TRANSFERIR","INATIVO"]);
+
 const ETAPA_DEF = {
-  A: {
-    title: "A — Disponibilidade",
-    cols: [
-      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
-      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
-      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
-      { key:"Disponibilidade_Status", label:"Status", type:"select", opts:["OK","FALTA","FÉRIAS","ATESTADO","FOLGA","TREINAMENTO","OUTRO"], w:"w150" },
-      { key:"Disponibilidade_Obs", label:"Obs", type:"text", w:"w220" },
-    ]
-  },
-  B: {
-    title: "B — Hospedagem",
-    cols: [
-      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
-      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
-      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
-      { key:"Estadia_Tipo", label:"Tipo", type:"select", opts:["NENHUM","HOTEL","ALOJAMENTO","CASA","OUTRO"], w:"w150" },
-      { key:"Estadia_Obs", label:"Obs (cidade/obs)", type:"text", w:"w220" },
-      { key:"Hotel_Dias", label:"Hotel dias", type:"number", w:"micro" },
-      { key:"Hotel_Chegada", label:"Chegada", type:"text", placeholder:"dd/MM/aaaa", w:"w150" },
-    ]
-  },
-  C: {
-    title: "C — Alimentação",
-    cols: [
-      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
-      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
-      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
-      { key:"Cafe_Valor", label:"Café (R$)", type:"money", w:"micro" },
-      { key:"Almoco_Valor", label:"Almoço (R$)", type:"money", w:"micro" },
-      { key:"Janta_Valor", label:"Janta (R$)", type:"money", w:"micro" },
-    ]
-  },
-  D: {
-    title: "D — Deslocamento",
-    cols: [
-      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
-      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
-      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
-      { key:"Deslocamento_Tipo", label:"Tipo", type:"select", opts:["NENHUM","FROTA","PARTICULAR","UBER","BUS","AVIÃO","OUTRO"], w:"w150" },
-      { key:"Deslocamento_Obs", label:"Obs", type:"text", w:"w220" },
-      { key:"Manut_veic", label:"Manut. veic", type:"select", opts:["N","S"], w:"micro" },
-    ]
-  },
-  E: {
-    title: "E — Extras",
-    cols: [
-      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
-      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
-      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
-      { key:"Extras_Recarga_Valor", label:"Recarga (R$)", type:"money", w:"micro" },
-      { key:"Extras_Passagem_Valor", label:"Passagem (R$)", type:"money", w:"micro" },
-      { key:"Extras_Lavagem_Valor", label:"Lavagem (R$)", type:"money", w:"micro" },
-      { key:"Extras_Obs", label:"Obs", type:"text", w:"w220" },
-    ]
-  }
+  A: { title:"A — Disponibilidade" },
+  B: { title:"B — Estadia" },
+  C: { title:"C — Alimentação" },
+  D: { title:"D — Deslocamento" },
+  E: { title:"E — Extras" },
+};
+
+// estado local (mantém seleções ao trocar etapa)
+const STATE = {
+  disp: new Map(), // nome -> {status, obs}
+  estadia: new Map(), // nome -> {tipo, obs, hotelDias, hotelChegada, alojamento}
+  alim: new Map(), // nome -> {cafe, almoco, janta} booleans
+  desl: new Map(), // nome -> {tipo, obs}
+  extra: new Map(), // nome -> {recargaV, passagemV, lavagemV, manut, obs, recargaOn, passagemOn, lavagemOn}
 };
 
 let _ctx = null; // contexto atual
-function ctxRows(){
-  // contexto pode vir {colaboradores:[...]} ou direto array
-  const r = _ctx?.colaboradores || _ctx?.itens || _ctx?.rows || _ctx;
+
+function ctxLiberados(){
+  const r = _ctx?.liberados || _ctx?.colaboradores || _ctx?.ativos || _ctx?.itens || _ctx?.rows || _ctx;
+  return Array.isArray(r) ? r : [];
+}
+function ctxBloqueados(){
+  const r = _ctx?.bloqueados || [];
   return Array.isArray(r) ? r : [];
 }
 
 function moneyToNumber(v){
   const s = String(v??"").trim();
   if(!s) return 0;
-  // aceita "12,50" "12.50" "R$ 12,50"
   const norm = s.replace(/[^\d,.-]/g,"").replace(/\.(?=.*\.)/g,""); // remove milhares
   const withDot = norm.replace(",",".");
   const n = Number(withDot);
   return isFinite(n) ? n : 0;
 }
-
-function buildTableForEtapa(et){
-  const def = ETAPA_DEF[et];
-  const head = document.createElement("tr");
-  for(const c of def.cols){
-    const th = document.createElement("th");
-    th.textContent = c.label;
-    th.className = c.w || "";
-    head.appendChild(th);
-  }
-  $("tblHead").innerHTML = "";
-  $("tblHead").appendChild(head);
-
-  const body = $("tblBody");
-  body.innerHTML = "";
-
-  const rows = ctxRows();
-  for(let i=0;i<rows.length;i++){
-    const r = rows[i] || {};
-    const tr = document.createElement("tr");
-    tr.dataset.idx = String(i);
-
-    for(const c of def.cols){
-      const td = document.createElement("td");
-      const inp = makeCellInput(c, r);
-      td.appendChild(inp);
-      tr.appendChild(td);
-    }
-    body.appendChild(tr);
-  }
+function ensureDispDefault(nome){
+  if(!STATE.disp.has(nome)) STATE.disp.set(nome, { status:"OK", obs:"" });
+  return STATE.disp.get(nome);
 }
 
-function makeCellInput(col, row){
-  const key = col.key;
-  const v = row[key] ?? row[key.toLowerCase()] ?? "";
-
-  if(col.type==="select"){
-    const sel = document.createElement("select");
-    sel.dataset.key = key;
-    sel.style.width = "100%";
-    for(const opt of (col.opts||[])){
-      const o = document.createElement("option");
-      o.value = opt;
-      o.textContent = opt;
-      sel.appendChild(o);
-    }
-    sel.value = String(v||"").toUpperCase() || (col.opts?.[0] || "");
-    if(col.ro) sel.disabled = true
-    return sel;
-  }
-
-  const input = document.createElement("input");
-  input.dataset.key = key;
-  input.placeholder = col.placeholder || "";
-  input.value = String(v ?? "");
-
-  if(col.type==="number"){
-    input.type = "number";
-    input.step = "1";
-  }else if(col.type==="money"){
-    input.type = "text";
-    input.inputMode = "decimal";
-    input.placeholder = "0,00";
-  }else{
-    input.type = "text";
-  }
-  if(col.ro){
-    input.readOnly = true;
-    input.style.opacity = ".85";
-  }
-  if(key==="Hotel_Chegada"){
-    input.addEventListener("blur", ()=>{ const n = normalizeDMY(input.value); if(n) input.value=n; });
-  }
-  return input;
+function isBlockedByDisp(nome){
+  const d = ensureDispDefault(nome);
+  return DISP_BLOQ.has(String(d.status||"").toUpperCase());
 }
 
-function collectRegistrosFromTable(et){
-  const def = ETAPA_DEF[et];
-  const out = [];
-  const rows = Array.from($("tblBody").querySelectorAll("tr"));
-
-  for(const tr of rows){
-    const idx = Number(tr.dataset.idx || "0");
-    const base = ctxRows()[idx] || {};
-    const reg = {
-      colaborador: String(base.colaborador || base.nome || "").trim(),
-      supervisao: String(base.supervisao || "").trim(),
-      coordenacao: String(base.coordenacao || "").trim(),
-    };
-    // coleta campos da etapa
-    for(const c of def.cols){
-      if(["colaborador","supervisao","coordenacao"].includes(c.key)) continue;
-      const el = tr.querySelector(`[data-key="${c.key}"]`);
-      if(!el) continue;
-      let val = el.value;
-      if(c.type==="money"){
-        val = moneyToNumber(val);
-      }else if(c.type==="number"){
-        val = Number(el.value || 0);
-        if(!isFinite(val)) val = 0;
-      }else{
-        val = String(val ?? "").trim();
-      }
-      reg[c.key] = val;
-    }
-    out.push(reg);
-  }
-  return out;
+function getAlojOptionsForSup(sup){
+  const m = _ctx?.alojRefPorSupervisao || {};
+  const k = String(sup||"").trim();
+  const list = m[k] || m[norm_(k)] || [];
+  return Array.isArray(list) ? list : [];
 }
 
-function zeroEtapa(et){
-  const def = ETAPA_DEF[et];
-  const rows = Array.from($("tblBody").querySelectorAll("tr"));
-  for(const tr of rows){
-    for(const c of def.cols){
-      if(["colaborador","supervisao","coordenacao"].includes(c.key)) continue;
-      const el = tr.querySelector(`[data-key="${c.key}"]`);
-      if(!el) continue;
-      if(c.type==="select"){
-        el.value = (c.opts && c.opts[0]) ? c.opts[0] : "";
-      }else{
-        el.value = (c.type==="money" || c.type==="number") ? "0" : "";
-      }
-    }
+function norm_(s){ return String(s||"").trim().toUpperCase(); }
+
+/** ---------- RENDER ---------- */
+function renderEtapa(){
+  if(!_ctx){
+    $("painelEtapas").classList.add("hide");
+    return;
   }
-}
-
-/** UI bindings etapa */
-$("selEtapa").addEventListener("change", ()=>{
-  if(!_ctx) return;
-  buildTableForEtapa($("selEtapa").value);
-});
-
-$("btnMarcarZero").addEventListener("click", ()=>{
+  $("painelEtapas").classList.remove("hide");
   const et = $("selEtapa").value;
-  zeroEtapa(et);
-  toast("Etapa zerada", "Você ainda precisa salvar.");
-});
 
-$("btnSalvarEtapa").addEventListener("click", async ()=>{
-  const sess = getSess();
-  if(!sess?.token) return toast("Sem sessão", "Faça login novamente.");
-  const dataRef = normalizeDMY($("inpData").value);
-  if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
-  const etapa = $("selEtapa").value;
-  const registros = collectRegistrosFromTable(etapa);
+  if(et==="A") return renderEtapaA();
+  if(et==="B") return renderEtapaB();
+  if(et==="C") return renderEtapaC();
+  if(et==="D") return renderEtapaD();
+  if(et==="E") return renderEtapaE();
+}
 
-  try{
-    const payload = {
-      etapa,
-      dataReferencia: dataRef,
-      supervisao: "TODAS",
-      origem: sess.type || "GESTOR",
-      registros
-    };
-    const r = await api("salvarEtapa", { token: sess.token, payload });
-    setLog(r);
-    toast("Salvo", `Etapa ${etapa}: ${r.inserted||0} inseridos / ${r.updated||0} atualizados.`);
-  }catch(e){
-    setLog(e.payload || String(e.message||e));
-    toast("Erro ao salvar", e.message || "Falha");
+function setTable(headCells, rowsHtml){
+  $("tblHead").innerHTML = `<tr>${headCells.map(h=>`<th class="${h.cls||""}">${h.label}</th>`).join("")}</tr>`;
+  $("tblBody").innerHTML = rowsHtml.join("");
+}
+
+function rowBase(i, r){
+  const nome = String(r.colaborador||r.nome||"").trim();
+  const sup  = String(r.supervisao||"").trim();
+  const coord= String(r.coordenacao||"").trim();
+  return { i, nome, sup, coord };
+}
+
+function renderEtapaA(){
+  const liberados = ctxLiberados();
+  const bloqueados = ctxBloqueados();
+
+  // tabela 1: disponíveis (status OK)
+  const head = [
+    {label:"Colaborador", cls:"w220"},
+    {label:"Coordenação", cls:"w150"},
+    {label:"Supervisão", cls:"w220"},
+    {label:"Status", cls:"w150"},
+    {label:"Obs", cls:"w220"},
+  ];
+
+  const rowsOk = [];
+  const rowsInd = [];
+
+  liberados.forEach((r, i)=>{
+    const b = rowBase(i, r);
+    const d = ensureDispDefault(b.nome);
+
+    const status = String(d.status||"OK").toUpperCase();
+    const obs = d.obs || "";
+
+    const tr = `
+      <tr data-nome="${escapeHtml(b.nome)}" data-sup="${escapeHtml(b.sup)}" data-coord="${escapeHtml(b.coord)}">
+        <td>${escapeHtml(b.nome)}</td>
+        <td>${escapeHtml(b.coord)}</td>
+        <td>${escapeHtml(b.sup)}</td>
+        <td>
+          <select data-k="disp_status" style="width:100%">
+            ${DISP_OPTS.map(o=>`<option value="${o}" ${o===status?'selected':''}>${o}</option>`).join("")}
+          </select>
+        </td>
+        <td><input data-k="disp_obs" type="text" value="${escapeAttr(obs)}" placeholder="Obs..." /></td>
+      </tr>`;
+
+    if(DISP_BLOQ.has(status)) rowsInd.push(tr);
+    else rowsOk.push(tr);
+  });
+
+  // bloqueados vindos da planilha de indisponibilidade
+  const head2 = [
+    {label:"Colaborador", cls:"w220"},
+    {label:"Coordenação", cls:"w150"},
+    {label:"Supervisão", cls:"w220"},
+    {label:"Motivo", cls:"w150"},
+    {label:"Período", cls:"w220"},
+    {label:"Obs", cls:"w220"},
+  ];
+  const rowsBloq = bloqueados.map(b=>`
+    <tr>
+      <td>${escapeHtml(b.colaborador||"")}</td>
+      <td>${escapeHtml(b.coordenacao||"")}</td>
+      <td>${escapeHtml(b.supervisao||"")}</td>
+      <td>${escapeHtml(b.motivo||"Indisponível")}</td>
+      <td>${escapeHtml(b.periodo||"")}</td>
+      <td>${escapeHtml(b.obs||"")}</td>
+    </tr>`);
+
+  // render: duas tabelas na mesma área (usando o mesmo container)
+  $("tblHead").innerHTML = "";
+  $("tblBody").innerHTML = "";
+  $("tblHead").insertAdjacentHTML("beforeend", `<tr>${head.map(h=>`<th class="${h.cls||""}">${h.label}</th>`).join("")}</tr>`);
+  $("tblBody").innerHTML = rowsOk.join("");
+
+  const wrap = $("tblWrap");
+  // injeta abaixo uma segunda tabela para indisponíveis
+  let sec = document.getElementById("secIndisponiveis");
+  if(!sec){
+    sec = document.createElement("div");
+    sec.id = "secIndisponiveis";
+    sec.style.marginTop = "12px";
+    wrap.parentElement.appendChild(sec);
   }
-});
+  sec.innerHTML = `
+    <div class="hr"></div>
+    <div style="font-weight:900;margin:6px 0">Indisponíveis (selecionados + base)</div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>${head2.map(h=>`<th class="${h.cls||""}">${h.label}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${rowsInd.join("")}
+          ${rowsBloq.join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="hint" style="margin-top:8px">Quando Status ≠ OK, bloqueia despesas nas etapas B–E, mas ainda vai para a conferência.</div>
+  `;
 
-$("btnSalvarAsync").addEventListener("click", async ()=>{
-  const sess = getSess();
-  if(!sess?.token) return toast("Sem sessão", "Faça login novamente.");
-  const dataRef = normalizeDMY($("inpData").value);
-  if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
-  const etapa = $("selEtapa").value;
-  const registros = collectRegistrosFromTable(etapa);
+  bindEtapaAEvents();
+}
 
-  try{
-    const payload = {
-      etapa,
-      dataReferencia: dataRef,
-      supervisao: "TODAS",
-      origem: sess.type || "GESTOR",
-      registros
-    };
-    const r = await api("salvarEtapaAsync", { token: sess.token, payload });
-    setLog(r);
-    toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
-  }catch(e){
-    setLog(e.payload || String(e.message||e));
-    toast("Erro ao enfileirar", e.message || "Falha");
+function bindEtapaAEvents(){
+  // atualiza STATE e re-render para mover entre tabelas
+  $("tblBody").querySelectorAll("tr").forEach(tr=>{
+    const nome = tr.getAttribute("data-nome") || "";
+    const sel = tr.querySelector('select[data-k="disp_status"]');
+    const obs = tr.querySelector('input[data-k="disp_obs"]');
+    if(sel){
+      sel.addEventListener("change", ()=>{
+        const d = ensureDispDefault(nome);
+        d.status = sel.value;
+        renderEtapa(); // move para indisponíveis se necessário
+      });
+    }
+    if(obs){
+      obs.addEventListener("input", ()=>{
+        const d = ensureDispDefault(nome);
+        d.obs = obs.value;
+      });
+    }
+  });
+  // também nas linhas "indisponíveis selecionados"
+  const sec = document.getElementById("secIndisponiveis");
+  if(sec){
+    sec.querySelectorAll('tr[data-nome]').forEach(tr=>{
+      const nome = tr.getAttribute("data-nome") || "";
+      const sel = tr.querySelector('select[data-k="disp_status"]');
+      const obs = tr.querySelector('input[data-k="disp_obs"]');
+      if(sel){
+        sel.addEventListener("change", ()=>{
+          const d = ensureDispDefault(nome);
+          d.status = sel.value;
+          renderEtapa();
+        });
+      }
+      if(obs){
+        obs.addEventListener("input", ()=>{
+          const d = ensureDispDefault(nome);
+          d.obs = obs.value;
+        });
+      }
+    });
   }
-});
+}
+
+function renderEtapaB(){
+  const head = [
+    {label:"Colaborador", cls:"w220"},
+    {label:"Coordenação", cls:"w150"},
+    {label:"Supervisão", cls:"w220"},
+    {label:"Estadia", cls:"w150"},
+    {label:"Alojamento (se aplicável)", cls:"w220"},
+    {label:"Obs", cls:"w220"},
+    {label:"Diárias", cls:"micro"},
+    {label:"Chegada", cls:"w150"},
+  ];
+
+  const rows = [];
+  ctxLiberados().forEach((r,i)=>{
+    const b = rowBase(i,r);
+    const disabled = isBlockedByDisp(b.nome);
+    const st = STATE.estadia.get(b.nome) || { tipo:"CASA", obs:"", hotelDias:0, hotelChegada:"", alojamento:"" };
+    STATE.estadia.set(b.nome, st);
+
+    const alojOpts = getAlojOptionsForSup(b.sup);
+    const alojSelect = `
+      <select data-k="alojamento" ${disabled?'disabled':''} style="width:100%">
+        <option value="">—</option>
+        ${alojOpts.map(a=>{
+          const val = (typeof a === "string") ? a : (a.nome || a.alojamento || a[0] || "");
+          return `<option value="${escapeAttr(val)}" ${val===st.alojamento?'selected':''}>${escapeHtml(val)}</option>`;
+        }).join("")}
+      </select>`;
+
+    rows.push(`
+      <tr data-nome="${escapeHtml(b.nome)}" data-sup="${escapeHtml(b.sup)}" data-coord="${escapeHtml(b.coord)}">
+        <td>${escapeHtml(b.nome)}</td>
+        <td>${escapeHtml(b.coord)}</td>
+        <td>${escapeHtml(b.sup)}</td>
+        <td>
+          <select data-k="tipo" ${disabled?'disabled':''} style="width:100%">
+            ${["CASA","HOTEL","ALOJAMENTO","FAZENDA/ARMAZÉM"].map(o=>`<option value="${o}" ${o===st.tipo?'selected':''}>${o}</option>`).join("")}
+          </select>
+        </td>
+        <td>${alojSelect}</td>
+        <td><input data-k="obs" ${disabled?'disabled':''} type="text" value="${escapeAttr(st.obs||"")}" placeholder="Cidade/UF, hotel, pernoite..." /></td>
+        <td><input data-k="dias" ${disabled?'disabled':''} type="number" min="0" step="1" value="${Number(st.hotelDias||0)}" style="width:100%"/></td>
+        <td><input data-k="chegada" ${disabled?'disabled':''} type="text" value="${escapeAttr(st.hotelChegada||"")}" placeholder="dd/MM/aaaa" /></td>
+      </tr>`);
+  });
+
+  setTable(head, rows);
+  ensureSecIndisponiveisHidden_();
+  bindEtapaBEvents();
+}
+
+function bindEtapaBEvents(){
+  $("tblBody").querySelectorAll("tr").forEach(tr=>{
+    const nome = tr.getAttribute("data-nome") || "";
+    const tipo = tr.querySelector('select[data-k="tipo"]');
+    const aloj = tr.querySelector('select[data-k="alojamento"]');
+    const obs = tr.querySelector('input[data-k="obs"]');
+    const dias = tr.querySelector('input[data-k="dias"]');
+    const chegada = tr.querySelector('input[data-k="chegada"]');
+
+    const st = STATE.estadia.get(nome) || { tipo:"CASA", obs:"", hotelDias:0, hotelChegada:"", alojamento:"" };
+    STATE.estadia.set(nome, st);
+
+    if(tipo){
+      tipo.addEventListener("change", async ()=>{
+        st.tipo = tipo.value;
+        // regra: se Fazenda/Armazém, preencher obs com PERNOITE se vazio
+        if(st.tipo==="FAZENDA/ARMAZÉM" && !String(st.obs||"").trim()){
+          st.obs = "PERNOITE";
+          if(obs) obs.value = st.obs;
+        }
+        // se Hotel: tenta puxar do dia anterior
+        if(st.tipo==="HOTEL"){
+          try{
+            const sess = getSess();
+            const dataRef = normalizeDMY($("inpData").value);
+            if(sess?.token && dataRef){
+              const r = await api("verificarHotelD1", { token: sess.token, nome, dataRef });
+              if(r?.hotel && !String(st.obs||"").trim()){
+                st.obs = r.hotel;
+                if(obs) obs.value = st.obs;
+              }
+            }
+          }catch(_){}
+        }
+      });
+    }
+    if(aloj){
+      aloj.addEventListener("change", ()=>{
+        st.alojamento = aloj.value;
+        // quando escolher alojamento, coloca no obs se vazio
+        if(st.tipo==="ALOJAMENTO" && st.alojamento && !String(st.obs||"").trim()){
+          st.obs = st.alojamento;
+          if(obs) obs.value = st.obs;
+        }
+      });
+    }
+    if(obs) obs.addEventListener("input", ()=> st.obs = obs.value);
+    if(dias) dias.addEventListener("input", ()=> st.hotelDias = Number(dias.value||0)||0);
+    if(chegada){
+      chegada.addEventListener("blur", ()=>{ const n = normalizeDMY(chegada.value); if(n){ chegada.value=n; st.hotelChegada=n; } });
+      chegada.addEventListener("input", ()=> st.hotelChegada = chegada.value);
+    }
+  });
+}
+
+function renderEtapaC(){
+  const head = [
+    {label:"Colaborador", cls:"w220"},
+    {label:"Coordenação", cls:"w150"},
+    {label:"Supervisão", cls:"w220"},
+    {label:"Café", cls:"micro"},
+    {label:"Almoço", cls:"micro"},
+    {label:"Janta", cls:"micro"},
+  ];
+
+  // adiciona botão "Selecionar todos almoço"
+  let btnAll = document.getElementById("btnAllAlmoco");
+  if(!btnAll){
+    btnAll = document.createElement("button");
+    btnAll.id = "btnAllAlmoco";
+    btnAll.className = "btn secondary small";
+    btnAll.type = "button";
+    btnAll.textContent = "Selecionar todos (Almoço)";
+    document.querySelector(".btnrow .right").prepend(btnAll);
+    btnAll.addEventListener("click", ()=>{
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        const a = STATE.alim.get(nome) || { cafe:false, almoco:false, janta:false };
+        a.almoco = true;
+        STATE.alim.set(nome, a);
+      });
+      renderEtapaC();
+    });
+  }
+
+  const rows = [];
+  ctxLiberados().forEach((r,i)=>{
+    const b = rowBase(i,r);
+    const disabled = isBlockedByDisp(b.nome);
+    const a = STATE.alim.get(b.nome) || { cafe:false, almoco:false, janta:false };
+    STATE.alim.set(b.nome, a);
+
+    rows.push(`
+      <tr data-nome="${escapeHtml(b.nome)}" data-sup="${escapeHtml(b.sup)}" data-coord="${escapeHtml(b.coord)}">
+        <td>${escapeHtml(b.nome)}</td>
+        <td>${escapeHtml(b.coord)}</td>
+        <td>${escapeHtml(b.sup)}</td>
+        <td style="text-align:center"><input data-k="cafe" ${disabled?'disabled':''} type="checkbox" ${a.cafe?'checked':''}/></td>
+        <td style="text-align:center"><input data-k="almoco" ${disabled?'disabled':''} type="checkbox" ${a.almoco?'checked':''}/></td>
+        <td style="text-align:center"><input data-k="janta" ${disabled?'disabled':''} type="checkbox" ${a.janta?'checked':''}/></td>
+      </tr>`);
+  });
+  setTable(head, rows);
+  ensureSecIndisponiveisHidden_();
+  bindEtapaCEvents();
+}
+
+function bindEtapaCEvents(){
+  $("tblBody").querySelectorAll("tr").forEach(tr=>{
+    const nome = tr.getAttribute("data-nome") || "";
+    const a = STATE.alim.get(nome) || { cafe:false, almoco:false, janta:false };
+    STATE.alim.set(nome, a);
+    ["cafe","almoco","janta"].forEach(k=>{
+      const el = tr.querySelector(`input[data-k="${k}"]`);
+      if(el) el.addEventListener("change", ()=> a[k] = !!el.checked);
+    });
+  });
+}
+
+function renderEtapaD(){
+  const head = [
+    {label:"Colaborador", cls:"w220"},
+    {label:"Coordenação", cls:"w150"},
+    {label:"Supervisão", cls:"w220"},
+    {label:"Tipo", cls:"w150"},
+    {label:"Obs", cls:"w220"},
+  ];
+  const opts = ["LOGÍSTICA/FROTA","CARONA/FROTA","UBER/TÁXI","REEMBOLSO KM"];
+  const rows = [];
+  ctxLiberados().forEach((r,i)=>{
+    const b = rowBase(i,r);
+    const disabled = isBlockedByDisp(b.nome);
+    const d = STATE.desl.get(b.nome) || { tipo:"LOGÍSTICA/FROTA", obs:"" };
+    STATE.desl.set(b.nome, d);
+
+    rows.push(`
+      <tr data-nome="${escapeHtml(b.nome)}" data-sup="${escapeHtml(b.sup)}" data-coord="${escapeHtml(b.coord)}">
+        <td>${escapeHtml(b.nome)}</td>
+        <td>${escapeHtml(b.coord)}</td>
+        <td>${escapeHtml(b.sup)}</td>
+        <td>
+          <select data-k="tipo" ${disabled?'disabled':''} style="width:100%">
+            ${opts.map(o=>`<option value="${o}" ${o===d.tipo?'selected':''}>${o}</option>`).join("")}
+          </select>
+        </td>
+        <td><input data-k="obs" ${disabled?'disabled':''} type="text" value="${escapeAttr(d.obs||"")}" placeholder="Obs..." /></td>
+      </tr>`);
+  });
+  setTable(head, rows);
+  ensureSecIndisponiveisHidden_();
+  bindEtapaDEvents();
+}
+
+function bindEtapaDEvents(){
+  $("tblBody").querySelectorAll("tr").forEach(tr=>{
+    const nome = tr.getAttribute("data-nome") || "";
+    const d = STATE.desl.get(nome) || { tipo:"LOGÍSTICA/FROTA", obs:"" };
+    STATE.desl.set(nome, d);
+    const tipo = tr.querySelector('select[data-k="tipo"]');
+    const obs = tr.querySelector('input[data-k="obs"]');
+    if(tipo) tipo.addEventListener("change", ()=> d.tipo = tipo.value);
+    if(obs) obs.addEventListener("input", ()=> d.obs = obs.value);
+  });
+}
+
+function renderEtapaE(){
+  const head = [
+    {label:"Colaborador", cls:"w220"},
+    {label:"Coordenação", cls:"w150"},
+    {label:"Supervisão", cls:"w220"},
+    {label:"Recarga", cls:"micro"},
+    {label:"Valor", cls:"micro"},
+    {label:"Passagem", cls:"micro"},
+    {label:"Valor", cls:"micro"},
+    {label:"Lavagem", cls:"micro"},
+    {label:"Valor", cls:"micro"},
+    {label:"Manut. Veic", cls:"micro"},
+    {label:"Obs", cls:"w220"},
+  ];
+
+  const rows = [];
+  ctxLiberados().forEach((r,i)=>{
+    const b = rowBase(i,r);
+    const disabled = isBlockedByDisp(b.nome);
+    const e = STATE.extra.get(b.nome) || { recargaOn:false, recargaV:0, passagemOn:false, passagemV:0, lavagemOn:false, lavagemV:0, manut:false, obs:"" };
+    STATE.extra.set(b.nome, e);
+
+    rows.push(`
+      <tr data-nome="${escapeHtml(b.nome)}" data-sup="${escapeHtml(b.sup)}" data-coord="${escapeHtml(b.coord)}">
+        <td>${escapeHtml(b.nome)}</td>
+        <td>${escapeHtml(b.coord)}</td>
+        <td>${escapeHtml(b.sup)}</td>
+
+        <td style="text-align:center"><input data-k="rec_on" ${disabled?'disabled':''} type="checkbox" ${e.recargaOn?'checked':''}/></td>
+        <td><input data-k="rec_v" ${disabled||!e.recargaOn?'disabled':''} type="text" inputmode="decimal" value="${escapeAttr(String(e.recargaV??0))}" placeholder="0,00"/></td>
+
+        <td style="text-align:center"><input data-k="pas_on" ${disabled?'disabled':''} type="checkbox" ${e.passagemOn?'checked':''}/></td>
+        <td><input data-k="pas_v" ${disabled||!e.passagemOn?'disabled':''} type="text" inputmode="decimal" value="${escapeAttr(String(e.passagemV??0))}" placeholder="0,00"/></td>
+
+        <td style="text-align:center"><input data-k="lav_on" ${disabled?'disabled':''} type="checkbox" ${e.lavagemOn?'checked':''}/></td>
+        <td><input data-k="lav_v" ${disabled||!e.lavagemOn?'disabled':''} type="text" inputmode="decimal" value="${escapeAttr(String(e.lavagemV??0))}" placeholder="0,00"/></td>
+
+        <td style="text-align:center"><input data-k="manut" ${disabled?'disabled':''} type="checkbox" ${e.manut?'checked':''}/></td>
+
+        <td><input data-k="obs" ${disabled?'disabled':''} type="text" value="${escapeAttr(e.obs||"")}" placeholder="Obs..." /></td>
+      </tr>`);
+  });
+
+  setTable(head, rows);
+  ensureSecIndisponiveisHidden_();
+  bindEtapaEEvents();
+}
+
+function bindEtapaEEvents(){
+  $("tblBody").querySelectorAll("tr").forEach(tr=>{
+    const nome = tr.getAttribute("data-nome") || "";
+    const e = STATE.extra.get(nome) || { recargaOn:false, recargaV:0, passagemOn:false, passagemV:0, lavagemOn:false, lavagemV:0, manut:false, obs:"" };
+    STATE.extra.set(nome, e);
+
+    const recOn = tr.querySelector('input[data-k="rec_on"]');
+    const recV  = tr.querySelector('input[data-k="rec_v"]');
+    const pasOn = tr.querySelector('input[data-k="pas_on"]');
+    const pasV  = tr.querySelector('input[data-k="pas_v"]');
+    const lavOn = tr.querySelector('input[data-k="lav_on"]');
+    const lavV  = tr.querySelector('input[data-k="lav_v"]');
+    const manut = tr.querySelector('input[data-k="manut"]');
+    const obs   = tr.querySelector('input[data-k="obs"]');
+
+    function toggleValueInput(onEl, vEl, propOn){
+      if(!onEl || !vEl) return;
+      vEl.disabled = !onEl.checked;
+      e[propOn] = !!onEl.checked;
+      // regra: quando marca, garante valor > 0? (mantém o que estiver digitado)
+      if(onEl.checked && (moneyToNumber(vEl.value) === 0)){
+        vEl.value = "0,01"; // força >0 para evitar desmarcar por render
+      }
+    }
+
+    if(recOn){
+      recOn.addEventListener("change", ()=>{
+        toggleValueInput(recOn, recV, "recargaOn");
+      });
+    }
+    if(pasOn){
+      pasOn.addEventListener("change", ()=>{
+        toggleValueInput(pasOn, pasV, "passagemOn");
+      });
+    }
+    if(lavOn){
+      lavOn.addEventListener("change", ()=>{
+        toggleValueInput(lavOn, lavV, "lavagemOn");
+      });
+    }
+    if(recV) recV.addEventListener("input", ()=> e.recargaV = moneyToNumber(recV.value));
+    if(pasV) pasV.addEventListener("input", ()=> e.passagemV = moneyToNumber(pasV.value));
+    if(lavV) lavV.addEventListener("input", ()=> e.lavagemV = moneyToNumber(lavV.value));
+    if(manut) manut.addEventListener("change", ()=> e.manut = !!manut.checked);
+    if(obs) obs.addEventListener("input", ()=> e.obs = obs.value);
+
+    // inicializa valores
+    if(recV) e.recargaV = moneyToNumber(recV.value);
+    if(pasV) e.passagemV = moneyToNumber(pasV.value);
+    if(lavV) e.lavagemV = moneyToNumber(lavV.value);
+  });
+}
+
+function ensureSecIndisponiveisHidden_(){
+  const sec = document.getElementById("secIndisponiveis");
+  if(sec) sec.innerHTML = "";
+}
+
+// helpers escape
+function escapeHtml(s){
+  return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,"&quot;"); }
+
+/** ---------- COLETA / SALVAR ---------- */
+function buildRegistroForNome(nome, coord, sup, dataRef){
+  const reg = {
+    colaborador: nome,
+    coordenacao: coord,
+    supervisao: sup,
+    DataReferencia: dataRef,
+  };
+
+  const d = ensureDispDefault(nome);
+  reg["Disponibilidade_Status"] = String(d.status||"OK").toUpperCase();
+  reg["Disponibilidade_Obs"] = String(d.obs||"").trim();
+
+  const b = STATE.estadia.get(nome) || {};
+  reg["Estadia_Tipo"] = (b.tipo || "").toUpperCase();
+  // se for ALOJAMENTO e alojamento escolhido, coloca no obs
+  let estObs = String(b.obs||"").trim();
+  if((b.tipo||"").toUpperCase()==="ALOJAMENTO" && b.alojamento && !estObs) estObs = String(b.alojamento);
+  reg["Estadia_Obs"] = estObs;
+  reg["Hotel_Dias"] = Number(b.hotelDias||0) || 0;
+  reg["Hotel_Chegada"] = String(b.hotelChegada||"").trim();
+
+  const a = STATE.alim.get(nome) || {};
+  reg["Cafe_Valor"] = a.cafe ? "SIM" : "";
+  reg["Almoco_Valor"] = a.almoco ? "SIM" : "";
+  reg["Janta_Valor"] = a.janta ? "SIM" : "";
+
+  const dl = STATE.desl.get(nome) || {};
+  reg["Deslocamento_Tipo"] = String(dl.tipo||"").toUpperCase();
+  reg["Deslocamento_Obs"] = String(dl.obs||"").trim();
+
+  const e = STATE.extra.get(nome) || {};
+  reg["Extras_Recarga_Valor"] = e.recargaOn ? Number(e.recargaV||0) : 0;
+  reg["Extras_Passagem_Valor"] = e.passagemOn ? Number(e.passagemV||0) : 0;
+  reg["Extras_Lavagem_Valor"] = e.lavagemOn ? Number(e.lavagemV||0) : 0;
+  reg["Manut_veic"] = e.manut ? "SIM" : "";
+  reg["Extras_Obs"] = String(e.obs||"").trim();
+
+  return reg;
+}
+
+function collectAllRegistros(dataRef){
+  const regs = [];
+  // liberados
+  ctxLiberados().forEach(r=>{
+    const nome = String(r.colaborador||r.nome||"").trim();
+    const coord = String(r.coordenacao||"").trim();
+    const sup = String(r.supervisao||"").trim();
+    regs.push(buildRegistroForNome(nome, coord, sup, dataRef));
+  });
+  // bloqueados base (planilha Indisponibilidade): também entram na conferência
+  ctxBloqueados().forEach(b=>{
+    const nome = String(b.colaborador||"").trim();
+    if(!nome) return;
+    const coord = String(b.coordenacao||"").trim();
+    const sup = String(b.supervisao||"").trim();
+    // marca status com motivo se ainda não tiver
+    if(!STATE.disp.has(nome)){
+      STATE.disp.set(nome, { status: String(b.motivo||"ATESTADO").toUpperCase(), obs: String(b.obs||b.periodo||"").trim() });
+    }
+    regs.push(buildRegistroForNome(nome, coord, sup, dataRef));
+  });
+  return regs;
+}
 
 
 /** =========================
