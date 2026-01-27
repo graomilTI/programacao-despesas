@@ -869,8 +869,7 @@ async function login(){
     }catch(e){
       setLog(e.payload || String(e.message||e));
       toast("Erro", e.message || "Falha ao enfileirar");
-    }
-  });
+    });
 
     setLog(resp);
     toast("Logado", "Sessão criada com sucesso.");
@@ -1835,3 +1834,4 @@ function collectAllRegistros(dataRef){
 
 </body>
 </html>
+
