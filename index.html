@@ -626,6 +626,28 @@ document.querySelectorAll(".tabs .tab").forEach(btn=>{
 
 maskDMY($("inpData"));
 
+// Preenche data automaticamente:
+// - se agora >= 18:00 -> amanhã
+// - se agora < 18:00 -> hoje
+(function autoFillData(){
+  try{
+    const now = new Date();
+    let d = new Date(now);
+    if(now.getHours() >= 18){
+      d.setDate(d.getDate() + 1);
+    }
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yy = d.getFullYear();
+    const v = `${dd}/${mm}/${yy}`;
+    const inp = $("inpData");
+    if(inp && !inp.value){
+      inp.value = v;
+    }
+  }catch(e){}
+})();
+
+
 // Botões das etapas (A–E)
 document.querySelectorAll('button[data-et]').forEach(btn=>{
   btn.addEventListener("click", ()=> setEtapa(btn.getAttribute("data-et")));
@@ -732,6 +754,7 @@ async function registrarContatoUI(){
 
 /** =========================
  * PAINÉIS A–E (ESPECIFICAÇÃO G1000)
+ * ========================= */
 
 let currentEtapa = "A";
 function etapaNome(et){
