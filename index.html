@@ -184,6 +184,20 @@
     .toast .m{margin:0;color:var(--muted);font-weight:650;line-height:1.25}
     .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
     .small{font-size:12px;color:var(--muted);font-weight:800}
+  
+    table{width:100%;border-collapse:separate;border-spacing:0}
+    th,td{border-bottom:1px solid var(--line);padding:10px 8px;vertical-align:top}
+    th{position:sticky;top:0;background:color-mix(in srgb, var(--card) 96%, transparent);z-index:2;text-align:left;font-size:12px;color:var(--muted);font-weight:900}
+    .tblwrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:14px}
+    .mini{width:120px}
+    .micro{width:90px}
+    .w150{width:150px}
+    .w220{width:220px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:999px}
+    .right{margin-left:auto}
+    .btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .btn.small{padding:8px 10px;font-weight:900}
+
   </style>
 </head>
 <body>
@@ -274,12 +288,47 @@
 
             <div class="hr"></div>
 
-            <div class="small">Contexto carregado:</div>
-            <textarea id="outContexto" class="mono" spellcheck="false"></textarea>
+            <div class="btnrow">
+              <div class="pill">
+                <span class="small">Etapa:</span>
+                <select id="selEtapa" style="width:auto;min-width:160px">
+                  <option value="A">A — Disponibilidade</option>
+                  <option value="B">B — Hospedagem</option>
+                  <option value="C">C — Alimentação</option>
+                  <option value="D">D — Deslocamento</option>
+                  <option value="E">E — Extras</option>
+                </select>
+              </div>
 
-            <div class="hint">
-              Se o contexto carregar, o back-end está ok. Depois a gente liga as telas A–E.
+              <div class="row right">
+                <button class="btn secondary small" id="btnMarcarZero" type="button" title="Zera valores numéricos da etapa atual">Zerar etapa</button>
+                <button class="btn small" id="btnSalvarEtapa" type="button">Salvar etapa</button>
+                <button class="btn secondary small" id="btnSalvarAsync" type="button" title="Usa fila (recomendado p/ muitas linhas)">Salvar (fila)</button>
+              </div>
             </div>
+
+            <div class="hint" style="margin-top:10px">
+              Fluxo padrão: Carregar → preencher a etapa → Salvar etapa. (Você pode salvar por fila se estiver lento.)
+            </div>
+
+            <div class="hr"></div>
+
+            <div id="painelEtapas" class="hide">
+              <div class="tblwrap" id="tblWrap">
+                <table id="tblEtapa">
+                  <thead id="tblHead"></thead>
+                  <tbody id="tblBody"></tbody>
+                </table>
+              </div>
+              <div class="hint" style="margin-top:10px">
+                Dica: você pode editar várias linhas e salvar tudo de uma vez. O back-end faz dedupe por DataReferencia|Colaborador|Supervisão.
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="small">Contexto carregado (debug):</div>
+            <textarea id="outContexto" class="mono" spellcheck="false"></textarea>
           </section>
 
           <!-- Alojamentos -->
@@ -605,13 +654,17 @@ async function carregarContextoUI(){
   if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
   try{
     const r = await api("carregarContexto", { token: sess.token, dataRef });
+    _ctx = r;
     $("outContexto").value = JSON.stringify(r, null, 2);
+    $("painelEtapas").classList.remove("hide");
+    buildTableForEtapa($("selEtapa").value);
     const permitido = r?.janela?.permitido || r?.permitido || dataRef;
     $("permitido").textContent = permitido || "—";
     toast("Carregado", "Contexto carregado.");
     setLog(r);
   }catch(e){
     $("outContexto").value = "";
+    $("painelEtapas").classList.add("hide");
     setLog(e.payload || String(e.message||e));
     toast("Erro ao carregar", e.message || "Falha");
   }
@@ -669,6 +722,275 @@ async function registrarContatoUI(){
     toast("Erro Cliente", e.message || "Falha");
   }
 }
+
+
+/** =========================
+ * PAINÉIS A–E (MVP)
+ * ========================= */
+const ETAPA_DEF = {
+  A: {
+    title: "A — Disponibilidade",
+    cols: [
+      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
+      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
+      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
+      { key:"Disponibilidade_Status", label:"Status", type:"select", opts:["OK","FALTA","FÉRIAS","ATESTADO","FOLGA","TREINAMENTO","OUTRO"], w:"w150" },
+      { key:"Disponibilidade_Obs", label:"Obs", type:"text", w:"w220" },
+    ]
+  },
+  B: {
+    title: "B — Hospedagem",
+    cols: [
+      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
+      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
+      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
+      { key:"Estadia_Tipo", label:"Tipo", type:"select", opts:["NENHUM","HOTEL","ALOJAMENTO","CASA","OUTRO"], w:"w150" },
+      { key:"Estadia_Obs", label:"Obs (cidade/obs)", type:"text", w:"w220" },
+      { key:"Hotel_Dias", label:"Hotel dias", type:"number", w:"micro" },
+      { key:"Hotel_Chegada", label:"Chegada", type:"text", placeholder:"dd/MM/aaaa", w:"w150" },
+    ]
+  },
+  C: {
+    title: "C — Alimentação",
+    cols: [
+      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
+      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
+      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
+      { key:"Cafe_Valor", label:"Café (R$)", type:"money", w:"micro" },
+      { key:"Almoco_Valor", label:"Almoço (R$)", type:"money", w:"micro" },
+      { key:"Janta_Valor", label:"Janta (R$)", type:"money", w:"micro" },
+    ]
+  },
+  D: {
+    title: "D — Deslocamento",
+    cols: [
+      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
+      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
+      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
+      { key:"Deslocamento_Tipo", label:"Tipo", type:"select", opts:["NENHUM","FROTA","PARTICULAR","UBER","BUS","AVIÃO","OUTRO"], w:"w150" },
+      { key:"Deslocamento_Obs", label:"Obs", type:"text", w:"w220" },
+      { key:"Manut_veic", label:"Manut. veic", type:"select", opts:["N","S"], w:"micro" },
+    ]
+  },
+  E: {
+    title: "E — Extras",
+    cols: [
+      { key:"colaborador", label:"Colaborador", type:"text", ro:true, w:"w220" },
+      { key:"supervisao", label:"Supervisão", type:"text", ro:true, w:"w220" },
+      { key:"coordenacao", label:"Coordenação", type:"text", ro:true, w:"w150" },
+      { key:"Extras_Recarga_Valor", label:"Recarga (R$)", type:"money", w:"micro" },
+      { key:"Extras_Passagem_Valor", label:"Passagem (R$)", type:"money", w:"micro" },
+      { key:"Extras_Lavagem_Valor", label:"Lavagem (R$)", type:"money", w:"micro" },
+      { key:"Extras_Obs", label:"Obs", type:"text", w:"w220" },
+    ]
+  }
+};
+
+let _ctx = null; // contexto atual
+function ctxRows(){
+  // contexto pode vir {colaboradores:[...]} ou direto array
+  const r = _ctx?.colaboradores || _ctx?.itens || _ctx?.rows || _ctx;
+  return Array.isArray(r) ? r : [];
+}
+
+function moneyToNumber(v){
+  const s = String(v??"").trim();
+  if(!s) return 0;
+  // aceita "12,50" "12.50" "R$ 12,50"
+  const norm = s.replace(/[^\d,.-]/g,"").replace(/\.(?=.*\.)/g,""); // remove milhares
+  const withDot = norm.replace(",",".");
+  const n = Number(withDot);
+  return isFinite(n) ? n : 0;
+}
+
+function buildTableForEtapa(et){
+  const def = ETAPA_DEF[et];
+  const head = document.createElement("tr");
+  for(const c of def.cols){
+    const th = document.createElement("th");
+    th.textContent = c.label;
+    th.className = c.w || "";
+    head.appendChild(th);
+  }
+  $("tblHead").innerHTML = "";
+  $("tblHead").appendChild(head);
+
+  const body = $("tblBody");
+  body.innerHTML = "";
+
+  const rows = ctxRows();
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i] || {};
+    const tr = document.createElement("tr");
+    tr.dataset.idx = String(i);
+
+    for(const c of def.cols){
+      const td = document.createElement("td");
+      const inp = makeCellInput(c, r);
+      td.appendChild(inp);
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+function makeCellInput(col, row){
+  const key = col.key;
+  const v = row[key] ?? row[key.toLowerCase()] ?? "";
+
+  if(col.type==="select"){
+    const sel = document.createElement("select");
+    sel.dataset.key = key;
+    sel.style.width = "100%";
+    for(const opt of (col.opts||[])){
+      const o = document.createElement("option");
+      o.value = opt;
+      o.textContent = opt;
+      sel.appendChild(o);
+    }
+    sel.value = String(v||"").toUpperCase() || (col.opts?.[0] || "");
+    if(col.ro) sel.disabled = true
+    return sel;
+  }
+
+  const input = document.createElement("input");
+  input.dataset.key = key;
+  input.placeholder = col.placeholder || "";
+  input.value = String(v ?? "");
+
+  if(col.type==="number"){
+    input.type = "number";
+    input.step = "1";
+  }else if(col.type==="money"){
+    input.type = "text";
+    input.inputMode = "decimal";
+    input.placeholder = "0,00";
+  }else{
+    input.type = "text";
+  }
+  if(col.ro){
+    input.readOnly = true;
+    input.style.opacity = ".85";
+  }
+  if(key==="Hotel_Chegada"){
+    input.addEventListener("blur", ()=>{ const n = normalizeDMY(input.value); if(n) input.value=n; });
+  }
+  return input;
+}
+
+function collectRegistrosFromTable(et){
+  const def = ETAPA_DEF[et];
+  const out = [];
+  const rows = Array.from($("tblBody").querySelectorAll("tr"));
+
+  for(const tr of rows){
+    const idx = Number(tr.dataset.idx || "0");
+    const base = ctxRows()[idx] || {};
+    const reg = {
+      colaborador: String(base.colaborador || base.nome || "").trim(),
+      supervisao: String(base.supervisao || "").trim(),
+      coordenacao: String(base.coordenacao || "").trim(),
+    };
+    // coleta campos da etapa
+    for(const c of def.cols){
+      if(["colaborador","supervisao","coordenacao"].includes(c.key)) continue;
+      const el = tr.querySelector(`[data-key="${c.key}"]`);
+      if(!el) continue;
+      let val = el.value;
+      if(c.type==="money"){
+        val = moneyToNumber(val);
+      }else if(c.type==="number"){
+        val = Number(el.value || 0);
+        if(!isFinite(val)) val = 0;
+      }else{
+        val = String(val ?? "").trim();
+      }
+      reg[c.key] = val;
+    }
+    out.push(reg);
+  }
+  return out;
+}
+
+function zeroEtapa(et){
+  const def = ETAPA_DEF[et];
+  const rows = Array.from($("tblBody").querySelectorAll("tr"));
+  for(const tr of rows){
+    for(const c of def.cols){
+      if(["colaborador","supervisao","coordenacao"].includes(c.key)) continue;
+      const el = tr.querySelector(`[data-key="${c.key}"]`);
+      if(!el) continue;
+      if(c.type==="select"){
+        el.value = (c.opts && c.opts[0]) ? c.opts[0] : "";
+      }else{
+        el.value = (c.type==="money" || c.type==="number") ? "0" : "";
+      }
+    }
+  }
+}
+
+/** UI bindings etapa */
+$("selEtapa").addEventListener("change", ()=>{
+  if(!_ctx) return;
+  buildTableForEtapa($("selEtapa").value);
+});
+
+$("btnMarcarZero").addEventListener("click", ()=>{
+  const et = $("selEtapa").value;
+  zeroEtapa(et);
+  toast("Etapa zerada", "Você ainda precisa salvar.");
+});
+
+$("btnSalvarEtapa").addEventListener("click", async ()=>{
+  const sess = getSess();
+  if(!sess?.token) return toast("Sem sessão", "Faça login novamente.");
+  const dataRef = normalizeDMY($("inpData").value);
+  if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+  const etapa = $("selEtapa").value;
+  const registros = collectRegistrosFromTable(etapa);
+
+  try{
+    const payload = {
+      etapa,
+      dataReferencia: dataRef,
+      supervisao: "TODAS",
+      origem: sess.type || "GESTOR",
+      registros
+    };
+    const r = await api("salvarEtapa", { token: sess.token, payload });
+    setLog(r);
+    toast("Salvo", `Etapa ${etapa}: ${r.inserted||0} inseridos / ${r.updated||0} atualizados.`);
+  }catch(e){
+    setLog(e.payload || String(e.message||e));
+    toast("Erro ao salvar", e.message || "Falha");
+  }
+});
+
+$("btnSalvarAsync").addEventListener("click", async ()=>{
+  const sess = getSess();
+  if(!sess?.token) return toast("Sem sessão", "Faça login novamente.");
+  const dataRef = normalizeDMY($("inpData").value);
+  if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+  const etapa = $("selEtapa").value;
+  const registros = collectRegistrosFromTable(etapa);
+
+  try{
+    const payload = {
+      etapa,
+      dataReferencia: dataRef,
+      supervisao: "TODAS",
+      origem: sess.type || "GESTOR",
+      registros
+    };
+    const r = await api("salvarEtapaAsync", { token: sess.token, payload });
+    setLog(r);
+    toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
+  }catch(e){
+    setLog(e.payload || String(e.message||e));
+    toast("Erro ao enfileirar", e.message || "Falha");
+  }
+});
+
 
 /** =========================
  * START
