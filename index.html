@@ -297,7 +297,7 @@
               </div>
               <div>
                 <button class="btn" id="btnCarregar" type="button">Carregar</button>
-                <button class="btn secondary" id="btnPDF" type="button" style="margin-top:8px;width:100%">Gerar PDF</button>
+                <button class="btn secondary" id="btnPDFSomente" type="button" style="display:none">Gerar PDF</button>
               </div>
             </div>
 
@@ -316,13 +316,13 @@
 
               <div class="row right">
                 <button class="btn secondary small" id="btnMarcarZero" type="button" title="Zera valores numéricos da etapa atual">Zerar etapa</button>
-                <button class="btn small" id="btnSalvarEtapa" type="button">Salvar etapa</button>
-                <button class="btn secondary small" id="btnSalvarAsync" type="button" title="Usa fila (recomendado p/ muitas linhas)">Salvar (fila)</button>
+                <button class="btn small" id="btnSalvarEtapa" type="button">Salvar programação</button>
+                <button class="btn secondary small" id="btnPDF" type="button">Salvar e gerar PDF</button>
               </div>
             </div>
 
             <div class="hint" style="margin-top:10px">
-              Fluxo padrão: Carregar → preencher a etapa → Salvar etapa. (Você pode salvar por fila se estiver lento.)
+              Fluxo padrão: Carregar → preencher as etapas A–E → Salvar programação (no final).
             </div>
 
             <div class="hr"></div>
@@ -511,62 +511,12 @@ function bindActionButtonsOnce(){
     if(currentEtapa==="C") renderEtapa();
   });
 
-  // Salvar etapa (imediato)
+  // Salvar programação (A–E de uma vez, via 5 chamadas no back-end)
   $("btnSalvarEtapa")?.addEventListener("click", async ()=>{
-    const sess2 = getSess();
-    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
-    const dataRef = normalizeDMY($("inpData").value);
-    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
-
-    if(["C","D","E"].includes(currentEtapa)){
-      const pend = validarEtapaB_();
-      if(pend.length){
-        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
-        setEtapa("B");
-        return;
-      }
-    }
-
-    try{
-      const regs = collectAllRegistros(dataRef);
-      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
-      const r = await api("salvarEtapa", { token: sess2.token, payload });
-      setLog(r);
-      toast("Salvo", `Etapa ${currentEtapa} salva.`);
-    }catch(e){
-      setLog(e.payload || String(e.message||e));
-      toast("Erro", e.message || "Falha ao salvar");
-    }
+    await salvarProgramacaoCompleta_(false);
   });
 
-  // Salvar (fila) — enfileira p/ processamento em lote
-  $("btnSalvarAsync")?.addEventListener("click", async ()=>{
-    const sess2 = getSess();
-    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
-    const dataRef = normalizeDMY($("inpData").value);
-    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
-
-    if(["C","D","E"].includes(currentEtapa)){
-      const pend = validarEtapaB_();
-      if(pend.length){
-        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
-        setEtapa("B");
-        return;
-      }
-    }
-
-    try{
-      const regs = collectAllRegistros(dataRef);
-      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
-      const r = await api("salvarEtapaAsync", { token: sess2.token, payload });
-      setLog(r);
-      toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
-    }catch(e){
-      setLog(e.payload || String(e.message||e));
-      toast("Erro", e.message || "Falha ao enfileirar");
-    }
-  });
-}
+  }
 function normUF_(s){ return String(s||"").trim().toUpperCase().slice(0,2); }
 
 function promptHotelObrigatorio_(nome, st, after){
@@ -667,6 +617,49 @@ function validarEtapaB_(){
     }
   });
   return pend;
+
+async function salvarProgramacaoCompleta_(gerarPdf){
+  const sess2 = getSess();
+  if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+  const dataRef = normalizeDMY($("inpData").value);
+  if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+
+  // valida pendências na etapa B (Hotel/Alojamento) antes de salvar tudo
+  const pend = validarEtapaB_();
+  if(pend.length){
+    toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de salvar.");
+    setEtapa("B");
+    return;
+  }
+
+  // coleta todos os registros (com todos os campos)
+  const regs = collectAllRegistros(dataRef);
+
+  // salva A..E no back-end (o GS usa 'etapa' para mapear colunas)
+  const etapas = ["A","B","C","D","E"];
+  try{
+    setLog({ ok:true, info:"Salvando programação...", dataRef, etapas });
+    for(const et of etapas){
+      const payload = { etapa: et, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapa", { token: sess2.token, payload });
+      // mantém log da última resposta para debug
+      setLog(r);
+      if(r && r.ok === false) throw new Error(r.error || "Falha ao salvar");
+    }
+    toast("Programação salva", "Tudo certo! ✅");
+
+    if(gerarPdf){
+      try{
+        await gerarPDFUI();
+      }catch(e){
+        toast("PDF", "Programação salva, mas falhou ao gerar PDF.");
+      }
+    }
+  }catch(e){
+    setLog(e.payload || String(e.message||e));
+    toast("Erro", e.message || "Falha ao salvar programação");
+  }
+}
 }
 
 function setDbg(obj){
@@ -932,7 +925,8 @@ document.querySelectorAll('button[data-et]').forEach(btn=>{
 
 
 $("btnCarregar").addEventListener("click", carregarContextoUI);
-$("btnPDF").addEventListener("click", gerarPDFUI);
+$("btnPDFSomente")?.addEventListener("click", gerarPDFUI);
+$("btnPDF")?.addEventListener("click", async ()=>{ await salvarProgramacaoCompleta_(true); });
 $("btnAloj").addEventListener("click", listarAlojUI);
 $("btnCli").addEventListener("click", registrarContatoUI);
 $("btnClearLog").addEventListener("click", ()=> $("log").value="");
@@ -1783,31 +1777,6 @@ function collectAllRegistros(dataRef){
     }catch(e){
       setLog(e.payload || String(e.message||e));
       toast("Erro", e.message || "Falha ao salvar");
-    }
-  });
-
-  $("btnSalvarAsync")?.addEventListener("click", async ()=>{
-    const sess2 = getSess();
-    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
-    const dataRef = normalizeDMY($("inpData").value);
-    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
-    if(["C","D","E"].includes(currentEtapa)){
-      const pend = validarEtapaB_();
-      if(pend.length){
-        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
-        setEtapa("B");
-        return;
-      }
-    }
-    try{
-      const regs = collectAllRegistros(dataRef);
-      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
-      const r = await api("salvarEtapaAsync", { token: sess2.token, payload });
-      setLog(r);
-      toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
-    }catch(e){
-      setLog(e.payload || String(e.message||e));
-      toast("Erro", e.message || "Falha ao enfileirar");
     }
   });
 
