@@ -458,6 +458,115 @@ function bindReqModal(){
     if(REQ.onOk) REQ.onOk();
   });
 }
+
+let __buttonsBound = false;
+function bindActionButtonsOnce(){
+  if(__buttonsBound) return;
+  __buttonsBound = true;
+
+  // modal
+  bindReqModal();
+
+  // Zerar etapa
+  $("btnMarcarZero")?.addEventListener("click", ()=>{
+    const et = currentEtapa;
+    if(et==="A"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.disp.set(nome, { status:"OK", obs:"" });
+      });
+    }else if(et==="B"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.estadia.set(nome, { tipo:"CASA", obs:"", hotelDias:0, hotelChegada:"" });
+      });
+    }else if(et==="C"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.alim.set(nome, { cafe:false, almoco:false, janta:false });
+      });
+    }else if(et==="D"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.desl.set(nome, { tipo:"LOGÍSTICA/FROTA", obs:"" });
+      });
+    }else if(et==="E"){
+      ctxLiberados().forEach(r=>{
+        const nome = String(r.colaborador||"").trim();
+        STATE.extra.set(nome, { recargaOn:false, recargaV:0, passagemOn:false, passagemV:0, lavagemOn:false, lavagemV:0, manut:false, obs:"" });
+      });
+    }
+    renderEtapa();
+    toast("Etapa zerada", "Agora clique em Salvar.");
+  });
+
+  // Selecionar todos almoço
+  $("btnSelectAllAlmoco")?.addEventListener("click", ()=>{
+    ctxLiberados().forEach(r=>{
+      const nome = String(r.colaborador||"").trim();
+      const a = STATE.alim.get(nome) || { cafe:false, almoco:false, janta:false };
+      a.almoco = true;
+      STATE.alim.set(nome, a);
+    });
+    if(currentEtapa==="C") renderEtapa();
+  });
+
+  // Salvar etapa (imediato)
+  $("btnSalvarEtapa")?.addEventListener("click", async ()=>{
+    const sess2 = getSess();
+    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+    const dataRef = normalizeDMY($("inpData").value);
+    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+
+    if(["C","D","E"].includes(currentEtapa)){
+      const pend = validarEtapaB_();
+      if(pend.length){
+        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+        setEtapa("B");
+        return;
+      }
+    }
+
+    try{
+      const regs = collectAllRegistros(dataRef);
+      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapa", { token: sess2.token, payload });
+      setLog(r);
+      toast("Salvo", `Etapa ${currentEtapa} salva.`);
+    }catch(e){
+      setLog(e.payload || String(e.message||e));
+      toast("Erro", e.message || "Falha ao salvar");
+    }
+  });
+
+  // Salvar (fila) — enfileira p/ processamento em lote
+  $("btnSalvarAsync")?.addEventListener("click", async ()=>{
+    const sess2 = getSess();
+    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
+    const dataRef = normalizeDMY($("inpData").value);
+    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
+
+    if(["C","D","E"].includes(currentEtapa)){
+      const pend = validarEtapaB_();
+      if(pend.length){
+        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
+        setEtapa("B");
+        return;
+      }
+    }
+
+    try{
+      const regs = collectAllRegistros(dataRef);
+      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
+      const r = await api("salvarEtapaAsync", { token: sess2.token, payload });
+      setLog(r);
+      toast("Enfileirado", `Ticket: ${r.ticket || "(sem ticket)"}`);
+    }catch(e){
+      setLog(e.payload || String(e.message||e));
+      toast("Erro", e.message || "Falha ao enfileirar");
+    }
+  });
+}
 function normUF_(s){ return String(s||"").trim().toUpperCase().slice(0,2); }
 
 function promptHotelObrigatorio_(nome, st, after){
@@ -528,14 +637,12 @@ function promptAlojamentoObrigatorio_(nome, st, opcoes, after){
         toast("Obrigatório", "Selecione um alojamento.");
         return;
       }
-      st.alojamento = a;
-      if(!String(st.obs||"").trim()) st.obs = a;
+      st.obs = a;
       closeReqModal();
       if(after) after();
     },
     onCancel: ()=>{
       st.tipo = "CASA";
-      st.alojamento = "";
       st.obs = "";
       if(after) after(true);
     }
@@ -556,7 +663,7 @@ function validarEtapaB_(){
       if(!String(st.obs||"").trim()) pend.push({nome, tipo});
     }
     if(tipo==="ALOJAMENTO"){
-      if(!String(st.alojamento||"").trim()) pend.push({nome, tipo});
+      if(!String(st.obs||"").trim()) pend.push({nome, tipo});
     }
   });
   return pend;
@@ -740,83 +847,8 @@ async function login(){
     };
     setSess(sess);
     applySessionUI(sess);
-
-  // binds modal buttons
-  bindReqModal();
-
-  // Botões salvar/zerar (antes eram omitidos)
-  $("btnMarcarZero")?.addEventListener("click", ()=>{
-    const et = currentEtapa;
-    if(et==="A"){
-      ctxLiberados().forEach(r=>{
-        const nome = String(r.colaborador||"").trim();
-        STATE.disp.set(nome, { status:"OK", obs:"" });
-      });
-    }else if(et==="B"){
-      ctxLiberados().forEach(r=>{
-        const nome = String(r.colaborador||"").trim();
-        STATE.estadia.set(nome, { tipo:"CASA", obs:"", hotelDias:0, hotelChegada:"", alojamento:"" });
-      });
-    }else if(et==="C"){
-      ctxLiberados().forEach(r=>{
-        const nome = String(r.colaborador||"").trim();
-        STATE.alim.set(nome, { cafe:false, almoco:false, janta:false });
-      });
-    }else if(et==="D"){
-      ctxLiberados().forEach(r=>{
-        const nome = String(r.colaborador||"").trim();
-        STATE.desl.set(nome, { tipo:"LOGÍSTICA/FROTA", obs:"" });
-      });
-    }else if(et==="E"){
-      ctxLiberados().forEach(r=>{
-        const nome = String(r.colaborador||"").trim();
-        STATE.extra.set(nome, { recargaOn:false, recargaV:0, passagemOn:false, passagemV:0, lavagemOn:false, lavagemV:0, manut:false, obs:"" });
-      });
-    }
-    renderEtapa();
-    toast("Etapa zerada", "Agora clique em Salvar etapa.");
-  });
-
-  $("btnSelectAllAlmoco")?.addEventListener("click", ()=>{
-    ctxLiberados().forEach(r=>{
-      const nome = String(r.colaborador||"").trim();
-      const a = STATE.alim.get(nome) || { cafe:false, almoco:false, janta:false };
-      a.almoco = true;
-      STATE.alim.set(nome, a);
-    });
-    if(currentEtapa==="C") renderEtapa();
-  });
-
-  $("btnSalvarEtapa")?.addEventListener("click", async ()=>{
-    const sess2 = getSess();
-    if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
-    const dataRef = normalizeDMY($("inpData").value);
-    if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
-
-    // se tentar salvar C/D/E e Etapa B tem pendência, bloqueia
-    if(["C","D","E"].includes(currentEtapa)){
-      const pend = validarEtapaB_();
-      if(pend.length){
-        toast("Pendências na Estadia", "Preencha Hotel/Alojamento antes de avançar.");
-        setEtapa("B");
-        return;
-      }
-    }
-
-    try{
-      const regs = collectAllRegistros(dataRef);
-      const payload = { etapa: currentEtapa, dataReferencia: dataRef, supervisao: _ctx?.supervisao || "", registros: regs };
-      const r = await api("salvarEtapa", { token: sess2.token, payload });
-      setLog(r);
-      toast("Salvo", `Etapa ${currentEtapa} salva.`);
-    }catch(e){
-      setLog(e.payload || String(e.message||e));
-      toast("Erro", e.message || "Falha ao salvar");
-    }
-  });
-
-  $("btnSalvarAsync")?.addEventListener("click", async ()=>{
-    const sess2 = getSess();
+    bindActionButtonsOnce();
+  bindActionButtonsOnce();
     if(!sess2?.token) return toast("Sem sessão", "Faça login novamente.");
     const dataRef = normalizeDMY($("inpData").value);
     if(!dataRef) return toast("Data inválida", "Use dd/MM/aaaa.");
@@ -1672,11 +1704,13 @@ function collectAllRegistros(dataRef){
 
 // =========================
 // START
-
+  
 (function init(){
   // modo padrão: Gestor (PIN)
   const sess = getSess();
   applySessionUI(sess);
+    bindActionButtonsOnce();
+  bindActionButtonsOnce();
 
   // binds modal buttons
   bindReqModal();
@@ -1801,4 +1835,3 @@ function collectAllRegistros(dataRef){
 
 </body>
 </html>
-
